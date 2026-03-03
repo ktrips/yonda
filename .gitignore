@@ -1,0 +1,11 @@
+.credentials.json
+auth_jp.json
+auth_us.json
+__pycache__/
+*.pyc
+.env
+Arc/
+
+# データディレクトリ（個人データ・認証情報はコミットしない）
+data/*
+!data/.gitkeep

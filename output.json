@@ -1,0 +1,1980 @@
+{
+  "query": "シェニール織とか黄肉のメロンとか",
+  "catalog": {
+    "product": {
+      "asin": "B0F3NYBL89",
+      "asset_details": [],
+      "audible_editors_summary": "「ONLY FROM audible」とは、Audibleのみが提供・販売するデジタル音声作品です（オリジナル作品や、独自ナレーション作品等）。",
+      "authors": [
+        {
+          "asin": "B001JXJGXE",
+          "name": "江國 香織"
+        }
+      ],
+      "available_codecs": [
+        {
+          "enhanced_codec": "LC_32_22050_stereo",
+          "format": "Enhanced",
+          "is_kindle_enhanced": true,
+          "name": "aax_22_32"
+        },
+        {
+          "enhanced_codec": "LC_128_44100_stereo",
+          "format": "Enhanced",
+          "is_kindle_enhanced": true,
+          "name": "aax_44_128"
+        },
+        {
+          "enhanced_codec": "LC_64_22050_stereo",
+          "format": "Enhanced",
+          "is_kindle_enhanced": true,
+          "name": "aax_22_64"
+        },
+        {
+          "enhanced_codec": "LC_64_44100_stereo",
+          "format": "Enhanced",
+          "is_kindle_enhanced": true,
+          "name": "aax_44_64"
+        },
+        {
+          "enhanced_codec": "aax",
+          "format": "Enhanced",
+          "is_kindle_enhanced": false,
+          "name": "aax"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "8191654051",
+              "name": "文学・フィクション"
+            },
+            {
+              "id": "8191789051",
+              "name": "大衆小説"
+            },
+            {
+              "id": "8192427051",
+              "name": "現代文学"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "copyright": "©2023 Kaori Ekuni Published in Japan by Kadokawa Haruki Corporation. (P)2025 MEDIA DO Co.,Ltd.",
+      "customer_reviews": [
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AFJ42333NW2JIGX327AD437S2WQQ",
+          "author_name": "ktrips",
+          "body": "何が起こるわけではないが、３人の女性の日常が軽やかに描かれている",
+          "format": "Freeform",
+          "id": "812d0c9b26ec4b14837848d6aa4286f9",
+          "location": "",
+          "ratings": {
+            "overall_rating": 4,
+            "performance_rating": 5,
+            "story_rating": 5
+          },
+          "review_content_scores": {
+            "content_quality": 50,
+            "num_helpful_votes": 0,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2026-02-28T04:45:06Z",
+          "title": "何が起こるわけではないが、３人の女性の日常が軽やかに描かれている"
+        },
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AH6M3FVXLJGM7R25T6JDOOIJATRQ",
+          "author_name": "Amazon カスタマー",
+          "body": "江國香織さんの本は好きで結構読んだけれど、これは初めて。だんだん好きになれるのだろうかと期待しながら、結局最後までリエのことが好きではなかった。みんなを好きになりたかったのに悲しい。そしてナレーションの、特にセリフの抑揚に何とも違和感があった。プロの俳優さんに一度読んでみてほしい。リエの印象も変わるかもしれない。<br /><br />あと、唐突な終わりにとても驚いた。私たちが読もうが読むまいが、登場人物たちはこうして毎日暮らしていくんだろうな、何事もなく、静かに。そして私たちは、それを小さな窓から垣間見ただけ、という後味は江國さんならでは。",
+          "format": "Freeform",
+          "id": "2fb3a91e9a7f4d8584f9ad31e08db4c2",
+          "location": "",
+          "ratings": {
+            "overall_rating": 3,
+            "performance_rating": 2,
+            "story_rating": 4
+          },
+          "review_content_scores": {
+            "content_quality": 50,
+            "num_helpful_votes": 0,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2025-12-24T15:31:02Z",
+          "title": "ナレーションがイマイチ"
+        },
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AGDGQGISNIZLDZE3D5NONXFJNZ6A",
+          "body": "有吉佐和子の青い壺を読んだ直後からからの本作だったので、おしゃべり感が似ているな、と思った。本作に出てくる人々の、何と愛おしいことよ。それぞれの魅力に、年を重ねるっていいな、若いってそうだよなと。その後の物語も知りたくなりました！",
+          "format": "Freeform",
+          "id": "dd9ddd6b081e46e88d3a5d7191845d1c",
+          "ratings": {
+            "overall_rating": 5,
+            "performance_rating": 3,
+            "story_rating": 5
+          },
+          "review_content_scores": {
+            "content_quality": 67,
+            "num_helpful_votes": 1,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2026-01-15T16:13:23Z",
+          "title": "あるある"
+        },
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AEQOTNJSKKZ3EKZ4JM2MSHVR7FUA",
+          "author_name": "mmm.",
+          "body": "じわじわと面白さが増す。<br />私の女友達の中でもそれぞれのキャラ！があるあるっといった具合。<br />日本版セックスアンドシティみたいな感じで面白かった。<br />リカがキャリーよりかな。<br />こういったストーリーは重すぎず、日常的でもあって『ながら聴き』にちょうどよく心地よい。<br />あっという間に聴ける。<br />ナレーションが最初は暗いかな？と思ったが登場人物が沢山出てき出すと、それぞれのキャラにあった声色でとてもわかりやすくて良かった。",
+          "format": "Freeform",
+          "id": "29a41c7362894e24a69f8e9f91ee61e6",
+          "location": "",
+          "ratings": {
+            "overall_rating": 5,
+            "performance_rating": 5,
+            "story_rating": 5
+          },
+          "review_content_scores": {
+            "content_quality": 50,
+            "num_helpful_votes": 0,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2026-01-08T10:59:25Z",
+          "title": "女友達"
+        },
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AHMUXK2T75ZZOOC6ENUDJHJUNJYQ",
+          "body": "リエという登場人物に好感を持てないまま、中身のない話が続く。読み終わって、「え、これだけ？　だから何？」という感想のみ",
+          "format": "Freeform",
+          "id": "f0fa2d3a86f445e09ba50f875bd0e640",
+          "ratings": {
+            "overall_rating": 3,
+            "performance_rating": 3,
+            "story_rating": 2
+          },
+          "review_content_scores": {
+            "content_quality": 67,
+            "num_helpful_votes": 1,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2025-12-25T06:29:28Z",
+          "title": "何を伝えたい本なのだろう？"
+        },
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AG4QI6E2LTJPAM42XKTO52N5X63A",
+          "author_name": "a.n.n.e",
+          "body": "ちょっと奇妙な女の人たちのちょっと変わった暮らしが平凡なことのように描かれています。変わっているように見えるのに、当たり前のように暮らしている人々の営みをこっそり見せてもらっている感じ。江國香織さんの本を読むといつも不思議な気分になります。<br />260202聴了",
+          "format": "Freeform",
+          "id": "e265999974c74347adece73ee776223e",
+          "location": "",
+          "ratings": {
+            "overall_rating": 4,
+            "performance_rating": 4,
+            "story_rating": 4
+          },
+          "review_content_scores": {
+            "content_quality": 50,
+            "num_helpful_votes": 0,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2026-02-02T14:27:52Z",
+          "title": "ちょっと奇妙な女たちの話"
+        },
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AEOEPGLM2B2PROBILRQSYQCQTEGA",
+          "author_name": "Amazonカスタマー",
+          "body": "「やほうず」と読んでいたのは「野放図」のことかな…？とか、時々漢字の読み間違いがあるのが残念。あと、登場人物の違いを声色で演じ分けているのが自分には合いませんでした。特にリエの声に違和感があり、解釈違いと言われれば仕方ないけど、本で読んだときは生き方に共感したのに、聴いていると常識知らずの人みたいに聞こえて残念。<br />江國香織さんの小説はもっと淡々とキャラクターに色をつけずに読んでほしい。",
+          "format": "Freeform",
+          "id": "d204f6e9c45140e18627f5e414c62297",
+          "location": "",
+          "ratings": {
+            "overall_rating": 4,
+            "performance_rating": 2,
+            "story_rating": 5
+          },
+          "review_content_scores": {
+            "content_quality": 50,
+            "num_helpful_votes": 0,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2025-12-26T07:27:28Z",
+          "title": "読み間違えが時々ある"
+        },
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AGNO3KESVCCUN3IILYLWDLCFIU2Q",
+          "author_name": "しゃらら",
+          "body": "まず漢字の読み間違いがあって一気に萎えました。冒頭部分で虚空をキョクウと読んでいたのを聞いてびっくり。\r<br />そしてナレーターの声質にも最初から違和感を覚えました。地の文をざらっとした低い声、登場人物のセリフを高めの声で読んでいたのですが、なんだか一昔前のドラマの意地悪なおばさんみたいな声。確かに登場人物たちは50歳代の中年女性なので世間的にはおばさんなのですが、江國香織作品の登場人物は年齢を問わず浮き世離れしていて、育ちの良いお嬢さんっぽい空気をまとっている（作品の中でそうでないように描かれているとしても）のに、そういう人物像からはかけ離れた読み方だったのでとても残念です。もっと温かく厚みのある声（それは決して低い声という意味ではなく成熟して自信を感じさせる声）の方に読んでいただけたらもっと物語を楽しめたんじゃないかと思うのです。",
+          "format": "Freeform",
+          "id": "08fa9ae5efc8447a96c92b63640bb342",
+          "location": "",
+          "ratings": {
+            "overall_rating": 2,
+            "performance_rating": 1,
+            "story_rating": 4
+          },
+          "review_content_scores": {
+            "content_quality": 50,
+            "num_helpful_votes": 0,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2025-12-30T08:50:23Z",
+          "title": "ナレーションが世界観に合わない？"
+        },
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AFA2DZ4V4KDYFK2P7TR2CAFHYQ5A",
+          "author_name": "いねむりぱんだ",
+          "body": "江國氏の作品が馴染み易くよく読んでいたのですがこの作品の内容よりも、先ず朗読の女性の語り口がなんだか不思議に馴染めず、ストーリーがスッと頭に入ってきませんでした。最後まで聞いてられなくて、途中でやめてしまったのが残念です。",
+          "format": "Freeform",
+          "id": "3c4565a01926423ba9a84b441ebd8f5f",
+          "location": "",
+          "ratings": {
+            "overall_rating": 2,
+            "performance_rating": 1,
+            "story_rating": 3
+          },
+          "review_content_scores": {
+            "content_quality": 50,
+            "num_helpful_votes": 0,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2025-12-22T11:53:38Z",
+          "title": "読み手の感情が感じられず"
+        },
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AGP3LHDXK5DOD6LFBKEZVR4L6UMA",
+          "author_name": "きなこ",
+          "body": "日常会話を切り取ったお話。にしても、とーとつにおわる！(笑)ナレーションも無感情すぎて味気なさすぎて猛烈に後悔してる。",
+          "format": "Freeform",
+          "id": "64390b60623445b48fbdeaf4c66ea0c0",
+          "location": "",
+          "ratings": {
+            "overall_rating": 2,
+            "performance_rating": 1,
+            "story_rating": 5
+          },
+          "review_content_scores": {
+            "content_quality": 50,
+            "num_helpful_votes": 0,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2025-12-26T14:40:58Z",
+          "title": "シンプル"
+        }
+      ],
+      "customer_rights": {
+        "is_book_qa_eligible": false,
+        "is_consumable": true,
+        "is_consumable_indefinitely": false,
+        "is_consumable_offline": true,
+        "is_consumable_until": "2099-12-31T12:00:00Z",
+        "is_recap_eligible": false
+      },
+      "date_first_available": "2025-12-19",
+      "distribution_rights_region": [
+        "PR",
+        "PS",
+        "PT",
+        "PW",
+        "PY",
+        "QA",
+        "AD",
+        "AE",
+        "AF",
+        "AG",
+        "AI",
+        "AL",
+        "AM",
+        "AO",
+        "AQ",
+        "AR",
+        "AS",
+        "AT",
+        "RE",
+        "AU",
+        "AW",
+        "AX",
+        "AZ",
+        "RO",
+        "BA",
+        "BB",
+        "RS",
+        "BD",
+        "BE",
+        "RU",
+        "BF",
+        "BG",
+        "RW",
+        "BH",
+        "BI",
+        "BJ",
+        "BL",
+        "BM",
+        "BN",
+        "BO",
+        "SA",
+        "BQ",
+        "SB",
+        "BR",
+        "SC",
+        "BS",
+        "SD",
+        "BT",
+        "SE",
+        "BV",
+        "SG",
+        "BW",
+        "SH",
+        "SI",
+        "BY",
+        "SJ",
+        "BZ",
+        "SK",
+        "SL",
+        "SM",
+        "SN",
+        "SO",
+        "CA",
+        "SR",
+        "CC",
+        "SS",
+        "CD",
+        "ST",
+        "CF",
+        "SV",
+        "CG",
+        "CH",
+        "SX",
+        "CI",
+        "SZ",
+        "CK",
+        "CL",
+        "CM",
+        "CN",
+        "CO",
+        "CR",
+        "TC",
+        "TD",
+        "TF",
+        "CV",
+        "TG",
+        "CW",
+        "TH",
+        "CX",
+        "CY",
+        "TJ",
+        "CZ",
+        "TK",
+        "TL",
+        "TM",
+        "TN",
+        "TO",
+        "TR",
+        "TT",
+        "DE",
+        "TV",
+        "TW",
+        "DJ",
+        "TZ",
+        "DK",
+        "DM",
+        "DO",
+        "UA",
+        "UG",
+        "DZ",
+        "UM",
+        "EC",
+        "US",
+        "EE",
+        "EG",
+        "EH",
+        "UY",
+        "UZ",
+        "VA",
+        "ER",
+        "VC",
+        "ES",
+        "ET",
+        "VE",
+        "VG",
+        "VI",
+        "VN",
+        "VU",
+        "FI",
+        "FJ",
+        "FK",
+        "FM",
+        "FO",
+        "FR",
+        "WF",
+        "GA",
+        "GB",
+        "WS",
+        "GD",
+        "GE",
+        "GF",
+        "GG",
+        "GH",
+        "GI",
+        "GL",
+        "GM",
+        "GN",
+        "GP",
+        "GQ",
+        "GR",
+        "GS",
+        "GT",
+        "GU",
+        "GW",
+        "GY",
+        "HK",
+        "HM",
+        "HN",
+        "HR",
+        "HT",
+        "YE",
+        "HU",
+        "ID",
+        "YT",
+        "IE",
+        "IL",
+        "IM",
+        "IN",
+        "IO",
+        "ZA",
+        "IQ",
+        "IS",
+        "IT",
+        "ZM",
+        "JE",
+        "ZW",
+        "JM",
+        "JO",
+        "JP",
+        "KE",
+        "KG",
+        "KH",
+        "KI",
+        "KM",
+        "KN",
+        "KR",
+        "KW",
+        "KY",
+        "KZ",
+        "LA",
+        "LB",
+        "LC",
+        "LI",
+        "LK",
+        "LR",
+        "LS",
+        "LT",
+        "LU",
+        "LV",
+        "LY",
+        "MA",
+        "MC",
+        "MD",
+        "ME",
+        "MF",
+        "MG",
+        "MH",
+        "MK",
+        "ML",
+        "MM",
+        "MN",
+        "MO",
+        "MP",
+        "MQ",
+        "MR",
+        "MS",
+        "MT",
+        "MU",
+        "MV",
+        "MW",
+        "MX",
+        "MY",
+        "MZ",
+        "NC",
+        "NE",
+        "NF",
+        "NG",
+        "NI",
+        "NL",
+        "NO",
+        "NP",
+        "NR",
+        "NU",
+        "NZ",
+        "OM",
+        "PA",
+        "PE",
+        "PF",
+        "PG",
+        "PH",
+        "PK",
+        "PL",
+        "PM",
+        "PN"
+      ],
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_buyable": true,
+      "is_listenable": true,
+      "is_pdf_url_available": false,
+      "is_preorderable": false,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "is_world_rights": false,
+      "issue_date": "2025-12-19",
+      "language": "japanese",
+      "merchandising_description": "",
+      "merchandising_summary": "かつての「三人娘」が織りなす幸福な食卓と友情と人生に乾杯!作家の民子、自由人の理枝、主婦の早希。そして彼女たちをとりまく人々の楽しく切実な日常を濃やかに描く、愛おしさに満ち満ちた物語。江國香織〝心が躍る〟熱望の長編小説。「会わずにいるあいだ、それぞれ全然べつな生活を送っているのに――。会うとたちまち昔の空気に戻る」",
+      "narrators": [
+        {
+          "name": "坂内 愛"
+        }
+      ],
+      "plans": [
+        {
+          "end_date": "2099-12-31T12:00:00.00000Z",
+          "plan_name": "Audible-AYCL",
+          "start_date": "2025-04-04T06:54:00.00054Z"
+        },
+        {
+          "end_date": "2099-12-31T00:00:00.00000Z",
+          "plan_name": "AccessViaMusic",
+          "start_date": "1970-01-01T00:00:00.00000Z"
+        }
+      ],
+      "platinum_keywords": [
+        "LGBT/Literature_Fiction",
+        "Literature_Fiction",
+        "Literature_Fiction/Contemporary",
+        "AE2_Sandbox"
+      ],
+      "preorder_release_date": "2025-12-19T00:00:00Z",
+      "price": {
+        "credit_price": 1.0,
+        "list_price": {
+          "base": 3500.0,
+          "currency_code": "JPY",
+          "merchant_id": "A2OH60KQJFXQFM",
+          "type": "list"
+        },
+        "lowest_price": {
+          "base": 2450.0,
+          "currency_code": "JPY",
+          "merchant_id": "A2OH60KQJFXQFM",
+          "type": "member"
+        }
+      },
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/41nUVd0s86L._SL500_.jpg"
+      },
+      "product_site_launch_date": "2025-04-04T00:00:00Z",
+      "product_state": "AVAILABLE",
+      "provided_review": {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AFJ42333NW2JIGX327AD437S2WQQ",
+        "body": "何が起こるわけではないが、３人の女性の日常が軽やかに描かれている",
+        "format": "Freeform",
+        "id": "812d0c9b26ec4b14837848d6aa4286f9",
+        "ratings": {
+          "overall_rating": 4,
+          "performance_rating": 5,
+          "story_rating": 5
+        },
+        "review_content_scores": {
+          "content_quality": 50,
+          "num_helpful_votes": 0,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2026-02-28T04:45:06Z",
+        "title": "何が起こるわけではないが、３人の女性の日常が軽やかに描かれている"
+      },
+      "publication_datetime": "2025-12-19T00:00:00Z",
+      "publisher_name": "MediaDo",
+      "publisher_summary": "かつての「三人娘」が織りなす幸福な食卓と友情と人生に乾杯!<br /><br />作家の民子、自由人の理枝、主婦の早希。<br />そして彼女たちをとりまく人々の楽しく切実な日常を濃やかに描く、愛おしさに満ち満ちた物語。<br />江國香織〝心が躍る〟熱望の長編小説。<br /><br />「会わずにいるあいだ、それぞれ全然べつな生活を送っているのに――。会うとたちまち昔の空気に戻る」――作家の民子は、母の薫と静かなふたり暮らし。<br />そこに、大学からの友人・理枝が、イギリスでの仕事を辞めて帰国し、家が見つかるまで居候させてほしいとやってきた。<br />民子と理枝と早希(夫とふたりの息子がいる主婦)は、学生時代「三人娘」と呼ばれていた大の仲良し。<br />早速、三人で西麻布のビストロで、再会を祝しておいしい料理とワインを堪能しながら、おしゃべりに花が咲いて・・・・・・",
+      "rating": {
+        "num_reviews": 12,
+        "overall_distribution": {
+          "average_rating": 4.054054054054054,
+          "display_average_rating": "4.1",
+          "display_stars": 4.0,
+          "num_five_star_ratings": 20,
+          "num_four_star_ratings": 7,
+          "num_one_star_ratings": 1,
+          "num_ratings": 37,
+          "num_three_star_ratings": 3,
+          "num_two_star_ratings": 6
+        },
+        "performance_distribution": {
+          "average_rating": 3.9444444444444446,
+          "display_average_rating": "3.9",
+          "display_stars": 4.0,
+          "num_five_star_ratings": 20,
+          "num_four_star_ratings": 6,
+          "num_one_star_ratings": 5,
+          "num_ratings": 36,
+          "num_three_star_ratings": 3,
+          "num_two_star_ratings": 2
+        },
+        "story_distribution": {
+          "average_rating": 4.277777777777778,
+          "display_average_rating": "4.3",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 22,
+          "num_four_star_ratings": 7,
+          "num_one_star_ratings": 1,
+          "num_ratings": 36,
+          "num_three_star_ratings": 3,
+          "num_two_star_ratings": 3
+        }
+      },
+      "read_along_support": "false",
+      "reasons_for_reporting_review": [
+        {
+          "reported_reason_string_id": "adbl_review_reported_reason_guideline_violation",
+          "reported_reason_value": "guideline_violation"
+        },
+        {
+          "reported_reason_string_id": "adbl_review_reported_reason_csam",
+          "reported_reason_value": "csam"
+        },
+        {
+          "reported_reason_string_id": "adbl_review_reported_reason_inappropriate_content",
+          "reported_reason_value": "inappropriate_content"
+        },
+        {
+          "reported_reason_string_id": "adbl_review_reported_reason_other_concerning_content",
+          "reported_reason_value": "other_concerning_content"
+        }
+      ],
+      "release_date": "2025-12-19",
+      "runtime_length_min": 517,
+      "sample_url": "https://samples.audible.com/bk/mddo/001501/bk_mddo_001501_sample.mp3",
+      "selected_sort_option_for_reviews": "MostRelevant",
+      "sku": "BK_MDDO_001501JP",
+      "sku_lite": "BK_MDDO_001501",
+      "social_media_images": {
+        "facebook": "https://m.media-amazon.com/images/I/41nUVd0s86L._SL10_UR1600,800_CR200,50,1200,630_CLa%7C1200,630%7C41nUVd0s86L.jpg%7C0,0,1200,630+82,82,465,465_PJAdblSocialShare-Gradientoverlay-largeasin-0to70,TopLeft,0,0_PJAdblSocialShare-AudibleLogo-Large,TopLeft,600,270_OU01_ZBAmazon%E3%81%AE%E8%81%B4%E3%81%8F%E8%AA%AD%E6%9B%B8,617,216,52,500,AudibleSansMd,30,255,255,255.jpg",
+        "ig_bg": "https://m.media-amazon.com/images/I/41nUVd0s86L._SL200_BL80_UR1080,1920.jpg",
+        "ig_static_with_bg": "https://m.media-amazon.com/images/I/41nUVd0s86L._SL200_BL80_UR1080,2160_CLa%7C1080,2160%7C41nUVd0s86L.jpg%7C0,0,1080,2160+288,614,500,500_PJAdblSocialShare-Gradientoverlay-Radial,TopLeft,0,0_PJAdblSocialShare-AudibleLogo-Small,TopLeft,290,461_ZBAmazon%E3%81%AE%E8%81%B4%E3%81%8F%E8%AA%AD%E6%9B%B8,290,410,52,500,AudibleSansMd,34,255,255,255_ZB%E3%82%B7%E3%82%A7%E3%83%8B%E3%83%BC%E3%83%AB%E7%B9%94%E3%81%A8%E3%81%8B%E9%BB%84%E8%82%89%E3%81%AE%E3%83%A1%E3%83%AD%E3%83%B3%E3%81%A8%E3%81%8B,290,1183,52,500,AudibleSansSm,32,255,255,255_ZB%E6%B1%9F%E5%9C%8B%20%E9%A6%99%E7%B9%94,290,1247,52,500,AudibleSansRg,28,255,255,255.jpg",
+        "ig_sticker": "https://m.media-amazon.com/images/I/71UyRin7-TL._CLa%7C614,913%7C41nUVd0s86L.jpg%7C0,0,614,913+70,79,471,473_FMpng_PJAudible-logo-dk,BottomLeft,70,-100_ZA%E3%82%B7%E3%82%A7%E3%83%8B%E3%83%BC%E3%83%AB%E7%B9%94%E3%81%A8%E3%81%8B%E9%BB%84%E8%82%89%E3%81%AE%E3%83%A1%E3%83%AD%E3%83%B3%E3%81%A8%E3%81%8B,70,560,65,500,AudibleSansSm,42,54,54,54_ZA%E8%91%97%E8%80%85%20%E6%B1%9F%E5%9C%8B%20%E9%A6%99%E7%B9%94,70,640,52,517,AudibleSansRg,32,0,0,0.png",
+        "twitter": "https://m.media-amazon.com/images/I/41nUVd0s86L._SL10_UR1600,800_CR200,50,1024,512_CLa%7C1024,512%7C41nUVd0s86L.jpg%7C0,0,1024,512+67,67,376,376_PJAdblSocialShare-Gradientoverlay-twitter-largeasin-0to60,TopLeft,0,0_PJAdblSocialShare-AudibleLogo-Medium,TopLeft,490,223_OU01_ZBAmazon%E3%81%AE%E8%81%B4%E3%81%8F%E8%AA%AD%E6%9B%B8,483,152,55,450,AudibleSansMd,32,255,255,255.jpg"
+      },
+      "sort_options_for_reviews": [
+        {
+          "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostRelevant",
+          "reviews_sort_order_value": "MostRelevant"
+        },
+        {
+          "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostHelpful",
+          "reviews_sort_order_value": "MostHelpful"
+        },
+        {
+          "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostRecent",
+          "reviews_sort_order_value": "MostRecent"
+        },
+        {
+          "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostPositive",
+          "reviews_sort_order_value": "MostPositive"
+        },
+        {
+          "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostCritical",
+          "reviews_sort_order_value": "MostCritical"
+        }
+      ],
+      "thesaurus_subject_keywords": [
+        "contemporary"
+      ],
+      "title": "シェニール織とか黄肉のメロンとか"
+    },
+    "response_groups": [
+      "customer_rights",
+      "claim_code_url",
+      "goodreads_ratings",
+      "rating",
+      "media",
+      "product_attrs",
+      "sample",
+      "relationships",
+      "product_desc",
+      "always-returned",
+      "product_extended_attrs",
+      "contributors",
+      "reviews",
+      "provided_review",
+      "product_plans",
+      "rights",
+      "price",
+      "series",
+      "category_ladders",
+      "sku",
+      "review_attrs",
+      "product_details",
+      "product_plan_details"
+    ]
+  },
+  "library": {
+    "item": {
+      "accolades": null,
+      "amazon_asin": null,
+      "asin": "B0F3NYBL89",
+      "asin_trends": null,
+      "asset_badges": null,
+      "asset_details": [],
+      "audible_editors_summary": "「ONLY FROM audible」とは、Audibleのみが提供・販売するデジタル音声作品です（オリジナル作品や、独自ナレーション作品等）。",
+      "author_pages": null,
+      "authors": [
+        {
+          "asin": "B001JXJGXE",
+          "name": "江國 香織"
+        }
+      ],
+      "availability": null,
+      "available_codecs": [
+        {
+          "enhanced_codec": "LC_32_22050_stereo",
+          "format": "Enhanced",
+          "is_kindle_enhanced": true,
+          "name": "aax_22_32"
+        },
+        {
+          "enhanced_codec": "LC_128_44100_stereo",
+          "format": "Enhanced",
+          "is_kindle_enhanced": true,
+          "name": "aax_44_128"
+        },
+        {
+          "enhanced_codec": "LC_64_22050_stereo",
+          "format": "Enhanced",
+          "is_kindle_enhanced": true,
+          "name": "aax_22_64"
+        },
+        {
+          "enhanced_codec": "LC_64_44100_stereo",
+          "format": "Enhanced",
+          "is_kindle_enhanced": true,
+          "name": "aax_44_64"
+        },
+        {
+          "enhanced_codec": "aax",
+          "format": "Enhanced",
+          "is_kindle_enhanced": false,
+          "name": "aax"
+        }
+      ],
+      "badge_types": null,
+      "badges": null,
+      "benefit_id": "AYCL",
+      "book_tags": null,
+      "buying_options": null,
+      "category_ladders": [
+        {
+          "date_product_available_in_category": null,
+          "ladder": [
+            {
+              "category_presentation": null,
+              "children": null,
+              "default_offline_storage_days_count": null,
+              "default_offline_storage_item_count": null,
+              "description": null,
+              "header": null,
+              "id": "8191654051",
+              "images": null,
+              "initial_download_days_count": null,
+              "initial_download_item_count": null,
+              "is_new": null,
+              "localized_name": null,
+              "name": "文学・フィクション",
+              "products": null,
+              "promote_upsell": null,
+              "suppress_download_option": null,
+              "suppress_release_date": null
+            },
+            {
+              "category_presentation": null,
+              "children": null,
+              "default_offline_storage_days_count": null,
+              "default_offline_storage_item_count": null,
+              "description": null,
+              "header": null,
+              "id": "8191789051",
+              "images": null,
+              "initial_download_days_count": null,
+              "initial_download_item_count": null,
+              "is_new": null,
+              "localized_name": null,
+              "name": "大衆小説",
+              "products": null,
+              "promote_upsell": null,
+              "suppress_download_option": null,
+              "suppress_release_date": null
+            },
+            {
+              "category_presentation": null,
+              "children": null,
+              "default_offline_storage_days_count": null,
+              "default_offline_storage_item_count": null,
+              "description": null,
+              "header": null,
+              "id": "8192427051",
+              "images": null,
+              "initial_download_days_count": null,
+              "initial_download_item_count": null,
+              "is_new": null,
+              "localized_name": null,
+              "name": "現代文学",
+              "products": null,
+              "promote_upsell": null,
+              "suppress_download_option": null,
+              "suppress_release_date": null
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "chart_ranks": null,
+      "claim_code_url": null,
+      "collection_ids": null,
+      "content_delivery_type": "SinglePartBook",
+      "content_level": null,
+      "content_rating": null,
+      "content_type": "Product",
+      "continuity": null,
+      "copyright": "©2023 Kaori Ekuni Published in Japan by Kadokawa Haruki Corporation. (P)2025 MEDIA DO Co.,Ltd.",
+      "credits_required": null,
+      "customer_reviews": [
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AFJ42333NW2JIGX327AD437S2WQQ",
+          "author_name": "ktrips",
+          "body": "何が起こるわけではないが、３人の女性の日常が軽やかに描かれている",
+          "customer_vote": null,
+          "format": "Freeform",
+          "guided_responses": null,
+          "id": "812d0c9b26ec4b14837848d6aa4286f9",
+          "location": "",
+          "ratings": {
+            "overall_rating": 4,
+            "performance_rating": 5,
+            "story_rating": 5
+          },
+          "review_badges_lms_keys": null,
+          "review_content_scores": {
+            "content_quality": 50,
+            "num_helpful_votes": 0,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2026-02-28T04:45:06Z",
+          "title": "何が起こるわけではないが、３人の女性の日常が軽やかに描かれている"
+        },
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AH6M3FVXLJGM7R25T6JDOOIJATRQ",
+          "author_name": "Amazon カスタマー",
+          "body": "江國香織さんの本は好きで結構読んだけれど、これは初めて。だんだん好きになれるのだろうかと期待しながら、結局最後までリエのことが好きではなかった。みんなを好きになりたかったのに悲しい。そしてナレーションの、特にセリフの抑揚に何とも違和感があった。プロの俳優さんに一度読んでみてほしい。リエの印象も変わるかもしれない。<br /><br />あと、唐突な終わりにとても驚いた。私たちが読もうが読むまいが、登場人物たちはこうして毎日暮らしていくんだろうな、何事もなく、静かに。そして私たちは、それを小さな窓から垣間見ただけ、という後味は江國さんならでは。",
+          "customer_vote": null,
+          "format": "Freeform",
+          "guided_responses": null,
+          "id": "2fb3a91e9a7f4d8584f9ad31e08db4c2",
+          "location": "",
+          "ratings": {
+            "overall_rating": 3,
+            "performance_rating": 2,
+            "story_rating": 4
+          },
+          "review_badges_lms_keys": null,
+          "review_content_scores": {
+            "content_quality": 50,
+            "num_helpful_votes": 0,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2025-12-24T15:31:02Z",
+          "title": "ナレーションがイマイチ"
+        },
+        {
+          "asin": "B0F3NYBL89",
+          "author_id": "amzn1.account.AGDGQGISNIZLDZE3D5NONXFJNZ6A",
+          "author_name": null,
+          "body": "有吉佐和子の青い壺を読んだ直後からからの本作だったので、おしゃべり感が似ているな、と思った。本作に出てくる人々の、何と愛おしいことよ。それぞれの魅力に、年を重ねるっていいな、若いってそうだよなと。その後の物語も知りたくなりました！",
+          "customer_vote": null,
+          "format": "Freeform",
+          "guided_responses": null,
+          "id": "dd9ddd6b081e46e88d3a5d7191845d1c",
+          "location": null,
+          "ratings": {
+            "overall_rating": 5,
+            "performance_rating": 3,
+            "story_rating": 5
+          },
+          "review_badges_lms_keys": null,
+          "review_content_scores": {
+            "content_quality": 67,
+            "num_helpful_votes": 1,
+            "num_unhelpful_votes": 0
+          },
+          "submission_date": "2026-01-15T16:13:23Z",
+          "title": "あるある"
+        }
+      ],
+      "customer_rights": {
+        "is_book_qa_eligible": false,
+        "is_consumable": true,
+        "is_consumable_indefinitely": false,
+        "is_consumable_offline": true,
+        "is_consumable_until": "2099-12-31T12:00:00Z",
+        "is_recap_eligible": false
+      },
+      "date_first_available": "2025-12-19",
+      "destination_asin": null,
+      "distribution_rights_region": [
+        "PR",
+        "PS",
+        "PT",
+        "PW",
+        "PY",
+        "QA",
+        "AD",
+        "AE",
+        "AF",
+        "AG",
+        "AI",
+        "AL",
+        "AM",
+        "AO",
+        "AQ",
+        "AR",
+        "AS",
+        "AT",
+        "RE",
+        "AU",
+        "AW",
+        "AX",
+        "AZ",
+        "RO",
+        "BA",
+        "BB",
+        "RS",
+        "BD",
+        "BE",
+        "RU",
+        "BF",
+        "BG",
+        "RW",
+        "BH",
+        "BI",
+        "BJ",
+        "BL",
+        "BM",
+        "BN",
+        "BO",
+        "SA",
+        "BQ",
+        "SB",
+        "BR",
+        "SC",
+        "BS",
+        "SD",
+        "BT",
+        "SE",
+        "BV",
+        "SG",
+        "BW",
+        "SH",
+        "SI",
+        "BY",
+        "SJ",
+        "BZ",
+        "SK",
+        "SL",
+        "SM",
+        "SN",
+        "SO",
+        "CA",
+        "SR",
+        "CC",
+        "SS",
+        "CD",
+        "ST",
+        "CF",
+        "SV",
+        "CG",
+        "CH",
+        "SX",
+        "CI",
+        "SZ",
+        "CK",
+        "CL",
+        "CM",
+        "CN",
+        "CO",
+        "CR",
+        "TC",
+        "TD",
+        "TF",
+        "CV",
+        "TG",
+        "CW",
+        "TH",
+        "CX",
+        "CY",
+        "TJ",
+        "CZ",
+        "TK",
+        "TL",
+        "TM",
+        "TN",
+        "TO",
+        "TR",
+        "TT",
+        "DE",
+        "TV",
+        "TW",
+        "DJ",
+        "TZ",
+        "DK",
+        "DM",
+        "DO",
+        "UA",
+        "UG",
+        "DZ",
+        "UM",
+        "EC",
+        "US",
+        "EE",
+        "EG",
+        "EH",
+        "UY",
+        "UZ",
+        "VA",
+        "ER",
+        "VC",
+        "ES",
+        "ET",
+        "VE",
+        "VG",
+        "VI",
+        "VN",
+        "VU",
+        "FI",
+        "FJ",
+        "FK",
+        "FM",
+        "FO",
+        "FR",
+        "WF",
+        "GA",
+        "GB",
+        "WS",
+        "GD",
+        "GE",
+        "GF",
+        "GG",
+        "GH",
+        "GI",
+        "GL",
+        "GM",
+        "GN",
+        "GP",
+        "GQ",
+        "GR",
+        "GS",
+        "GT",
+        "GU",
+        "GW",
+        "GY",
+        "HK",
+        "HM",
+        "HN",
+        "HR",
+        "HT",
+        "YE",
+        "HU",
+        "ID",
+        "YT",
+        "IE",
+        "IL",
+        "IM",
+        "IN",
+        "IO",
+        "ZA",
+        "IQ",
+        "IS",
+        "IT",
+        "ZM",
+        "JE",
+        "ZW",
+        "JM",
+        "JO",
+        "JP",
+        "KE",
+        "KG",
+        "KH",
+        "KI",
+        "KM",
+        "KN",
+        "KR",
+        "KW",
+        "KY",
+        "KZ",
+        "LA",
+        "LB",
+        "LC",
+        "LI",
+        "LK",
+        "LR",
+        "LS",
+        "LT",
+        "LU",
+        "LV",
+        "LY",
+        "MA",
+        "MC",
+        "MD",
+        "ME",
+        "MF",
+        "MG",
+        "MH",
+        "MK",
+        "ML",
+        "MM",
+        "MN",
+        "MO",
+        "MP",
+        "MQ",
+        "MR",
+        "MS",
+        "MT",
+        "MU",
+        "MV",
+        "MW",
+        "MX",
+        "MY",
+        "MZ",
+        "NC",
+        "NE",
+        "NF",
+        "NG",
+        "NI",
+        "NL",
+        "NO",
+        "NP",
+        "NR",
+        "NU",
+        "NZ",
+        "OM",
+        "PA",
+        "PE",
+        "PF",
+        "PG",
+        "PH",
+        "PK",
+        "PL",
+        "PM",
+        "PN"
+      ],
+      "editorial_reviews": null,
+      "episode_count": null,
+      "episode_number": null,
+      "episode_type": null,
+      "extended_product_description": null,
+      "format_type": "unabridged",
+      "generic_keyword": null,
+      "goodreads_ratings": null,
+      "has_children": false,
+      "image_url": null,
+      "invites_remaining": null,
+      "is_adult_product": false,
+      "is_archived": false,
+      "is_ayce": true,
+      "is_buyable": true,
+      "is_downloaded": true,
+      "is_finished": true,
+      "is_getting_latest_episodes": null,
+      "is_in_wishlist": false,
+      "is_listenable": true,
+      "is_pdf_url_available": false,
+      "is_pending": false,
+      "is_playable": true,
+      "is_preorderable": false,
+      "is_prereleased": null,
+      "is_purchasability_suppressed": false,
+      "is_released": null,
+      "is_removable": true,
+      "is_removable_by_parent": true,
+      "is_returnable": true,
+      "is_searchable": null,
+      "is_shared": null,
+      "is_visible": true,
+      "is_vvab": false,
+      "is_world_rights": false,
+      "is_ws4v_companion_asin_owned": null,
+      "is_ws4v_enabled": false,
+      "isbn": null,
+      "issue_date": "2025-12-19",
+      "language": "japanese",
+      "library_status": {
+        "date_added": "2025-12-27T05:44:44.000Z",
+        "is_pending": false,
+        "is_preordered": null,
+        "is_removable": true,
+        "is_visible": true
+      },
+      "library_status_badges": null,
+      "listening_status": {
+        "finished_at_timestamp": "2026-02-27T10:25:17.379Z",
+        "is_finished": true,
+        "percent_complete": 99.0,
+        "time_remaining_seconds": 310
+      },
+      "long_tail_topic_tags": null,
+      "member_giving_status": null,
+      "merchandising_description": "",
+      "merchandising_summary": "かつての「三人娘」が織りなす幸福な食卓と友情と人生に乾杯!作家の民子、自由人の理枝、主婦の早希。そして彼女たちをとりまく人々の楽しく切実な日常を濃やかに描く、愛おしさに満ち満ちた物語。江國香織〝心が躍る〟熱望の長編小説。「会わずにいるあいだ、それぞれ全然べつな生活を送っているのに――。会うとたちまち昔の空気に戻る」",
+      "music_id": null,
+      "narration_accent": null,
+      "narrators": [
+        {
+          "asin": null,
+          "name": "坂内 愛"
+        }
+      ],
+      "new_episode_added_date": null,
+      "order_id": null,
+      "order_item_id": null,
+      "origin_asin": "B0F3NYBL89",
+      "origin_id": null,
+      "origin_marketplace": "A1QAP3MOU4173J",
+      "origin_type": null,
+      "part_number": null,
+      "participation_plans": null,
+      "pdf_url": null,
+      "percent_complete": 0.0,
+      "performance_summary": null,
+      "periodical_info": null,
+      "plans": [
+        {
+          "customer_eligible": true,
+          "detail_plan_names": null,
+          "end_date": "2099-12-31T12:00:00.00000Z",
+          "plan_name": "Audible-AYCL",
+          "start_date": "2025-04-04T06:54:00.00054Z"
+        },
+        {
+          "customer_eligible": null,
+          "detail_plan_names": null,
+          "end_date": "2099-12-31T00:00:00.00000Z",
+          "plan_name": "AccessViaMusic",
+          "start_date": "1970-01-01T00:00:00.00000Z"
+        }
+      ],
+      "platinum_keywords": [
+        "LGBT/Literature_Fiction",
+        "Literature_Fiction",
+        "Literature_Fiction/Contemporary",
+        "AE2_Sandbox"
+      ],
+      "preorder_release_date": "2025-12-19T00:00:00Z",
+      "preorder_status": null,
+      "price": null,
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/41nUVd0s86L._SL500_.jpg"
+      },
+      "product_page_url": null,
+      "product_site_launch_date": "2025-04-04T00:00:00Z",
+      "product_state": "AVAILABLE",
+      "product_summary": null,
+      "profile_sharing": null,
+      "program_participation": null,
+      "provided_review": {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AFJ42333NW2JIGX327AD437S2WQQ",
+        "author_name": null,
+        "body": "何が起こるわけではないが、３人の女性の日常が軽やかに描かれている",
+        "customer_vote": null,
+        "format": "Freeform",
+        "guided_responses": null,
+        "id": "812d0c9b26ec4b14837848d6aa4286f9",
+        "location": null,
+        "ratings": {
+          "overall_rating": 4,
+          "performance_rating": 5,
+          "story_rating": 5
+        },
+        "review_badges_lms_keys": null,
+        "review_content_scores": {
+          "content_quality": 50,
+          "num_helpful_votes": 0,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2026-02-28T04:45:06Z",
+        "title": "何が起こるわけではないが、３人の女性の日常が軽やかに描かれている"
+      },
+      "publication_datetime": "2025-12-19T00:00:00Z",
+      "publication_name": null,
+      "publisher_name": "MediaDo",
+      "publisher_summary": "かつての「三人娘」が織りなす幸福な食卓と友情と人生に乾杯!<br /><br />作家の民子、自由人の理枝、主婦の早希。<br />そして彼女たちをとりまく人々の楽しく切実な日常を濃やかに描く、愛おしさに満ち満ちた物語。<br />江國香織〝心が躍る〟熱望の長編小説。<br /><br />「会わずにいるあいだ、それぞれ全然べつな生活を送っているのに――。会うとたちまち昔の空気に戻る」――作家の民子は、母の薫と静かなふたり暮らし。<br />そこに、大学からの友人・理枝が、イギリスでの仕事を辞めて帰国し、家が見つかるまで居候させてほしいとやってきた。<br />民子と理枝と早希(夫とふたりの息子がいる主婦)は、学生時代「三人娘」と呼ばれていた大の仲良し。<br />早速、三人で西麻布のビストロで、再会を祝しておいしい料理とワインを堪能しながら、おしゃべりに花が咲いて・・・・・・",
+      "purchase_date": "2025-12-27T05:44:44.000Z",
+      "rating": {
+        "num_reviews": 12,
+        "overall_distribution": {
+          "average_rating": 4.054054054054054,
+          "display_average_rating": "4.1",
+          "display_stars": 4.0,
+          "num_five_star_ratings": 20,
+          "num_four_star_ratings": 7,
+          "num_one_star_ratings": 1,
+          "num_ratings": 37,
+          "num_three_star_ratings": 3,
+          "num_two_star_ratings": 6
+        },
+        "performance_distribution": {
+          "average_rating": 3.9444444444444446,
+          "display_average_rating": "3.9",
+          "display_stars": 4.0,
+          "num_five_star_ratings": 20,
+          "num_four_star_ratings": 6,
+          "num_one_star_ratings": 5,
+          "num_ratings": 36,
+          "num_three_star_ratings": 3,
+          "num_two_star_ratings": 2
+        },
+        "story_distribution": {
+          "average_rating": 4.277777777777778,
+          "display_average_rating": "4.3",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 22,
+          "num_four_star_ratings": 7,
+          "num_one_star_ratings": 1,
+          "num_ratings": 36,
+          "num_three_star_ratings": 3,
+          "num_two_star_ratings": 3
+        }
+      },
+      "read_along_support": "false",
+      "reasons_for_reporting_review": [
+        {
+          "reported_reason_string_id": "adbl_review_reported_reason_guideline_violation",
+          "reported_reason_value": "guideline_violation"
+        },
+        {
+          "reported_reason_string_id": "adbl_review_reported_reason_csam",
+          "reported_reason_value": "csam"
+        },
+        {
+          "reported_reason_string_id": "adbl_review_reported_reason_inappropriate_content",
+          "reported_reason_value": "inappropriate_content"
+        },
+        {
+          "reported_reason_string_id": "adbl_review_reported_reason_other_concerning_content",
+          "reported_reason_value": "other_concerning_content"
+        }
+      ],
+      "relationships": null,
+      "release_date": "2025-12-19",
+      "revenue_allocation_id": null,
+      "review_keywords": null,
+      "review_status": null,
+      "review_summary": null,
+      "rich_images": null,
+      "right_type": null,
+      "runtime_length_min": 517,
+      "sample_url": "https://samples.audible.com/bk/mddo/001501/bk_mddo_001501_sample.mp3",
+      "season_number": null,
+      "selected_sort_option_for_reviews": "MostRelevant",
+      "series": null,
+      "shared_states": null,
+      "shared_with": null,
+      "shared_with_identity_directed_ids": null,
+      "short_description": null,
+      "sku": "BK_MDDO_001501JP",
+      "sku_lite": "BK_MDDO_001501",
+      "social_media_images": {
+        "facebook": "https://m.media-amazon.com/images/I/41nUVd0s86L._SL10_UR1600,800_CR200,50,1200,630_CLa%7C1200,630%7C41nUVd0s86L.jpg%7C0,0,1200,630+82,82,465,465_PJAdblSocialShare-Gradientoverlay-largeasin-0to70,TopLeft,0,0_PJAdblSocialShare-AudibleLogo-Large,TopLeft,600,270_OU01_ZBAmazon%E3%81%AE%E8%81%B4%E3%81%8F%E8%AA%AD%E6%9B%B8,617,216,52,500,AudibleSansMd,30,255,255,255.jpg",
+        "ig_bg": "https://m.media-amazon.com/images/I/41nUVd0s86L._SL200_BL80_UR1080,1920.jpg",
+        "ig_static_with_bg": "https://m.media-amazon.com/images/I/41nUVd0s86L._SL200_BL80_UR1080,2160_CLa%7C1080,2160%7C41nUVd0s86L.jpg%7C0,0,1080,2160+288,614,500,500_PJAdblSocialShare-Gradientoverlay-Radial,TopLeft,0,0_PJAdblSocialShare-AudibleLogo-Small,TopLeft,290,461_ZBAmazon%E3%81%AE%E8%81%B4%E3%81%8F%E8%AA%AD%E6%9B%B8,290,410,52,500,AudibleSansMd,34,255,255,255_ZB%E3%82%B7%E3%82%A7%E3%83%8B%E3%83%BC%E3%83%AB%E7%B9%94%E3%81%A8%E3%81%8B%E9%BB%84%E8%82%89%E3%81%AE%E3%83%A1%E3%83%AD%E3%83%B3%E3%81%A8%E3%81%8B,290,1183,52,500,AudibleSansSm,32,255,255,255_ZB%E6%B1%9F%E5%9C%8B%20%E9%A6%99%E7%B9%94,290,1247,52,500,AudibleSansRg,28,255,255,255.jpg",
+        "ig_sticker": "https://m.media-amazon.com/images/I/71UyRin7-TL._CLa%7C614,913%7C41nUVd0s86L.jpg%7C0,0,614,913+70,79,471,473_FMpng_PJAudible-logo-dk,BottomLeft,70,-100_ZA%E3%82%B7%E3%82%A7%E3%83%8B%E3%83%BC%E3%83%AB%E7%B9%94%E3%81%A8%E3%81%8B%E9%BB%84%E8%82%89%E3%81%AE%E3%83%A1%E3%83%AD%E3%83%B3%E3%81%A8%E3%81%8B,70,560,65,500,AudibleSansSm,42,54,54,54_ZA%E8%91%97%E8%80%85%20%E6%B1%9F%E5%9C%8B%20%E9%A6%99%E7%B9%94,70,640,52,517,AudibleSansRg,32,0,0,0.png",
+        "twitter": "https://m.media-amazon.com/images/I/41nUVd0s86L._SL10_UR1600,800_CR200,50,1024,512_CLa%7C1024,512%7C41nUVd0s86L.jpg%7C0,0,1024,512+67,67,376,376_PJAdblSocialShare-Gradientoverlay-twitter-largeasin-0to60,TopLeft,0,0_PJAdblSocialShare-AudibleLogo-Medium,TopLeft,490,223_OU01_ZBAmazon%E3%81%AE%E8%81%B4%E3%81%8F%E8%AA%AD%E6%9B%B8,483,152,55,450,AudibleSansMd,32,255,255,255.jpg"
+      },
+      "sort_options_for_reviews": [
+        {
+          "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostRelevant",
+          "reviews_sort_order_value": "MostRelevant"
+        },
+        {
+          "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostHelpful",
+          "reviews_sort_order_value": "MostHelpful"
+        },
+        {
+          "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostRecent",
+          "reviews_sort_order_value": "MostRecent"
+        },
+        {
+          "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostPositive",
+          "reviews_sort_order_value": "MostPositive"
+        },
+        {
+          "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostCritical",
+          "reviews_sort_order_value": "MostCritical"
+        }
+      ],
+      "spotlight_tags": null,
+      "status": "Active",
+      "story_summary": null,
+      "subscription_asins": null,
+      "subtitle": null,
+      "tags": null,
+      "text_to_speech": null,
+      "thesaurus_subject_keywords": [
+        "contemporary"
+      ],
+      "title": "シェニール織とか黄肉のメロンとか",
+      "video_url": null,
+      "voice_description": null,
+      "ws4v_companion_asin": null,
+      "ws4v_details": null
+    },
+    "response_groups": [
+      "customer_rights",
+      "is_visible",
+      "customer_product_plans",
+      "claim_code_url",
+      "periodicals",
+      "ws4v",
+      "sample",
+      "is_downloaded",
+      "is_finished",
+      "percent_complete",
+      "always-returned",
+      "product_extended_attrs",
+      "is_playable",
+      "contributors",
+      "listening_status",
+      "is_archived",
+      "product_plans",
+      "series",
+      "review_attrs",
+      "product_details",
+      "product_plan_details",
+      "is_removable",
+      "origin",
+      "rating",
+      "pdf_url",
+      "media",
+      "order_details",
+      "product_attrs",
+      "relationships",
+      "product_desc",
+      "reviews",
+      "provided_review",
+      "library_status",
+      "in_wishlist",
+      "origin_asin",
+      "categories",
+      "category_ladders",
+      "sku",
+      "badge_types",
+      "is_returnable"
+    ]
+  },
+  "finished": {
+    "mark_as_finished_status_list": [
+      {
+        "asin": "B0F3NYBL89",
+        "event_timestamp": "2026-02-27T10:25:17.379Z",
+        "is_marked_as_finished": true,
+        "update_date": "2026-02-27T10:25:17.624Z"
+      }
+    ]
+  },
+  "reviews": {
+    "customer_reviews": [
+      {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AGDGQGISNIZLDZE3D5NONXFJNZ6A",
+        "body": "有吉佐和子の青い壺を読んだ直後からからの本作だったので、おしゃべり感が似ているな、と思った。本作に出てくる人々の、何と愛おしいことよ。それぞれの魅力に、年を重ねるっていいな、若いってそうだよなと。その後の物語も知りたくなりました！",
+        "format": "Freeform",
+        "id": "dd9ddd6b081e46e88d3a5d7191845d1c",
+        "ratings": {
+          "overall_rating": 5,
+          "performance_rating": 3,
+          "story_rating": 5
+        },
+        "review_content_scores": {
+          "content_quality": 67,
+          "num_helpful_votes": 1,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2026-01-15T16:13:23Z",
+        "title": "あるある"
+      },
+      {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AHMUXK2T75ZZOOC6ENUDJHJUNJYQ",
+        "body": "リエという登場人物に好感を持てないまま、中身のない話が続く。読み終わって、「え、これだけ？　だから何？」という感想のみ",
+        "format": "Freeform",
+        "id": "f0fa2d3a86f445e09ba50f875bd0e640",
+        "ratings": {
+          "overall_rating": 3,
+          "performance_rating": 3,
+          "story_rating": 2
+        },
+        "review_content_scores": {
+          "content_quality": 67,
+          "num_helpful_votes": 1,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2025-12-25T06:29:28Z",
+        "title": "何を伝えたい本なのだろう？"
+      },
+      {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AFJ42333NW2JIGX327AD437S2WQQ",
+        "author_name": "ktrips",
+        "body": "何が起こるわけではないが、３人の女性の日常が軽やかに描かれている",
+        "format": "Freeform",
+        "id": "812d0c9b26ec4b14837848d6aa4286f9",
+        "location": "",
+        "ratings": {
+          "overall_rating": 4,
+          "performance_rating": 5,
+          "story_rating": 5
+        },
+        "review_content_scores": {
+          "content_quality": 50,
+          "num_helpful_votes": 0,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2026-02-28T04:45:06Z",
+        "title": "何が起こるわけではないが、３人の女性の日常が軽やかに描かれている"
+      },
+      {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AGSPJNROPLKWYF7O6RW2D3IXWX3A",
+        "author_name": "エルモコ",
+        "body": "江國さんは昔好きだったので期待していたのですが、私には合いませんでした。リエは自分の周りに1番いて欲しくないタイプで、年齢を重ね、自分自身、友人に何を求めているかを改めて思いました。リエの奔放さを面白いと受け入れられる度量が私にはないけれど、それでもいいと。ナレーションの甲高いリエの声も、主人公と同世代の私には痛く感じ、ますます共感できませんでした。",
+        "format": "Freeform",
+        "id": "fe44b32cd8494156abd3a1b716de377c",
+        "location": "",
+        "ratings": {
+          "overall_rating": 2,
+          "performance_rating": 1,
+          "story_rating": 2
+        },
+        "review_content_scores": {
+          "content_quality": 50,
+          "num_helpful_votes": 0,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2026-02-20T23:24:23Z",
+        "title": "人それぞれ"
+      },
+      {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AG4QI6E2LTJPAM42XKTO52N5X63A",
+        "author_name": "a.n.n.e",
+        "body": "ちょっと奇妙な女の人たちのちょっと変わった暮らしが平凡なことのように描かれています。変わっているように見えるのに、当たり前のように暮らしている人々の営みをこっそり見せてもらっている感じ。江國香織さんの本を読むといつも不思議な気分になります。<br />260202聴了",
+        "format": "Freeform",
+        "id": "e265999974c74347adece73ee776223e",
+        "location": "",
+        "ratings": {
+          "overall_rating": 4,
+          "performance_rating": 4,
+          "story_rating": 4
+        },
+        "review_content_scores": {
+          "content_quality": 50,
+          "num_helpful_votes": 0,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2026-02-02T14:27:52Z",
+        "title": "ちょっと奇妙な女たちの話"
+      },
+      {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AEQOTNJSKKZ3EKZ4JM2MSHVR7FUA",
+        "author_name": "mmm.",
+        "body": "じわじわと面白さが増す。<br />私の女友達の中でもそれぞれのキャラ！があるあるっといった具合。<br />日本版セックスアンドシティみたいな感じで面白かった。<br />リカがキャリーよりかな。<br />こういったストーリーは重すぎず、日常的でもあって『ながら聴き』にちょうどよく心地よい。<br />あっという間に聴ける。<br />ナレーションが最初は暗いかな？と思ったが登場人物が沢山出てき出すと、それぞれのキャラにあった声色でとてもわかりやすくて良かった。",
+        "format": "Freeform",
+        "id": "29a41c7362894e24a69f8e9f91ee61e6",
+        "location": "",
+        "ratings": {
+          "overall_rating": 5,
+          "performance_rating": 5,
+          "story_rating": 5
+        },
+        "review_content_scores": {
+          "content_quality": 50,
+          "num_helpful_votes": 0,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2026-01-08T10:59:25Z",
+        "title": "女友達"
+      },
+      {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AGNO3KESVCCUN3IILYLWDLCFIU2Q",
+        "author_name": "しゃらら",
+        "body": "まず漢字の読み間違いがあって一気に萎えました。冒頭部分で虚空をキョクウと読んでいたのを聞いてびっくり。\r<br />そしてナレーターの声質にも最初から違和感を覚えました。地の文をざらっとした低い声、登場人物のセリフを高めの声で読んでいたのですが、なんだか一昔前のドラマの意地悪なおばさんみたいな声。確かに登場人物たちは50歳代の中年女性なので世間的にはおばさんなのですが、江國香織作品の登場人物は年齢を問わず浮き世離れしていて、育ちの良いお嬢さんっぽい空気をまとっている（作品の中でそうでないように描かれているとしても）のに、そういう人物像からはかけ離れた読み方だったのでとても残念です。もっと温かく厚みのある声（それは決して低い声という意味ではなく成熟して自信を感じさせる声）の方に読んでいただけたらもっと物語を楽しめたんじゃないかと思うのです。",
+        "format": "Freeform",
+        "id": "08fa9ae5efc8447a96c92b63640bb342",
+        "location": "",
+        "ratings": {
+          "overall_rating": 2,
+          "performance_rating": 1,
+          "story_rating": 4
+        },
+        "review_content_scores": {
+          "content_quality": 50,
+          "num_helpful_votes": 0,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2025-12-30T08:50:23Z",
+        "title": "ナレーションが世界観に合わない？"
+      },
+      {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AGP3LHDXK5DOD6LFBKEZVR4L6UMA",
+        "author_name": "きなこ",
+        "body": "日常会話を切り取ったお話。にしても、とーとつにおわる！(笑)ナレーションも無感情すぎて味気なさすぎて猛烈に後悔してる。",
+        "format": "Freeform",
+        "id": "64390b60623445b48fbdeaf4c66ea0c0",
+        "location": "",
+        "ratings": {
+          "overall_rating": 2,
+          "performance_rating": 1,
+          "story_rating": 5
+        },
+        "review_content_scores": {
+          "content_quality": 50,
+          "num_helpful_votes": 0,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2025-12-26T14:40:58Z",
+        "title": "シンプル"
+      },
+      {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AEOEPGLM2B2PROBILRQSYQCQTEGA",
+        "author_name": "Amazonカスタマー",
+        "body": "「やほうず」と読んでいたのは「野放図」のことかな…？とか、時々漢字の読み間違いがあるのが残念。あと、登場人物の違いを声色で演じ分けているのが自分には合いませんでした。特にリエの声に違和感があり、解釈違いと言われれば仕方ないけど、本で読んだときは生き方に共感したのに、聴いていると常識知らずの人みたいに聞こえて残念。<br />江國香織さんの小説はもっと淡々とキャラクターに色をつけずに読んでほしい。",
+        "format": "Freeform",
+        "id": "d204f6e9c45140e18627f5e414c62297",
+        "location": "",
+        "ratings": {
+          "overall_rating": 4,
+          "performance_rating": 2,
+          "story_rating": 5
+        },
+        "review_content_scores": {
+          "content_quality": 50,
+          "num_helpful_votes": 0,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2025-12-26T07:27:28Z",
+        "title": "読み間違えが時々ある"
+      },
+      {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AH6M3FVXLJGM7R25T6JDOOIJATRQ",
+        "author_name": "Amazon カスタマー",
+        "body": "江國香織さんの本は好きで結構読んだけれど、これは初めて。だんだん好きになれるのだろうかと期待しながら、結局最後までリエのことが好きではなかった。みんなを好きになりたかったのに悲しい。そしてナレーションの、特にセリフの抑揚に何とも違和感があった。プロの俳優さんに一度読んでみてほしい。リエの印象も変わるかもしれない。<br /><br />あと、唐突な終わりにとても驚いた。私たちが読もうが読むまいが、登場人物たちはこうして毎日暮らしていくんだろうな、何事もなく、静かに。そして私たちは、それを小さな窓から垣間見ただけ、という後味は江國さんならでは。",
+        "format": "Freeform",
+        "id": "2fb3a91e9a7f4d8584f9ad31e08db4c2",
+        "location": "",
+        "ratings": {
+          "overall_rating": 3,
+          "performance_rating": 2,
+          "story_rating": 4
+        },
+        "review_content_scores": {
+          "content_quality": 50,
+          "num_helpful_votes": 0,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2025-12-24T15:31:02Z",
+        "title": "ナレーションがイマイチ"
+      },
+      {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AHPH27IY24TI6QIMA2NBOOKNYYBQ",
+        "author_name": "Amazon カスタマー",
+        "body": "何々とか〜の言い回しが良かった<br />内容はもう少し何かほしかった<br />ような<br /><br /><br />",
+        "format": "Freeform",
+        "id": "841fafdc065e43ae803e2c6cef60b8a0",
+        "location": "",
+        "ratings": {
+          "overall_rating": 2,
+          "performance_rating": 5,
+          "story_rating": 1
+        },
+        "review_content_scores": {
+          "content_quality": 50,
+          "num_helpful_votes": 0,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2025-12-23T07:35:12Z",
+        "title": "なし"
+      },
+      {
+        "asin": "B0F3NYBL89",
+        "author_id": "amzn1.account.AFA2DZ4V4KDYFK2P7TR2CAFHYQ5A",
+        "author_name": "いねむりぱんだ",
+        "body": "江國氏の作品が馴染み易くよく読んでいたのですがこの作品の内容よりも、先ず朗読の女性の語り口がなんだか不思議に馴染めず、ストーリーがスッと頭に入ってきませんでした。最後まで聞いてられなくて、途中でやめてしまったのが残念です。",
+        "format": "Freeform",
+        "id": "3c4565a01926423ba9a84b441ebd8f5f",
+        "location": "",
+        "ratings": {
+          "overall_rating": 2,
+          "performance_rating": 1,
+          "story_rating": 3
+        },
+        "review_content_scores": {
+          "content_quality": 50,
+          "num_helpful_votes": 0,
+          "num_unhelpful_votes": 0
+        },
+        "submission_date": "2025-12-22T11:53:38Z",
+        "title": "読み手の感情が感じられず"
+      }
+    ],
+    "reasons_for_reporting_review": [
+      {
+        "reported_reason_string_id": "adbl_review_reported_reason_guideline_violation",
+        "reported_reason_value": "guideline_violation"
+      },
+      {
+        "reported_reason_string_id": "adbl_review_reported_reason_csam",
+        "reported_reason_value": "csam"
+      },
+      {
+        "reported_reason_string_id": "adbl_review_reported_reason_inappropriate_content",
+        "reported_reason_value": "inappropriate_content"
+      },
+      {
+        "reported_reason_string_id": "adbl_review_reported_reason_other_concerning_content",
+        "reported_reason_value": "other_concerning_content"
+      }
+    ],
+    "response_groups": [
+      "always-returned"
+    ],
+    "selected_sort_option_for_reviews": "MostHelpful",
+    "sort_options_for_reviews": [
+      {
+        "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostRelevant",
+        "reviews_sort_order_value": "MostRelevant"
+      },
+      {
+        "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostHelpful",
+        "reviews_sort_order_value": "MostHelpful"
+      },
+      {
+        "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostRecent",
+        "reviews_sort_order_value": "MostRecent"
+      },
+      {
+        "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostPositive",
+        "reviews_sort_order_value": "MostPositive"
+      },
+      {
+        "reviews_sort_order_string_id": "adbl_productdetail_reviews_sort_MostCritical",
+        "reviews_sort_order_value": "MostCritical"
+      }
+    ],
+    "topic_and_reasons_for_reporting_review_list": [
+      {
+        "reported_reasons_review_list": [
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_hidden_advertisement",
+            "reported_reason_value": "hidden_advertisement"
+          }
+        ],
+        "reported_topic_review": {
+          "reported_topic_string_id": "adbl_review_reporting_topic_consumer_info_infringements",
+          "reported_topic_value": "consumer_info_infringements"
+        }
+      },
+      {
+        "reported_reasons_review_list": [
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_cyber_bullying_intimidation",
+            "reported_reason_value": "cyber_bullying_intimidation"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_cyber_harassment",
+            "reported_reason_value": "cyber_harassment"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_cyber_incitement_hatred_violence",
+            "reported_reason_value": "cyber_incitement_hatred_violence"
+          }
+        ],
+        "reported_topic_review": {
+          "reported_topic_string_id": "adbl_review_reporting_topic_cyber_violence_general",
+          "reported_topic_value": "cyber_violence_general"
+        }
+      },
+      {
+        "reported_reasons_review_list": [
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_cyber_bullying_against_girls",
+            "reported_reason_value": "cyber_bullying_against_girls"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_cyber_harassment_against_women",
+            "reported_reason_value": "cyber_harassment_against_women"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_gendered_disinformation",
+            "reported_reason_value": "gendered_disinformation"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_incitement_violence_hatred_women",
+            "reported_reason_value": "incitement_violence_hatred_women"
+          }
+        ],
+        "reported_topic_review": {
+          "reported_topic_string_id": "adbl_review_reporting_topic_cyber_violence_against_women",
+          "reported_topic_value": "cyber_violence_against_women"
+        }
+      },
+      {
+        "reported_reasons_review_list": [
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_defamation",
+            "reported_reason_value": "defamation"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_discrimination",
+            "reported_reason_value": "discrimination"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_illegal_incitement_hate_speech",
+            "reported_reason_value": "illegal_incitement_hate_speech"
+          }
+        ],
+        "reported_topic_review": {
+          "reported_topic_string_id": "adbl_review_reporting_topic_illegal_harmful_speech",
+          "reported_topic_value": "illegal_harmful_speech"
+        }
+      },
+      {
+        "reported_reasons_review_list": [
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_inauthentic_accounts",
+            "reported_reason_value": "inauthentic_accounts"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_inauthentic_user_reviews",
+            "reported_reason_value": "inauthentic_user_reviews"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_phishing",
+            "reported_reason_value": "phishing"
+          }
+        ],
+        "reported_topic_review": {
+          "reported_topic_string_id": "adbl_review_reporting_topic_scams_and_fraud",
+          "reported_topic_value": "scams_and_fraud"
+        }
+      },
+      {
+        "reported_reasons_review_list": [
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_eating_disorders",
+            "reported_reason_value": "eating_disorders"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_self_mutilation",
+            "reported_reason_value": "self_mutilation"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_suicide",
+            "reported_reason_value": "suicide"
+          }
+        ],
+        "reported_topic_review": {
+          "reported_topic_string_id": "adbl_review_reporting_topic_self_harm",
+          "reported_topic_value": "self_harm"
+        }
+      },
+      {
+        "reported_reasons_review_list": [
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_coordinated_harm",
+            "reported_reason_value": "coordinated_harm"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_general_incitement_violence",
+            "reported_reason_value": "general_incitement_violence"
+          }
+        ],
+        "reported_topic_review": {
+          "reported_topic_string_id": "adbl_review_reporting_topic_violence",
+          "reported_topic_value": "violence"
+        }
+      },
+      {
+        "reported_reasons_review_list": [
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_animal_welfare",
+            "reported_reason_value": "animal_welfare"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_csam",
+            "reported_reason_value": "csam"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_misleading_information",
+            "reported_reason_value": "misleading_information"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_terrorist_content",
+            "reported_reason_value": "terrorist_content"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_illegal_content_unspecified",
+            "reported_reason_value": "illegal_content_unspecified"
+          },
+          {
+            "reported_reason_string_id": "adbl_review_reported_reason_other_concerning_content",
+            "reported_reason_value": "other_concerning_content"
+          }
+        ],
+        "reported_topic_review": {
+          "reported_topic_string_id": "adbl_review_reporting_topic_other",
+          "reported_topic_value": "other"
+        }
+      }
+    ]
+  },
+  "sims": {
+    "response_groups": [
+      "product_desc",
+      "always-returned",
+      "contributors",
+      "series",
+      "rating",
+      "media",
+      "sku",
+      "product_attrs"
+    ],
+    "similar_products": []
+  }
+}

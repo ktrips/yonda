@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yonda 最近何読んだ?</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="header-main-tabs">
+        <button type="button" class="header-tab active" id="mainTabYonda" data-main-tab="yonda"><span class="header-tab-en">Yonda</span><span class="header-tab-ja">読んだ？</span></button>
+        <button type="button" class="header-tab" id="mainTabYomu" data-main-tab="yomu"><span class="header-tab-en">Yomu</span><span class="header-tab-ja">何読む？</span></button>
+        <button type="button" class="header-tab" id="mainTabOshi" data-main-tab="oshi"><span class="header-tab-en">Oshi</span><span class="header-tab-ja">AI推し</span></button>
+      </div>
+      <div class="header-stats" id="headerStats">
+        <a href="#" class="header-stat" id="statRated" title="読了リスト">
+          <span class="header-stat-value" id="statRatedVal">0</span>
+          <span class="header-stat-label">読了数</span>
+        </a>
+        <a href="#" class="header-stat" id="statYearly" title="今年読了した冊数">
+          <span class="header-stat-value" id="statYearlyVal">0</span>
+          <span class="header-stat-label" id="statYearlyLabel">2026年</span>
+        </a>
+        <a href="#" class="header-stat" id="statFavorite" title="お気に入りリスト">
+          <span class="header-stat-value" id="statFavoriteVal">0</span>
+          <span class="header-stat-label">お気に入り</span>
+        </a>
+      </div>
+
+      <button type="button" class="hamburger-btn" id="hamburgerBtn" aria-label="メニュー">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="hamburger-menu" id="hamburgerMenu">
+        <button type="button" class="menu-item menu-item-fetch" id="menuFetchDirect">読書記録を取込み</button>
+        <button type="button" class="menu-item" id="menuAmazonAi">Amazon/AI設定</button>
+        <a href="{{ url_for('help_page') }}" class="menu-help-link" target="_blank" rel="noopener">設定のヘルプ</a>
+        <select id="librarySelect" class="menu-select" style="display:none;" aria-hidden="true">
+          <option value="setagaya">世田谷区立図書館</option>
+          <option value="audible_jp">Audible Japan</option>
+          <option value="kindle">Kindle</option>
+        </select>
+      </div>
+    </header>
+
+    <div id="content">
+      <!-- Yonda: 読んだ・途中・ランキング -->
+      <div id="mainContentYonda" class="main-content">
+        <div class="filter-wrapper" id="filterWrapper" style="display:none;">
+          <button type="button" class="filter-menu-btn" id="filterMenuBtn" aria-label="検索・絞り込み">
+            <span class="filter-menu-btn-icon">≡</span>
+            <span class="filter-menu-btn-label">フィルター</span>
+          </button>
+          <div class="filter-bar" id="filterBar">
+            <div class="filter-menu-panel" id="filterMenuPanel">
+              <div class="filter-group">
+                <label for="searchInputYonda">検索:</label>
+                <input type="text" id="searchInputYonda" class="filter-search-input" placeholder="タイトル・著者…">
+              </div>
+              <div class="filter-group">
+                <label for="sourceFilter">ソース:</label>
+                <select id="sourceFilter" class="filter-select">
+                  <option value="all">すべて</option>
+                  <option value="setagaya">図書館</option>
+                  <option value="audible_jp">Audible</option>
+                  <option value="kindle">Kindle</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label for="ratingFilter">状態:</label>
+                <select id="ratingFilter" class="filter-select">
+                  <option value="completed">読了</option>
+                  <option value="not_completed">未読</option>
+                  <option value="all">すべて</option>
+                  <option value="yearly_completed">今年の読了</option>
+                  <option value="favorite">お気に入り</option>
+                  <option value="5">★★★★★</option>
+                  <option value="4">★★★★☆以上</option>
+                  <option value="3">★★★☆☆以上</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label for="sortSelect">並べ替え:</label>
+                <select id="sortSelect" class="filter-select">
+                  <option value="completed_date_desc">読了日（新しい順）</option>
+                  <option value="completed_date_asc">読了日（古い順）</option>
+                  <option value="date_desc">日付（新しい順）</option>
+                  <option value="date_asc">日付（古い順）</option>
+                  <option value="author_asc">著者（あ→わ）</option>
+                  <option value="author_desc">著者（わ→あ）</option>
+                  <option value="rating_desc">評価（高い順）</option>
+                  <option value="rating_asc">評価（低い順）</option>
+                </select>
+              </div>
+              <div class="filter-group filter-group-view">
+                <label>表示:</label>
+                <div class="view-toggle">
+                  <button type="button" class="view-btn active" id="viewCard" title="カード表示">▦</button>
+                  <button type="button" class="view-btn" id="viewTable" title="テーブル表示">☰</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="chart-section" id="chartSection" style="display:none;">
+          <div class="chart-toggle" id="chartToggle">
+            <span class="chart-toggle-title">読書グラフ</span>
+            <span class="chart-toggle-arrow">▼</span>
+          </div>
+          <div class="chart-body">
+            <div class="chart-genre-filter">
+              <label for="genreFilter">ジャンル:</label>
+              <select id="genreFilter" class="filter-select">
+                <option value="all">すべて</option>
+              </select>
+            </div>
+            <div class="chart-tabs">
+              <button type="button" class="chart-tab active" data-tab="monthly">月別</button>
+              <button type="button" class="chart-tab" data-tab="genre">ジャンル別</button>
+            </div>
+            <div class="chart-canvas-wrap" id="chartMonthlyWrap">
+              <canvas id="monthlyChart"></canvas>
+            </div>
+            <div class="chart-canvas-wrap" id="chartGenreWrap" style="display:none;">
+              <canvas id="genreChart"></canvas>
+            </div>
+          </div>
+        </div>
+        <div id="loading" style="display:none;">
+          <div class="spinner"></div>
+          <p id="loadingMessage">読み込み中…</p>
+        </div>
+        <div id="error" class="error" style="display:none;"></div>
+        <div id="emptyState" class="empty-state">
+          <p>読書記録がありません。</p>
+          <p>メニューから「読書記録を取込み」を実行してください。</p>
+        </div>
+        <div id="bookTabs" class="book-tabs" style="display:none;">
+          <button type="button" class="book-tab active" id="tabRead" data-tab="read">読んだ</button>
+          <button type="button" class="book-tab" id="tabRanking" data-tab="ranking">ランキング</button>
+          <button type="button" class="book-tab" id="tabRecommend" data-tab="recommend">オススメ</button>
+        </div>
+        <div id="recommendSection" class="recommend-section" style="display:none;">
+          <div id="recommendLoading" class="recommend-loading" style="display:none;">AIでおすすめを生成中…</div>
+          <div id="recommendList" class="recommend-list"></div>
+          <button type="button" class="btn btn-secondary" id="recommendRefreshBtn" style="margin-top:1rem;">もう一度おすすめを生成</button>
+        </div>
+        <div id="rankingSection" class="ranking-section" style="display:none;">
+          <div class="ranking-filters">
+            <span class="ranking-menu-label">ランキング</span>
+            <div class="filter-group">
+              <select id="rankingYearFilter" class="filter-select">
+                <option value="all">全期間</option>
+              </select>
+            </div>
+          </div>
+          <div id="rankingList" class="ranking-list"></div>
+        </div>
+        <div id="bookList" style="display:none;"></div>
+        <div id="pagination" class="pagination" style="display:none;"></div>
+      </div>
+
+      <!-- Yomu: これから検索 -->
+      <div id="mainContentYomu" class="main-content" style="display:none;">
+        <div class="book-search-section" id="bookSearchSection">
+          <p class="book-search-headline"><strong>読みたい本検索</strong></p>
+          <p class="book-search-description">読みたい本の名前か著者を入れて下さい。<br>本の写真を撮るだけで、情報を収集して、一番お得に手に入る方法を探してくれます。（Amazon、Kindle、Audible、メルカリ、ブックオフ、図書館）</p>
+          <div class="book-search-input-row">
+            <input type="text" id="searchInput" class="book-search-input" placeholder="タイトル・著者で検索…">
+            <button type="button" class="btn btn-secondary" id="bookPhotoBtn">
+              <span class="book-photo-btn-icon">📷</span> 写真を撮る
+            </button>
+          </div>
+          <input type="file" id="bookPhotoInput" accept="image/*" capture="environment" style="display:none">
+          <div id="bookSearchPhotoStatus" class="book-search-photo-status"></div>
+          <div id="bookSearchResults" class="book-search-results"></div>
+        </div>
+      </div>
+
+      <!-- Oshi: AI推し -->
+      <div id="mainContentOshi" class="main-content" style="display:none;">
+        <div class="ai-recommend-section" id="aiRecommendSection">
+          <p class="ai-recommend-headline"><strong>AIであなたにピッタリの推し本オススメします！</strong></p>
+          <p class="ai-recommend-description">会話するうちに、あなたにぴったりな推し本を探します。まずはあなたの基本的な事を教えて下さい。<span id="aiRecommendProvider" class="ai-recommend-provider"></span></p>
+          <div class="ai-recommend-form" id="aiRecommendForm">
+            <div class="ai-recommend-form-row-wrap">
+              <div class="ai-recommend-form-group ai-recommend-slider-group ai-recommend-slider-group-gender">
+                <label>性別 <span class="ai-recommend-slider-value" id="aiQ0Value">女性</span></label>
+                <div class="ai-recommend-slider-row">
+                  <span class="ai-recommend-slider-label">女性</span>
+                  <input type="range" name="aiQ0" id="aiQ0" min="0" max="100" value="0" class="ai-recommend-slider">
+                  <span class="ai-recommend-slider-label">男性</span>
+                </div>
+              </div>
+              <div class="ai-recommend-form-group ai-recommend-slider-group">
+                <label>年代 <span class="ai-recommend-slider-value" id="aiQ1Value">30代</span></label>
+                <div class="ai-recommend-slider-row">
+                  <span class="ai-recommend-slider-label">10代</span>
+                  <input type="range" name="aiQ1" id="aiQ1" min="0" max="100" value="50" class="ai-recommend-slider">
+                  <span class="ai-recommend-slider-label">60代以上</span>
+                </div>
+              </div>
+              <div class="ai-recommend-form-group ai-recommend-slider-group">
+                <label>読書頻度 <span class="ai-recommend-slider-value" id="aiQ6Value">月２冊</span></label>
+                <div class="ai-recommend-slider-row">
+                  <span class="ai-recommend-slider-label">月４冊以上</span>
+                  <input type="range" name="aiQ6" id="aiQ6" min="0" max="100" value="25" class="ai-recommend-slider">
+                  <span class="ai-recommend-slider-label">読まない</span>
+                </div>
+              </div>
+            </div>
+            <div class="ai-recommend-form-row-wrap">
+              <div class="ai-recommend-form-group ai-recommend-slider-group">
+                <label>職業 <span class="ai-recommend-slider-value" id="aiQ2Value">社会人</span></label>
+                <div class="ai-recommend-slider-row">
+                  <span class="ai-recommend-slider-label">学生</span>
+                  <input type="range" name="aiQ2" id="aiQ2" min="0" max="100" value="50" class="ai-recommend-slider">
+                  <span class="ai-recommend-slider-label">悠々</span>
+                </div>
+              </div>
+              <div class="ai-recommend-form-group ai-recommend-slider-group">
+                <label>ジャンル <span class="ai-recommend-slider-value" id="aiQ7Value">現代小説</span></label>
+                <div class="ai-recommend-slider-row">
+                  <span class="ai-recommend-slider-label">ノンフィクション</span>
+                  <input type="range" name="aiQ7" id="aiQ7" min="0" max="100" value="50" class="ai-recommend-slider">
+                  <span class="ai-recommend-slider-label">ファンタジー・SF</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="ai-recommend-chat" id="aiRecommendChat"></div>
+          <div class="ai-recommend-input-row">
+            <input type="text" id="aiRecommendInput" class="ai-recommend-input" placeholder="メッセージを入力…" autocomplete="off">
+            <button type="button" class="btn btn-primary" id="aiRecommendSendBtn">送信</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 設定モーダル -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>設定</h2>
+        <button type="button" class="modal-close" id="settingsModalClose" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-field">
+          <label for="affiliateTagInput">アフィリエイトタグ（Kindle・Audible リンク用）:</label>
+          <input type="text" id="affiliateTagInput" class="modal-input" placeholder="例: ktrip-22">
+        </div>
+        <p class="modal-note">本検索や詳細ページの Kindle・Audible リンクに &amp;tag=xxx を付与します。空欄で無効。</p>
+
+        <hr class="modal-divider">
+        <h3 class="modal-section-title">写真から本を検索（AI）</h3>
+        <div class="modal-field">
+          <label for="aiProviderSelect">AI プロバイダ:</label>
+          <select id="aiProviderSelect" class="modal-input">
+            <option value="openai">OpenAI (GPT-4o)</option>
+            <option value="gemini">Google Gemini 3</option>
+          </select>
+        </div>
+        <div class="modal-field">
+          <label for="aiApiKeyInput">API キー:</label>
+          <input type="password" id="aiApiKeyInput" class="modal-input" placeholder="sk-... または AIza...">
+        </div>
+        <p class="modal-note">本の写真を撮ると、OpenAI または Gemini 3 で表紙からタイトル・著者を正確に抽出します。空欄で無効（バーコード・OCR にフォールバック）。</p>
+
+        <div class="modal-status" id="settingsModalStatus"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-primary" id="settingsSaveBtn">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アカウント設定モーダル -->
+  <div class="modal-overlay" id="credentialModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>アカウント設定</h2>
+        <button type="button" class="modal-close" id="credentialModalClose" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-field">
+          <label for="credLibrarySelect">ソース:</label>
+          <select id="credLibrarySelect" class="modal-input"></select>
+        </div>
+        <div id="credCredentialFields" class="modal-field-group">
+          <div class="modal-field">
+            <label for="credUserId">ユーザーID（利用者番号）:</label>
+            <input type="text" id="credUserId" class="modal-input" placeholder="利用者番号を入力" autocomplete="username">
+          </div>
+          <div class="modal-field">
+            <label for="credPassword">パスワード:</label>
+            <input type="password" id="credPassword" class="modal-input" placeholder="パスワードを入力" autocomplete="current-password">
+          </div>
+        </div>
+        <div id="credKindleNote" class="modal-note" style="display:none;">Amazon にログインして Kindle 蔵書を取得します。メールアドレスとパスワードを入力してください。未設定の場合は Kindle for PC/Mac のデータファイルから取得します。</div>
+        <div id="credAudibleFields" class="modal-field-group" style="display:none;">
+          <p class="modal-note">Audible は <code>auth_jp.json</code> で認証します。<code>audible-cli</code> で認証して取得したファイルをアップロードするか、<code>yonda/data/auth_jp.json</code> に配置してください。</p>
+          <div class="modal-field">
+            <label for="credAudibleFile">auth_jp.json をアップロード:</label>
+            <input type="file" id="credAudibleFile" class="modal-input" accept=".json,application/json">
+          </div>
+          <div class="modal-actions" style="margin-top:0.5rem;">
+            <button type="button" class="btn btn-secondary" id="credAudibleUploadBtn">アップロードして保存</button>
+            <button type="button" class="btn btn-primary" id="credAudibleTestBtn">接続確認</button>
+          </div>
+        </div>
+        <div id="credOtpFields" class="modal-field-group" style="display:none;">
+          <div class="modal-field">
+            <label for="credOtp">OTP（ワンタイムパスワード）:</label>
+            <input type="text" id="credOtp" class="modal-input" placeholder="メールまたはアプリに届いたコードを入力" autocomplete="one-time-code" inputmode="numeric" maxlength="8">
+          </div>
+          <div class="modal-actions" style="margin-top:0.5rem;">
+            <button type="button" class="btn btn-secondary" id="credOtpCancelBtn">キャンセル</button>
+            <button type="button" class="btn btn-primary" id="credOtpSubmitBtn">OTP を送信</button>
+          </div>
+        </div>
+        <div class="modal-status" id="credModalStatus"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="credDeleteBtn">登録解除</button>
+          <button type="button" class="btn btn-secondary" id="credFetchBtn">読書記録を取込み</button>
+          <button type="button" class="btn btn-primary" id="credTestSaveBtn">ログインテスト &amp; 保存</button>
+        </div>
+        <p class="modal-note">認証情報はこのPC上のローカルファイルに保存されます。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kindle 読書記録取得時の OTP 入力モーダル -->
+  <div class="modal-overlay" id="fetchOtpModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Kindle OTP 入力</h2>
+        <button type="button" class="modal-close" id="fetchOtpModalClose" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-note" id="fetchOtpMessage">読書記録を取得するには OTP（ワンタイムパスワード）の入力が必要です。メールまたは認証アプリに届いたコードを入力してください。</p>
+        <div class="modal-field">
+          <label for="fetchOtpInput">OTP（ワンタイムパスワード）:</label>
+          <input type="text" id="fetchOtpInput" class="modal-input" placeholder="6桁のコードを入力" autocomplete="one-time-code" inputmode="numeric" maxlength="8">
+        </div>
+        <div class="modal-status" id="fetchOtpStatus"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="fetchOtpCancelBtn">キャンセル</button>
+          <button type="button" class="btn btn-primary" id="fetchOtpSubmitBtn">OTP を送信して取得</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 本の詳細モーダル -->
+  <div class="modal-overlay" id="bookDetailModal">
+    <div class="modal modal-book-detail">
+      <div class="modal-header">
+        <h2 id="bookDetailTitle">—</h2>
+        <button type="button" class="modal-close" id="bookDetailClose" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="book-detail-layout">
+          <div class="book-detail-cover">
+            <img id="bookDetailCover" src="" alt="">
+          </div>
+          <div class="book-detail-meta">
+            <div class="book-detail-author" id="bookDetailAuthor"></div>
+            <div class="book-detail-genre" id="bookDetailGenre"></div>
+            <div class="book-detail-favorite" id="bookDetailFavorite"></div>
+            <div class="book-detail-rating" id="bookDetailRating"></div>
+            <div class="book-detail-review-headline" id="bookDetailReviewHeadline"></div>
+            <div class="book-detail-dates">
+              <span id="bookDetailLoanDate"></span>
+              <span id="bookDetailCompleted" class="book-detail-completed"></span>
+            </div>
+            <div class="book-detail-comment" id="bookDetailComment"></div>
+            <a id="bookDetailLink" href="#" target="_blank" rel="noopener" class="btn btn-primary">詳細ページを開く</a>
+          </div>
+        </div>
+        <div class="book-detail-summary-wrap">
+          <h3>概要</h3>
+          <div class="book-detail-summary" id="bookDetailSummary"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
