@@ -1,0 +1,201 @@
+# yonda → Google Cloud Run デプロイ
+# トリガー: main への push / 手動実行
+# 必要な Secrets: GCP_PROJECT_ID, GCP_SA_KEY, AUTH_JP_JSON, (CREDENTIALS_JSON)
+
+name: Deploy yonda to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**'
+  workflow_dispatch:
+    inputs:
+      image_only:
+        description: 'イメージ更新のみ（deploy.sh --image-only 相当）'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGION: asia-northeast1
+  SERVICE_NAME: yonda
+  REPO_NAME: yonda-repo
+  BUCKET_NAME_PREFIX: yonda-data
+  DOMAIN: yonda.ktrips.net
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Prepare auth files for full deploy
+        if: ${{ github.event.inputs.image_only != 'true' }}
+        env:
+          AUTH_JP_JSON: ${{ secrets.AUTH_JP_JSON }}
+          CREDENTIALS_JSON: ${{ secrets.CREDENTIALS_JSON }}
+        run: |
+          mkdir -p data
+          python3 -c "
+          import os
+          for name, path in [('AUTH_JP_JSON', 'auth_jp.json'), ('CREDENTIALS_JSON', 'data/.credentials.json')]:
+              val = os.environ.get(name, '')
+              if val:
+                  with open(path, 'w') as f:
+                      f.write(val)
+                  print(f'  ✔ {path} created')
+          "
+
+      - name: Enable APIs
+        if: ${{ github.event.inputs.image_only != 'true' }}
+        run: |
+          gcloud services enable \
+            run.googleapis.com \
+            artifactregistry.googleapis.com \
+            cloudbuild.googleapis.com \
+            secretmanager.googleapis.com \
+            storage.googleapis.com \
+            --quiet
+
+      - name: Create Artifact Registry repository
+        if: ${{ github.event.inputs.image_only != 'true' }}
+        run: |
+          if ! gcloud artifacts repositories describe ${{ env.REPO_NAME }} \
+               --location=${{ env.REGION }} --format='value(name)' 2>/dev/null; then
+            gcloud artifacts repositories create ${{ env.REPO_NAME }} \
+              --repository-format=docker \
+              --location=${{ env.REGION }} \
+              --description="yonda container images"
+          fi
+
+      - name: Build and push Docker image
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:latest"
+          gcloud builds submit \
+            --tag "${IMAGE_TAG}" \
+            --timeout=600 \
+            .
+
+      - name: Deploy (image only)
+        if: ${{ github.event.inputs.image_only == 'true' }}
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:latest"
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image "${IMAGE_TAG}" \
+            --region ${{ env.REGION }} \
+            --quiet
+          echo "✔ イメージ更新デプロイ完了"
+
+      - name: Create GCS bucket and upload data
+        if: ${{ github.event.inputs.image_only != 'true' }}
+        run: |
+          BUCKET_NAME="${{ secrets.GCP_PROJECT_ID }}-${{ env.BUCKET_NAME_PREFIX }}"
+          if ! gsutil ls -b "gs://${BUCKET_NAME}" 2>/dev/null; then
+            gsutil mb -l ${{ env.REGION }} "gs://${BUCKET_NAME}"
+          fi
+          for f in library_books.json audible_books.json kindle_books.json; do
+            if [[ -f "data/${f}" ]]; then
+              gsutil -q cp "data/${f}" "gs://${BUCKET_NAME}/${f}"
+              echo "  ✔ ${f}"
+            fi
+          done
+          if [[ -f "data/.credentials.json" ]]; then
+            gsutil -q cp "data/.credentials.json" "gs://${BUCKET_NAME}/.credentials.json"
+            echo "  ✔ .credentials.json"
+          fi
+
+      - name: Create or update secrets
+        if: ${{ github.event.inputs.image_only != 'true' }}
+        run: |
+          if [[ -f "auth_jp.json" ]]; then
+            if ! gcloud secrets describe yonda-auth-jp --format='value(name)' 2>/dev/null; then
+              gcloud secrets create yonda-auth-jp --replication-policy="automatic"
+            fi
+            gcloud secrets versions add yonda-auth-jp --data-file=auth_jp.json --quiet
+            echo "  ✔ yonda-auth-jp"
+          else
+            echo "  ⚠ auth_jp.json がありません（AUTH_JP_JSON を GitHub Secrets に登録してください）"
+          fi
+          if [[ -f "data/.credentials.json" ]]; then
+            if ! gcloud secrets describe yonda-credentials --format='value(name)' 2>/dev/null; then
+              gcloud secrets create yonda-credentials --replication-policy="automatic"
+            fi
+            gcloud secrets versions add yonda-credentials --data-file=data/.credentials.json --quiet
+            echo "  ✔ yonda-credentials"
+          fi
+
+      - name: Grant IAM to Cloud Run service account
+        if: ${{ github.event.inputs.image_only != 'true' }}
+        run: |
+          PROJECT_NUMBER=$(gcloud projects describe ${{ secrets.GCP_PROJECT_ID }} --format='value(projectNumber)')
+          RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+          for role in roles/storage.objectAdmin roles/secretmanager.secretAccessor; do
+            gcloud projects add-iam-policy-binding ${{ secrets.GCP_PROJECT_ID }} \
+              --member="serviceAccount:${RUN_SA}" \
+              --role="${role}" \
+              --quiet 2>/dev/null || true
+          done
+          for secret_name in yonda-auth-jp yondapp-auth-jp yonda-credentials; do
+            if gcloud secrets describe "${secret_name}" --format='value(name)' 2>/dev/null; then
+              gcloud secrets add-iam-policy-binding "${secret_name}" \
+                --member="serviceAccount:${RUN_SA}" \
+                --role="roles/secretmanager.secretAccessor" \
+                --quiet 2>/dev/null || true
+            fi
+          done
+
+      - name: Deploy to Cloud Run (full)
+        if: ${{ github.event.inputs.image_only != 'true' }}
+        run: |
+          IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:latest"
+          BUCKET_NAME="${{ secrets.GCP_PROJECT_ID }}-${{ env.BUCKET_NAME_PREFIX }}"
+          AUTH_SECRET="yonda-auth-jp"
+          if gcloud secrets describe "yondapp-auth-jp" 2>/dev/null; then
+            AUTH_SECRET="yondapp-auth-jp"
+          fi
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image "${IMAGE_TAG}" \
+            --region ${{ env.REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --port 8080 \
+            --memory 512Mi \
+            --cpu 1 \
+            --min-instances 0 \
+            --max-instances 3 \
+            --timeout 300 \
+            --execution-environment gen2 \
+            --add-volume "name=data-vol,type=cloud-storage,bucket=${BUCKET_NAME}" \
+            --add-volume-mount "volume=data-vol,mount-path=/mnt/data" \
+            --set-secrets "/secrets/auth_jp.json=${AUTH_SECRET}:latest" \
+            --update-env-vars "YONDA_DATA_DIR=/mnt/data,YONDA_AUTH_FILE=/secrets/auth_jp.json,YONDA_CREDS_PATH=/mnt/data/.credentials.json" \
+            --quiet
+          echo "✔ Cloud Run デプロイ完了"
+
+      - name: Map custom domain
+        if: ${{ github.event.inputs.image_only != 'true' }}
+        run: |
+          if ! gcloud run domain-mappings describe \
+               --domain=${{ env.DOMAIN }} --region=${{ env.REGION }} 2>/dev/null; then
+            gcloud run domain-mappings create \
+              --service=${{ env.SERVICE_NAME }} \
+              --domain=${{ env.DOMAIN }} \
+              --region=${{ env.REGION }} \
+              --quiet || true
+          fi

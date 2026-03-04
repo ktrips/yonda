@@ -1868,7 +1868,7 @@ async function saveSettings() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        provider: aiProvider?.value || 'openai',
+        provider: aiProvider?.value || 'gemini',
         api_key: (aiKey?.value || '').trim(),
       }),
     });

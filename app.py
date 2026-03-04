@@ -341,7 +341,7 @@ def api_ai_config_get():
     cfg = _load_ai_config()
     return jsonify({
         "configured": bool(cfg.get("api_key")),
-        "provider": cfg.get("provider", "openai"),
+        "provider": cfg.get("provider", "gemini"),
     })
 
 
@@ -349,7 +349,7 @@ def api_ai_config_get():
 def api_ai_config_post():
     """AI設定を保存"""
     body = request.get_json(silent=True) or {}
-    provider = (body.get("provider") or "openai").lower()
+    provider = (body.get("provider") or "gemini").lower()
     api_key = (body.get("api_key") or "").strip()
     if provider not in ("openai", "gemini"):
         return jsonify({"success": False, "error": "provider は openai または gemini を指定してください"}), 400
@@ -374,7 +374,7 @@ def api_ai_extract_book():
 
     cfg = _load_ai_config()
     api_key = (cfg.get("api_key") or "").strip()
-    provider = (cfg.get("provider") or "openai").lower()
+    provider = (cfg.get("provider") or "gemini").lower()
     if not api_key:
         return jsonify({"success": False, "error": "AI設定が未設定です。設定メニューからAPIキーを登録してください"}), 400
 
@@ -627,7 +627,7 @@ def api_ai_recommend():
     system_prompt = _build_ai_recommend_system_prompt(form_prefs)
     cfg = _load_ai_config()
     api_key = (cfg.get("api_key") or "").strip()
-    provider = (cfg.get("provider") or "openai").lower()
+    provider = (cfg.get("provider") or "gemini").lower()
     if not api_key:
         return jsonify({
             "success": False,
@@ -773,7 +773,7 @@ def api_yonda_recommend():
 
     cfg = _load_ai_config()
     api_key = (cfg.get("api_key") or "").strip()
-    provider = (cfg.get("provider") or "openai").lower()
+    provider = (cfg.get("provider") or "gemini").lower()
     if not api_key:
         return jsonify({"success": False, "error": "AI設定が未設定です。Amazon/AI設定からAPIキーを登録してください"}), 400
 

@@ -114,45 +114,90 @@ Google Cloud Run へのデプロイ方法は 2 通りあります。
 
 GitHub Actions でデプロイするには、以下を設定してください。
 
-**1. ワークフロー配置**
+#### 1. ワークフロー配置
 
-- ワークフローは **リポジトリルート** の `.github/workflows/` に配置する必要があります
-- `yonda-deploy.yml` が `Git/.github/workflows/` にあることを確認
+ワークフローは **リポジトリルート** の `.github/workflows/yonda-deploy.yml` に配置されています。GitHub はこのパスのみを読み込むため、サブディレクトリ内のワークフローは実行されません。
 
-**2. GitHub Secrets の登録**
+#### 2. GCP サービスアカウントの作成と GCP_SA_KEY の取得
+
+**Step 1: gcloud でログイン**
+
+```bash
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+```
+
+**Step 2: サービスアカウントの作成**
+
+```bash
+export PROJECT_ID="your-gcp-project-id"   # 実際のプロジェクトIDに変更
+
+gcloud iam service-accounts create github-actions-yonda \
+  --display-name="GitHub Actions for yonda"
+```
+
+**Step 3: 必要な権限の付与**
+
+```bash
+for role in "roles/run.admin" "roles/artifactregistry.admin" "roles/cloudbuild.builds.builder" \
+  "roles/storage.admin" "roles/secretmanager.admin" "roles/iam.serviceAccountUser"; do
+  gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:github-actions-yonda@${PROJECT_ID}.iam.gserviceaccount.com" \
+    --role="$role" --quiet
+done
+```
+
+**Step 4: キー（JSON）のダウンロード**
+
+```bash
+gcloud iam service-accounts keys create ~/sa-key-yonda.json \
+  --iam-account=github-actions-yonda@${PROJECT_ID}.iam.gserviceaccount.com
+```
+
+**Step 5: JSON の内容をコピー**
+
+```bash
+cat ~/sa-key-yonda.json
+```
+
+表示された JSON を **最初の `{` から最後の `}` まで** すべてコピーします。この内容が `GCP_SA_KEY` です。
+
+> ⚠️ **注意**: この JSON は秘密情報です。Git にコミットしたり他人に共有しないでください。登録後は `~/sa-key-yonda.json` を削除して構いません。
+
+#### 3. GitHub Secrets の登録
 
 リポジトリ → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
 | Secret 名 | 値 | 必須 |
 |-----------|-----|------|
-| `GCP_PROJECT_ID` | GCP プロジェクト ID | ✅ |
-| `GCP_SA_KEY` | サービスアカウント JSON の全文 | ✅ |
-| `AUTH_JP_JSON` | `auth_jp.json` の内容（`data/auth_jp.json` または `auth_jp.json`） | ✅（Audible 利用時） |
-| `CREDENTIALS_JSON` | `.credentials.json` の内容（`data/.credentials.json`） | 任意（図書館利用時） |
+| `GCP_PROJECT_ID` | GCP プロジェクト ID（例: `my-project-123`） | ✅ |
+| `GCP_SA_KEY` | Step 5 でコピーした JSON の全文を貼り付け | ✅ |
+| `AUTH_JP_JSON` | `auth_jp.json` の内容 | ✅（Audible 利用時） |
+| `CREDENTIALS_JSON` | `.credentials.json` の内容 | 任意（図書館利用時） |
 
-**3. 認証ファイルの取得例**
+**認証ファイルの取得例:**
 
 ```bash
 # Audible 認証（auth_jp.json）
 cat data/auth_jp.json
-# または yonda 直下にある場合
+# または yonda 直下
 cat auth_jp.json
 
 # 図書館認証（.credentials.json）
 cat data/.credentials.json
+# または ~/.config/yonda に移行済みなら
+cat ~/.config/yonda/credentials.json
 ```
 
-**4. サービスアカウントの権限**
+#### 4. 実行方法
 
-`GCP_SA_KEY` のサービスアカウントに以下のロールを付与してください。
+- **自動**: `main` ブランチに push するとフルデプロイが自動開始
+- **手動**: **Actions** タブ → **Deploy yonda to Cloud Run** → **Run workflow**（「イメージ更新のみ」を選択可能）
 
-- Cloud Run 管理者
-- Artifact Registry 作成者
-- サービス アカウント ユーザー
-- Secret Manager 管理者
-- Storage オブジェクト管理者
+#### 5. セットアップチェックリスト
 
-**5. 実行方法**
-
-- **自動**: `main` ブランチの `yonda/` に push すると自動デプロイ
-- **手動**: Actions タブ → "Deploy yonda to Cloud Run" → Run workflow
+- [ ] ワークフローが `.github/workflows/yonda-deploy.yml` に配置されている
+- [ ] `GCP_PROJECT_ID` を GitHub Secrets に登録
+- [ ] `GCP_SA_KEY` を GitHub Secrets に登録（サービスアカウントキー JSON の全文）
+- [ ] `AUTH_JP_JSON` を GitHub Secrets に登録（Audible 利用時）
+- [ ] `CREDENTIALS_JSON` を GitHub Secrets に登録（図書館利用時、任意）

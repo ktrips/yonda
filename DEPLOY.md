@@ -84,8 +84,8 @@ cd yonda
 
 GitHub は **リポジトリルート** の `.github/workflows/` のみを読み込みます。
 
-- ワークフローは `Git/.github/workflows/yonda-deploy.yml` に配置すること
-- `yonda/.github/workflows/` 内のワークフローは実行されません
+- ワークフローは `.github/workflows/yonda-deploy.yml` に配置すること
+- サブディレクトリ内の `.github/workflows/` は実行されません
 
 #### 4.2 セットアップ手順
 
@@ -116,6 +116,8 @@ gcloud iam service-accounts keys create ~/sa-key-yonda.json \
   --iam-account=github-actions-yonda@${PROJECT_ID}.iam.gserviceaccount.com
 ```
 
+`~/sa-key-yonda.json` にキーファイルが作成されます。`cat ~/sa-key-yonda.json` で表示された JSON の全文（`{` から `}` まで）をコピーし、GitHub Secret `GCP_SA_KEY` に貼り付けてください。登録後はローカルのキーファイルを削除して構いません。
+
 **Step 3: GitHub Secrets の登録**
 
 GitHub リポジトリ → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
@@ -143,12 +145,12 @@ cat ~/.config/yonda/credentials.json
 
 **Step 4: 初回実行**
 
-1. **方法A**: `main` ブランチの `yonda/` に push する（自動でフルデプロイが開始）
+1. **方法A**: `main` ブランチに push する（自動でフルデプロイが開始）
 2. **方法B**: **Actions** タブ → **Deploy yonda to Cloud Run** → **Run workflow** で手動実行
 
 #### 4.3 セットアップチェックリスト
 
-- [ ] ワークフローが `Git/.github/workflows/yonda-deploy.yml` に配置されている
+- [ ] ワークフローが `.github/workflows/yonda-deploy.yml` に配置されている
 - [ ] `GCP_PROJECT_ID` を GitHub Secrets に登録
 - [ ] `GCP_SA_KEY` を GitHub Secrets に登録
 - [ ] `AUTH_JP_JSON` を GitHub Secrets に登録（Audible 利用時）
@@ -168,7 +170,7 @@ cat ~/.config/yonda/credentials.json
 
 #### 4.5 トリガー
 
-- **push**: `main` ブランチの `yonda/**` に変更があるとフルデプロイ
+- **push**: `main` ブランチに変更があるとフルデプロイ
 - **workflow_dispatch**: 手動実行。「イメージ更新のみ」を選択可能（`deploy.sh --image-only` 相当）
 
 ## 環境変数
