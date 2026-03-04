@@ -1614,7 +1614,7 @@ function renderCardView(books) {
 
     const genreHtml = book.genre ? `<span class="book-card-genre">${escapeHtml(book.genre)}</span>` : '';
     const supplementHtml = titleSupplementHtml(book);
-    const summaryHtml = supplementHtml ? '' : (book.summary ? `<div class="book-card-summary">${escapeHtml(book.summary)}</div>` : '');
+    const summaryHtml = book.summary ? `<div class="book-card-summary">${escapeHtml(book.summary)}</div>` : '';
 
     return header + `
       <div class="book-card book-card-clickable${book.completed ? ' completed' : ''}${srcClass}" data-book-index="${i}" role="button" tabindex="0">
@@ -1642,6 +1642,8 @@ function renderTableView(books) {
     const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
     const genre = book.genre ? escapeHtml(book.genre.length > 30 ? book.genre.substring(0, 30) + '…' : book.genre) : '—';
     const supplementHtml = titleSupplementHtml(book);
+    const summary = (book.summary || '').trim();
+    const summaryCell = summary ? escapeHtml(summary.length > 80 ? summary.substring(0, 80) + '…' : summary) : '—';
     return `
       <tr class="book-row-clickable ${book.completed ? 'row-completed' : ''}" data-book-index="${i}" role="button" tabindex="0">
         <td class="col-cover"><img src="${escapeHtml(book.cover_url || NO_COVER)}" alt=""
@@ -1652,6 +1654,7 @@ function renderTableView(books) {
         </td>
         <td>${escapeHtml(book.author || '')}</td>
         <td class="col-genre">${genre}</td>
+        <td class="col-summary" title="${summary ? escapeHtml(summary) : ''}">${summaryCell}</td>
         <td>${formatDate(book.loan_date)}</td>
         <td>${book.completed ? formatDateOnly(book.completed_date) : (formatProgress(book) || '—')}</td>
         <td>${srcBadge}</td>
@@ -1673,6 +1676,7 @@ function renderTableView(books) {
           <th class="col-title">タイトル</th>
           <th class="th-sortable" data-sort-asc="author_asc" data-sort-desc="author_desc" title="クリックでソート">著者</th>
           <th class="col-genre">ジャンル</th>
+          <th class="col-summary">概要</th>
           <th class="th-sortable" data-sort-asc="date_asc" data-sort-desc="date_desc" title="クリックでソート">日付</th>
           <th class="th-sortable" data-sort-asc="completed_date_asc" data-sort-desc="completed_date_desc" title="クリックでソート">読了日</th>
           <th>ソース</th>
