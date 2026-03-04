@@ -102,7 +102,8 @@ gcloud iam service-accounts create github-actions-yonda \
 
 # 必要な権限を付与
 for role in "roles/run.admin" "roles/artifactregistry.admin" "roles/cloudbuild.builds.builder" \
-  "roles/storage.admin" "roles/secretmanager.admin" "roles/iam.serviceAccountUser"; do
+  "roles/storage.admin" "roles/secretmanager.admin" "roles/iam.serviceAccountUser" \
+  "roles/serviceusage.serviceUsageAdmin" "roles/logging.viewer"; do
   gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member="serviceAccount:github-actions-yonda@${PROJECT_ID}.iam.gserviceaccount.com" \
     --role="$role" --quiet

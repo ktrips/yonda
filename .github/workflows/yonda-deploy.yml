@@ -106,10 +106,16 @@ jobs:
       - name: Build and push Docker image
         run: |
           IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:latest"
-          gcloud builds submit \
-            --tag "${IMAGE_TAG}" \
-            --timeout=600 \
-            .
+          # --async でログストリーミングを回避（Viewer 権限なしでもビルド可能）
+          gcloud builds submit --async --tag "${IMAGE_TAG}" --timeout=600 .
+          BUILD_ID=$(gcloud builds list --limit=1 --format='value(id)')
+          echo "Waiting for build $BUILD_ID..."
+          gcloud builds wait "$BUILD_ID"
+          STATUS=$(gcloud builds describe "$BUILD_ID" --format='value(status)')
+          if [ "$STATUS" != "SUCCESS" ]; then
+            echo "Build failed with status: $STATUS"
+            exit 1
+          fi
 
       - name: Deploy (image only)
         if: ${{ github.event.inputs.image_only == 'true' }}
