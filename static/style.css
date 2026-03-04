@@ -423,6 +423,32 @@ header {
   border: 1px solid var(--border);
   padding: 1rem;
 }
+.ai-recommend-mode-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+.ai-recommend-mode-btn {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.ai-recommend-mode-btn:hover {
+  background: var(--accent-light);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.ai-recommend-mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
 .ai-recommend-headline {
   font-size: 1rem;
   margin-bottom: 0.5rem;
@@ -1493,7 +1519,7 @@ header {
     min-width: 0;
   }
   .ai-recommend-input-row .btn { flex-shrink: 0; }
-  /* モバイル: 性別・年代 | 職業・ジャンル | 読書頻度 の3段表示 */
+  /* モバイル: 性別・年代 | 職業・ジャンル（読書頻度は非表示） */
   .ai-recommend-form {
     flex-direction: column;
     flex-wrap: nowrap;
@@ -1507,5 +1533,5 @@ header {
   }
   .ai-recommend-row-1 { order: 1; }
   .ai-recommend-row-2 { order: 2; }
-  .ai-recommend-row-3 { order: 3; }
+  .ai-recommend-row-3 { order: 3; display: none; }  /* モバイルでは読書頻度を非表示 */
 }

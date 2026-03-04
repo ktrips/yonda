@@ -188,8 +188,13 @@
       <!-- Oshi: AI推し -->
       <div id="mainContentOshi" class="main-content" style="display:none;">
         <div class="ai-recommend-section" id="aiRecommendSection">
+          <div class="ai-recommend-mode-menu" id="aiRecommendModeMenu">
+            <button type="button" class="ai-recommend-mode-btn active" data-mode="5questions">簡単な質問で選書</button>
+            <button type="button" class="ai-recommend-mode-btn" data-mode="mbti">MBTI診断で選書</button>
+            <button type="button" class="ai-recommend-mode-btn" data-mode="strength">Strength Finderで選書</button>
+          </div>
           <p class="ai-recommend-headline"><strong>AIであなたにピッタリの推し本オススメします！</strong></p>
-          <p class="ai-recommend-description">会話するうちに、あなたにぴったりな推し本を探します。まずはあなたの基本的な事を教えて下さい。<span id="aiRecommendProvider" class="ai-recommend-provider"></span></p>
+          <p class="ai-recommend-description" id="aiRecommendDescription">会話するうちに、あなたにぴったりな推し本を探します。まずはあなたの基本的な事を教えて下さい。<span id="aiRecommendProvider" class="ai-recommend-provider"></span></p>
           <div class="ai-recommend-form" id="aiRecommendForm">
             <div class="ai-recommend-form-row-wrap ai-recommend-row-1">
               <div class="ai-recommend-form-group ai-recommend-slider-group ai-recommend-slider-group-gender">

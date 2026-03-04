@@ -977,6 +977,13 @@ function renderBookSearchResults() {
 let aiRecommendMessages = [];
 let aiRecommendInitialized = false;
 let aiRecommendCurrentProvider = '';
+let aiRecommendMode = '5questions';  // 5questions | mbti | strength
+
+const AI_RECOMMEND_MODE_DESCRIPTIONS = {
+  '5questions': '会話するうちに、あなたにぴったりな推し本を探します。まずはあなたの基本的な事を教えて下さい。',
+  'mbti': 'MBTI診断の質問に答えながら、あなたの性格タイプに合った本を提案します。',
+  'strength': 'Strength Finder（強みの資質）に基づいて、あなたに最適な本を提案します。',
+};
 
 function updateAiRecommendProvider(provider, model) {
   const el = document.getElementById('aiRecommendProvider');
@@ -1068,13 +1075,64 @@ function loadAiRecommendFormPrefs() {
   } catch (_) {}
 }
 
+function setAiRecommendMode(mode) {
+  aiRecommendMode = mode;
+  const menu = document.getElementById('aiRecommendModeMenu');
+  const formEl = document.getElementById('aiRecommendForm');
+  const descEl = document.getElementById('aiRecommendDescription');
+  if (menu) {
+    menu.querySelectorAll('.ai-recommend-mode-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+    });
+  }
+  if (formEl) {
+    formEl.style.display = (mode === '5questions') ? '' : 'none';
+  }
+  if (descEl) {
+    const base = AI_RECOMMEND_MODE_DESCRIPTIONS[mode] || AI_RECOMMEND_MODE_DESCRIPTIONS['5questions'];
+    const providerEl = document.getElementById('aiRecommendProvider');
+    descEl.innerHTML = base + (providerEl ? ' ' + providerEl.outerHTML : '');
+  }
+  try {
+    localStorage.setItem('yonda_aiRecommendMode', mode);
+  } catch (_) {}
+}
+
 function initAiRecommendIfNeeded() {
   const chatEl = document.getElementById('aiRecommendChat');
   const inputEl = document.getElementById('aiRecommendInput');
   const formEl = document.getElementById('aiRecommendForm');
+  const modeMenu = document.getElementById('aiRecommendModeMenu');
   if (!chatEl || !inputEl) return;
-  loadAiRecommendFormPrefs();
-  updateAiRecommendSliderDisplay();
+
+  if (modeMenu && !modeMenu.dataset.listenersAttached) {
+    modeMenu.dataset.listenersAttached = '1';
+    modeMenu.querySelectorAll('.ai-recommend-mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.mode;
+        if (mode === aiRecommendMode) return;
+        setAiRecommendMode(mode);
+        aiRecommendInitialized = false;
+        initAiRecommendIfNeeded();
+      });
+    });
+  }
+  try {
+    const saved = localStorage.getItem('yonda_aiRecommendMode');
+    if (saved && ['5questions', 'mbti', 'strength'].includes(saved)) {
+      aiRecommendMode = saved;
+      setAiRecommendMode(saved);
+    } else {
+      setAiRecommendMode(aiRecommendMode);
+    }
+  } catch (_) {
+    setAiRecommendMode(aiRecommendMode);
+  }
+
+  if (aiRecommendMode === '5questions') {
+    loadAiRecommendFormPrefs();
+    updateAiRecommendSliderDisplay();
+  }
   if (formEl && !formEl.dataset.listenersAttached) {
     formEl.dataset.listenersAttached = '1';
     ['aiQ0', 'aiQ1', 'aiQ2', 'aiQ6', 'aiQ7'].forEach(id => {
@@ -1129,6 +1187,7 @@ async function sendAiRecommendMessage(userText, isInit = false) {
         user_message: isInit ? '' : text,
         init: isInit,
         form_preferences: formPrefs,
+        mode: aiRecommendMode,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -1219,22 +1278,27 @@ function renderAiRecommendBookCards(books) {
   }).join('');
 }
 
+function stripRolePrefix(text) {
+  return (text || '').replace(/^\s*(Assistant|User|assistant|user)\s*:\s*/i, '').trim();
+}
+
 function renderAiRecommendMessageContent(content, isUser) {
+  const cleaned = stripRolePrefix(content);
   if (isUser) {
-    return content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+    return cleaned.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
   }
-  const books = parseAiRecommendBooks(content);
+  const books = parseAiRecommendBooks(cleaned);
   if (books.length > 0) {
-    const firstBookIdx = content.search(/[１1２2３3]冊目/);
-    const intro = firstBookIdx >= 0 ? content.slice(0, firstBookIdx).trim() : '';
-    const restIdx = content.search(/最後に補足|選書した本が/);
-    const rest = restIdx >= 0 ? content.slice(restIdx).trim() : '';
+    const firstBookIdx = cleaned.search(/[１1２2３3]冊目/);
+    const intro = firstBookIdx >= 0 ? cleaned.slice(0, firstBookIdx).trim() : '';
+    const restIdx = cleaned.search(/最後に補足|選書した本が/);
+    const rest = restIdx >= 0 ? cleaned.slice(restIdx).trim() : '';
     const introHtml = intro ? `<div class="ai-recommend-intro">${sanitizeAiRecommendHtml(intro.replace(/\n/g, '<br>'))}</div>` : '';
     const cardsHtml = renderAiRecommendBookCards(books);
     const restHtml = rest ? `<div class="ai-recommend-rest">${sanitizeAiRecommendHtml(rest.replace(/\n/g, '<br>'))}</div>` : '';
     return `${introHtml}<div class="ai-recommend-books-grid">${cardsHtml}</div>${restHtml}`;
   }
-  return sanitizeAiRecommendHtml(content.replace(/\n/g, '<br>'));
+  return sanitizeAiRecommendHtml(cleaned.replace(/\n/g, '<br>'));
 }
 
 function renderAiRecommendChat() {
@@ -1243,7 +1307,8 @@ function renderAiRecommendChat() {
   chatEl.innerHTML = aiRecommendMessages.map(m => {
     const isUser = m.role === 'user';
     const content = (m.content || '').trim();
-    const books = isUser ? [] : parseAiRecommendBooks(content);
+    const cleaned = stripRolePrefix(content);
+    const books = isUser ? [] : parseAiRecommendBooks(cleaned);
     const cls = isUser ? 'ai-recommend-msg user' : `ai-recommend-msg assistant${books.length > 0 ? ' has-books' : ''}`;
     const html = renderAiRecommendMessageContent(content, isUser);
     return `<div class="${cls}"><div class="ai-recommend-msg-content">${html}</div></div>`;
