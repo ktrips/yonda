@@ -110,12 +110,17 @@ jobs:
           gcloud builds submit --async --tag "${IMAGE_TAG}" --timeout=600 .
           BUILD_ID=$(gcloud builds list --limit=1 --format='value(id)')
           echo "Waiting for build $BUILD_ID..."
-          gcloud builds wait "$BUILD_ID"
-          STATUS=$(gcloud builds describe "$BUILD_ID" --format='value(status)')
-          if [ "$STATUS" != "SUCCESS" ]; then
-            echo "Build failed with status: $STATUS"
-            exit 1
-          fi
+          for i in $(seq 1 60); do
+            STATUS=$(gcloud builds describe "$BUILD_ID" --format='value(status)' 2>/dev/null || echo "UNKNOWN")
+            echo "  Build status: $STATUS"
+            case "$STATUS" in
+              SUCCESS) echo "✔ Build completed successfully"; exit 0 ;;
+              FAILURE|CANCELLED|EXPIRED) echo "Build failed with status: $STATUS"; exit 1 ;;
+              *) sleep 15 ;;
+            esac
+          done
+          echo "Build timed out"
+          exit 1
 
       - name: Deploy (image only)
         if: ${{ github.event.inputs.image_only == 'true' }}
