@@ -35,12 +35,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-
-      - name: Authenticate to Google Cloud
+      - name: Create GCP credentials file
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
@@ -57,8 +52,19 @@ jobs:
               f.write(key)
           print('Credentials file created')
           "
-          gcloud auth activate-service-account --key-file=gcp-key.json
-          rm -f gcp-key.json
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json_path: ${{ github.workspace }}/gcp-key.json
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Remove credentials file
+        run: rm -f gcp-key.json
 
       - name: Prepare auth files for full deploy
         if: ${{ github.event.inputs.image_only != 'true' }}
