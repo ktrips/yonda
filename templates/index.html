@@ -145,9 +145,13 @@
           <button type="button" class="book-tab" id="tabRecommend" data-tab="recommend">オススメ</button>
         </div>
         <div id="recommendSection" class="recommend-section" style="display:none;">
+          <div id="recommendInitial" class="recommend-initial">
+            <button type="button" class="btn btn-primary" id="recommendGenerateBtn">読書履歴からオススメを生成</button>
+            <span class="recommend-initial-hint">設定からあなたのAPI Keyを入れると生成できます。</span>
+          </div>
           <div id="recommendLoading" class="recommend-loading" style="display:none;">AIでおすすめを生成中…</div>
           <div id="recommendList" class="recommend-list"></div>
-          <button type="button" class="btn btn-secondary" id="recommendRefreshBtn" style="margin-top:1rem;">もう一度おすすめを生成</button>
+          <button type="button" class="btn btn-secondary" id="recommendRefreshBtn" style="display:none; margin-top:1rem;">もう一度おすすめを生成</button>
         </div>
         <div id="rankingSection" class="ranking-section" style="display:none;">
           <div class="ranking-filters">
@@ -187,47 +191,49 @@
           <p class="ai-recommend-headline"><strong>AIであなたにピッタリの推し本オススメします！</strong></p>
           <p class="ai-recommend-description">会話するうちに、あなたにぴったりな推し本を探します。まずはあなたの基本的な事を教えて下さい。<span id="aiRecommendProvider" class="ai-recommend-provider"></span></p>
           <div class="ai-recommend-form" id="aiRecommendForm">
-            <div class="ai-recommend-form-row-wrap">
+            <div class="ai-recommend-form-row-wrap ai-recommend-row-1">
               <div class="ai-recommend-form-group ai-recommend-slider-group ai-recommend-slider-group-gender">
-                <label>性別 <span class="ai-recommend-slider-value" id="aiQ0Value">女性</span></label>
+                <label><span class="ai-recommend-slider-value" id="aiQ0Value">男性</span></label>
                 <div class="ai-recommend-slider-row">
                   <span class="ai-recommend-slider-label">女性</span>
-                  <input type="range" name="aiQ0" id="aiQ0" min="0" max="100" value="0" class="ai-recommend-slider">
+                  <input type="range" name="aiQ0" id="aiQ0" min="0" max="100" value="100" class="ai-recommend-slider ai-recommend-slider-gender">
                   <span class="ai-recommend-slider-label">男性</span>
                 </div>
               </div>
               <div class="ai-recommend-form-group ai-recommend-slider-group">
-                <label>年代 <span class="ai-recommend-slider-value" id="aiQ1Value">30代</span></label>
+                <label><span class="ai-recommend-slider-value" id="aiQ1Value">30代</span></label>
                 <div class="ai-recommend-slider-row">
                   <span class="ai-recommend-slider-label">10代</span>
-                  <input type="range" name="aiQ1" id="aiQ1" min="0" max="100" value="50" class="ai-recommend-slider">
+                  <input type="range" name="aiQ1" id="aiQ1" min="0" max="100" value="50" class="ai-recommend-slider ai-recommend-slider-age">
                   <span class="ai-recommend-slider-label">60代以上</span>
                 </div>
               </div>
-              <div class="ai-recommend-form-group ai-recommend-slider-group">
-                <label>読書頻度 <span class="ai-recommend-slider-value" id="aiQ6Value">月２冊</span></label>
-                <div class="ai-recommend-slider-row">
-                  <span class="ai-recommend-slider-label">月４冊以上</span>
-                  <input type="range" name="aiQ6" id="aiQ6" min="0" max="100" value="25" class="ai-recommend-slider">
-                  <span class="ai-recommend-slider-label">読まない</span>
-                </div>
-              </div>
             </div>
-            <div class="ai-recommend-form-row-wrap">
+            <div class="ai-recommend-form-row-wrap ai-recommend-row-2">
               <div class="ai-recommend-form-group ai-recommend-slider-group">
-                <label>職業 <span class="ai-recommend-slider-value" id="aiQ2Value">社会人</span></label>
+                <label><span class="ai-recommend-slider-value" id="aiQ2Value">社会人</span></label>
                 <div class="ai-recommend-slider-row">
                   <span class="ai-recommend-slider-label">学生</span>
-                  <input type="range" name="aiQ2" id="aiQ2" min="0" max="100" value="50" class="ai-recommend-slider">
+                  <input type="range" name="aiQ2" id="aiQ2" min="0" max="100" value="50" class="ai-recommend-slider ai-recommend-slider-job">
                   <span class="ai-recommend-slider-label">悠々</span>
                 </div>
               </div>
               <div class="ai-recommend-form-group ai-recommend-slider-group">
-                <label>ジャンル <span class="ai-recommend-slider-value" id="aiQ7Value">現代小説</span></label>
+                <label><span class="ai-recommend-slider-value" id="aiQ7Value">現代小説</span></label>
                 <div class="ai-recommend-slider-row">
                   <span class="ai-recommend-slider-label">ノンフィクション</span>
-                  <input type="range" name="aiQ7" id="aiQ7" min="0" max="100" value="50" class="ai-recommend-slider">
+                  <input type="range" name="aiQ7" id="aiQ7" min="0" max="100" value="50" class="ai-recommend-slider ai-recommend-slider-genre">
                   <span class="ai-recommend-slider-label">ファンタジー・SF</span>
+                </div>
+              </div>
+            </div>
+            <div class="ai-recommend-form-row-wrap ai-recommend-row-3">
+              <div class="ai-recommend-form-group ai-recommend-slider-group">
+                <label><span class="ai-recommend-slider-value" id="aiQ6Value">月２冊</span></label>
+                <div class="ai-recommend-slider-row">
+                  <span class="ai-recommend-slider-label">月４冊以上</span>
+                  <input type="range" name="aiQ6" id="aiQ6" min="0" max="100" value="25" class="ai-recommend-slider ai-recommend-slider-freq">
+                  <span class="ai-recommend-slider-label">読まない</span>
                 </div>
               </div>
             </div>

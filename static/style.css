@@ -454,6 +454,14 @@ header {
   flex-wrap: nowrap;
   gap: 0.35rem 0.6rem;
 }
+/* デスクトップ: 1行目=性別・年代・読書頻度、2行目=職業・ジャンル */
+.ai-recommend-form {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.ai-recommend-row-1 { order: 1; flex: 1 1 auto; min-width: 140px; }
+.ai-recommend-row-3 { order: 2; flex: 1 1 auto; min-width: 140px; }
+.ai-recommend-row-2 { order: 3; flex: 1 1 100%; }
 .ai-recommend-form-group {
   flex: 1 1 0;
   min-width: 0;
@@ -495,12 +503,12 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.48rem;
+  font-size: 0.72rem;
 }
 .ai-recommend-slider-value {
   font-weight: 500;
   color: var(--accent);
-  font-size: 0.48rem;
+  font-size: 0.72rem;
 }
 .ai-recommend-slider-row {
   display: flex;
@@ -509,7 +517,7 @@ header {
   margin-top: 0.15rem;
 }
 .ai-recommend-slider-label {
-  font-size: 0.42rem;
+  font-size: 0.63rem;
   color: var(--text-secondary);
   flex-shrink: 0;
   min-width: 2.5em;
@@ -520,6 +528,40 @@ header {
 .ai-recommend-slider {
   flex: 1;
   min-width: 0;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--slider-track, var(--border));
+  border-radius: 3px;
+  --slider-accent: var(--accent);
+}
+.ai-recommend-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--slider-accent);
+  cursor: pointer;
+  border: 2px solid var(--bg);
+}
+.ai-recommend-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--slider-accent);
+  cursor: pointer;
+  border: 2px solid var(--bg);
+}
+.ai-recommend-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--slider-track, var(--border));
+}
+.ai-recommend-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--slider-track, var(--border));
 }
 .ai-recommend-form-row {
   display: flex;
@@ -914,6 +956,23 @@ header {
 /* === Yonda オススメ === */
 .recommend-section {
   margin-top: 1rem;
+}
+.recommend-initial {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.recommend-initial .btn-primary {
+  width: auto;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+}
+.recommend-initial-hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
 }
 .recommend-loading {
   padding: 1rem;
@@ -1434,4 +1493,19 @@ header {
     min-width: 0;
   }
   .ai-recommend-input-row .btn { flex-shrink: 0; }
+  /* モバイル: 性別・年代 | 職業・ジャンル | 読書頻度 の3段表示 */
+  .ai-recommend-form {
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+  .ai-recommend-row-1,
+  .ai-recommend-row-2,
+  .ai-recommend-row-3 {
+    order: unset;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .ai-recommend-row-1 { order: 1; }
+  .ai-recommend-row-2 { order: 2; }
+  .ai-recommend-row-3 { order: 3; }
 }

@@ -75,17 +75,27 @@ python -m app
 | `audible_books.json` | Audible |
 | `kindle_books.json` | Kindle |
 | `BookData.sqlite` | Kindle（ローカル同期用） |
-| `.credentials.json` | 図書館認証 |
 
-デフォルトは `yonda/data/`。環境変数 `YONDA_DATA_DIR` で変更可能。
+読書データは `yonda/data/`（環境変数 `YONDA_DATA_DIR` で変更可能）。
+
+**認証・設定ファイル**（セキュアな保存先）:
+
+| ファイル | 用途 | デフォルトパス |
+|----------|------|----------------|
+| `ai_config.json` | AI（OpenAI/Gemini）API キー | `~/.config/yonda/ai_config.json` |
+| `credentials.json` | 図書館認証 | `~/.config/yonda/credentials.json` |
+
+環境変数 `YONDA_CONFIG_DIR` でディレクトリを変更、`YONDA_AI_CONFIG_PATH` / `YONDA_CREDS_PATH` で個別パスを指定可能。既存ファイルは初回起動時に自動移行されます。
 
 ## 環境変数
 
 | 変数 | 説明 |
 |------|------|
 | `YONDA_DATA_DIR` | データ保存先ディレクトリ |
+| `YONDA_CONFIG_DIR` | 認証・設定ファイルのディレクトリ（デフォルト: `~/.config/yonda`） |
+| `YONDA_AI_CONFIG_PATH` | AI 設定ファイルのパス |
+| `YONDA_CREDS_PATH` | 図書館認証ファイルのパス |
 | `YONDA_AUTH_FILE` | Audible 認証ファイル（auth_jp.json）のパス |
-| `YONDA_CREDS_PATH` | 図書館認証（.credentials.json）のパス |
 | `YONDA_KINDLE_SQLITE_PATH` | Kindle BookData.sqlite のパス（任意） |
 | `YONDA_KINDLE_XML_PATH` | KindleSyncMetadataCache.xml のパス（任意） |
 
@@ -98,6 +108,51 @@ Google Cloud Run へのデプロイ方法は 2 通りあります。
 | **deploy.sh** | ローカルから `./deploy.sh` でフルデプロイ、`./deploy.sh --image-only` でイメージ更新のみ |
 | **GitHub Actions** | `main` への push で自動デプロイ。手動実行で「イメージ更新のみ」も選択可能 |
 
-必要な GitHub Secrets: `GCP_PROJECT_ID`、`GCP_SA_KEY`、`AUTH_JP_JSON`、`CREDENTIALS_JSON`（任意）
-
 詳細は [DEPLOY.md](DEPLOY.md) を参照。`yonda.ktrips.net` としてホスティング可能。
+
+### GitHub Actions セットアップ（初回のみ）
+
+GitHub Actions でデプロイするには、以下を設定してください。
+
+**1. ワークフロー配置**
+
+- ワークフローは **リポジトリルート** の `.github/workflows/` に配置する必要があります
+- `yonda-deploy.yml` が `Git/.github/workflows/` にあることを確認
+
+**2. GitHub Secrets の登録**
+
+リポジトリ → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+
+| Secret 名 | 値 | 必須 |
+|-----------|-----|------|
+| `GCP_PROJECT_ID` | GCP プロジェクト ID | ✅ |
+| `GCP_SA_KEY` | サービスアカウント JSON の全文 | ✅ |
+| `AUTH_JP_JSON` | `auth_jp.json` の内容（`data/auth_jp.json` または `auth_jp.json`） | ✅（Audible 利用時） |
+| `CREDENTIALS_JSON` | `.credentials.json` の内容（`data/.credentials.json`） | 任意（図書館利用時） |
+
+**3. 認証ファイルの取得例**
+
+```bash
+# Audible 認証（auth_jp.json）
+cat data/auth_jp.json
+# または yonda 直下にある場合
+cat auth_jp.json
+
+# 図書館認証（.credentials.json）
+cat data/.credentials.json
+```
+
+**4. サービスアカウントの権限**
+
+`GCP_SA_KEY` のサービスアカウントに以下のロールを付与してください。
+
+- Cloud Run 管理者
+- Artifact Registry 作成者
+- サービス アカウント ユーザー
+- Secret Manager 管理者
+- Storage オブジェクト管理者
+
+**5. 実行方法**
+
+- **自動**: `main` ブランチの `yonda/` に push すると自動デプロイ
+- **手動**: Actions タブ → "Deploy yonda to Cloud Run" → Run workflow

@@ -84,12 +84,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOCAL_DATA_DIR="${SCRIPT_DIR}/data"
 if [[ -d "${LOCAL_DATA_DIR}" ]]; then
   echo ">>> 既存データファイルを GCS にアップロード..."
-  for f in library_books.json audible_books.json kindle_books.json .credentials.json; do
+  for f in library_books.json audible_books.json kindle_books.json; do
     if [[ -f "${LOCAL_DATA_DIR}/${f}" ]]; then
       gsutil -q cp "${LOCAL_DATA_DIR}/${f}" "gs://${BUCKET_NAME}/${f}"
       echo "    ✔ ${f}"
     fi
   done
+  CREDS_SRC="${LOCAL_DATA_DIR}/.credentials.json"
+  [[ -f "${CREDS_SRC}" ]] || CREDS_SRC=".credentials.json"
+  [[ -f "${CREDS_SRC}" ]] || CREDS_SRC="${HOME}/.config/yonda/credentials.json"
+  if [[ -f "${CREDS_SRC}" ]]; then
+    gsutil -q cp "${CREDS_SRC}" "gs://${BUCKET_NAME}/.credentials.json"
+    echo "    ✔ .credentials.json"
+  fi
 fi
 
 # ---------- 5. Secret Manager にシークレットを登録 ----------
@@ -113,6 +120,7 @@ fi
 
 CREDS_FILE="${LOCAL_DATA_DIR}/.credentials.json"
 [[ -f "${CREDS_FILE}" ]] || CREDS_FILE=".credentials.json"
+[[ -f "${CREDS_FILE}" ]] || CREDS_FILE="${HOME}/.config/yonda/credentials.json"
 if [[ -f "${CREDS_FILE}" ]]; then
   create_or_update_secret "yonda-credentials" "${CREDS_FILE}"
 else

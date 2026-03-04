@@ -14,6 +14,8 @@ import requests
 from adapters import get_adapter, list_libraries
 from adapters.base import LibraryCredentials, BookRecord
 
+from config_paths import get_credentials_path, ensure_config_dir
+
 logger = logging.getLogger(__name__)
 
 # 図書館の本の表紙取得: Open Library API（多くの表紙は Amazon 等と共通）
@@ -25,10 +27,7 @@ DATA_DIR = Path(os.environ.get(
     "YONDA_DATA_DIR",
     str(APP_DIR / "data"),
 ))
-CREDS_PATH = Path(os.environ.get(
-    "YONDA_CREDS_PATH",
-    str(DATA_DIR / ".credentials.json"),
-))
+CREDS_PATH = get_credentials_path()
 
 _JSON_MAP: dict[str, Path] = {
     "setagaya": DATA_DIR / "library_books.json",
@@ -50,20 +49,24 @@ def _json_path_for(library_id: str) -> Path:
 # ------------------------------------------------------------------
 
 def save_credentials(library_id: str, user_id: str, password: str) -> None:
-    """認証情報をローカルファイルに保存"""
+    """認証情報をローカルファイルに保存（~/.config/yonda/credentials.json）"""
+    ensure_config_dir()
     all_creds = _load_all_credentials()
     all_creds[library_id] = {"user_id": user_id, "password": password}
     with open(CREDS_PATH, "w", encoding="utf-8") as f:
         json.dump(all_creds, f, ensure_ascii=False, indent=2)
+    CREDS_PATH.chmod(0o600)
     logger.info("認証情報を保存: %s", library_id)
 
 
 def delete_credentials(library_id: str) -> None:
     """認証情報を削除"""
+    ensure_config_dir()
     all_creds = _load_all_credentials()
     all_creds.pop(library_id, None)
     with open(CREDS_PATH, "w", encoding="utf-8") as f:
         json.dump(all_creds, f, ensure_ascii=False, indent=2)
+    CREDS_PATH.chmod(0o600)
 
 
 def has_credentials(library_id: str) -> bool:

@@ -470,7 +470,7 @@ function updateTabContentVisibility() {
     if (rankingSection) rankingSection.style.display = 'none';
     if (recommendSection) {
       recommendSection.style.display = 'block';
-      renderYondaRecommend();
+      showRecommendInitialState();
     }
   } else {
     if (rankingSection) rankingSection.style.display = 'none';
@@ -652,19 +652,33 @@ function renderRanking() {
 
 let _yondaRecommendCache = null;
 
+function showRecommendInitialState() {
+  const initialEl = document.getElementById('recommendInitial');
+  const listEl = document.getElementById('recommendList');
+  const refreshBtn = document.getElementById('recommendRefreshBtn');
+  if (initialEl) initialEl.style.display = 'flex';
+  if (listEl) listEl.innerHTML = '';
+  if (refreshBtn) refreshBtn.style.display = 'none';
+}
+
 async function renderYondaRecommend() {
   const listEl = document.getElementById('recommendList');
   const loadingEl = document.getElementById('recommendLoading');
+  const initialEl = document.getElementById('recommendInitial');
+  const refreshBtn = document.getElementById('recommendRefreshBtn');
   if (!listEl) return;
 
   const completed = allBooks.filter(b => b.completed).slice(0, 20);
   const unread = allBooks.filter(b => !b.completed);
   if (completed.length === 0 || unread.length === 0) {
+    if (initialEl) initialEl.style.display = 'flex';
     listEl.innerHTML = '<p class="recommend-empty">読了本と未読本の両方が必要です。読書記録を取込んでください。</p>';
     if (loadingEl) loadingEl.style.display = 'none';
+    if (refreshBtn) refreshBtn.style.display = 'none';
     return;
   }
 
+  if (initialEl) initialEl.style.display = 'none';
   if (loadingEl) loadingEl.style.display = 'block';
   listEl.innerHTML = '';
 
@@ -680,12 +694,16 @@ async function renderYondaRecommend() {
     const data = await res.json();
     if (loadingEl) loadingEl.style.display = 'none';
     if (!data.success) {
+      if (initialEl) initialEl.style.display = 'flex';
       listEl.innerHTML = `<p class="recommend-error">${escapeHtml(data.error || 'エラー')}</p>`;
+      if (refreshBtn) refreshBtn.style.display = 'none';
       return;
     }
     const recs = data.recommendations || [];
     if (recs.length === 0) {
+      if (initialEl) initialEl.style.display = 'flex';
       listEl.innerHTML = '<p class="recommend-empty">おすすめを生成できませんでした。</p>';
+      if (refreshBtn) refreshBtn.style.display = 'none';
       return;
     }
     const modelLabel = data.model ? ` (${data.model})` : '';
@@ -711,6 +729,7 @@ async function renderYondaRecommend() {
       `;
     }).join('');
     listEl.innerHTML = `<p class="recommend-model">AI${modelLabel}によるおすすめ</p><div class="recommend-grid">${items}</div>`;
+    if (refreshBtn) refreshBtn.style.display = 'block';
     listEl.querySelectorAll('.recommend-item').forEach((el) => {
       el.addEventListener('click', (e) => {
         if (e.target.closest('a')) return;
@@ -726,7 +745,9 @@ async function renderYondaRecommend() {
     });
   } catch (err) {
     if (loadingEl) loadingEl.style.display = 'none';
+    if (initialEl) initialEl.style.display = 'flex';
     listEl.innerHTML = `<p class="recommend-error">${escapeHtml(err.message || 'エラー')}</p>`;
+    if (refreshBtn) refreshBtn.style.display = 'none';
   }
 }
 
@@ -737,7 +758,6 @@ function applyFilters() {
   }
   if (activeBookTab === 'recommend') {
     updateTabContentVisibility();
-    renderYondaRecommend();
     return;
   }
 
@@ -976,7 +996,7 @@ const AI_RECOMMEND_SLIDER_LABELS = {
 };
 
 function getAiRecommendFormPreferences() {
-  const prefs = { q0: 0, q1: 50, q2: 50, q6: 25, q7: 50 };
+  const prefs = { q0: 100, q1: 50, q2: 50, q6: 25, q7: 50 };
   ['q0', 'q1', 'q2', 'q6', 'q7'].forEach(key => {
     const el = document.getElementById(key === 'q0' ? 'aiQ0' : key === 'q1' ? 'aiQ1' : key === 'q2' ? 'aiQ2' : key === 'q6' ? 'aiQ6' : 'aiQ7');
     if (el) prefs[key] = parseInt(el.value, 10);
@@ -984,6 +1004,33 @@ function getAiRecommendFormPreferences() {
   return prefs;
 }
 
+function lerpColor(c1, c2, t) {
+  const r = Math.round(c1.r + (c2.r - c1.r) * t);
+  const g = Math.round(c1.g + (c2.g - c1.g) * t);
+  const b = Math.round(c1.b + (c2.b - c1.b) * t);
+  return `rgb(${r},${g},${b})`;
+}
+const AI_RECOMMEND_SLIDER_COLORS = {
+  q0: { left: { r: 233, g: 30, b: 99 }, right: { r: 33, g: 150, b: 243 } },   // 女性=赤/ピンク, 男性=青
+  q1: { left: { r: 76, g: 175, b: 80 }, right: { r: 121, g: 85, b: 72 } },     // 10代=緑, 60代=茶
+  q2: { left: { r: 156, g: 39, b: 176 }, right: { r: 255, g: 152, b: 0 } },    // 学生=紫, 悠々=オレンジ
+  q6: { left: { r: 76, g: 175, b: 80 }, right: { r: 158, g: 158, b: 158 } },   // 月4冊=緑, 読まない=グレー
+  q7: { left: { r: 96, g: 125, b: 139 }, right: { r: 224, g: 64, b: 251 } },   // ノンフィクション=青灰, ファンタジー=マゼンタ
+};
+function updateAiRecommendSliderColors() {
+  const ids = ['aiQ0', 'aiQ1', 'aiQ2', 'aiQ6', 'aiQ7'];
+  const keys = ['q0', 'q1', 'q2', 'q6', 'q7'];
+  ids.forEach((id, i) => {
+    const el = document.getElementById(id);
+    const cfg = AI_RECOMMEND_SLIDER_COLORS[keys[i]];
+    if (!el || !cfg) return;
+    const v = parseInt(el.value, 10) / 100;
+    const accent = lerpColor(cfg.left, cfg.right, v);
+    const track = `linear-gradient(to right, ${lerpColor(cfg.left, cfg.right, 0)}, ${lerpColor(cfg.left, cfg.right, 1)})`;
+    el.style.setProperty('--slider-accent', accent);
+    el.style.setProperty('--slider-track', track);
+  });
+}
 function updateAiRecommendSliderDisplay() {
   const prefs = getAiRecommendFormPreferences();
   const q0Val = document.getElementById('aiQ0Value');
@@ -996,6 +1043,7 @@ function updateAiRecommendSliderDisplay() {
   if (q2Val) q2Val.textContent = AI_RECOMMEND_SLIDER_LABELS.q2(prefs.q2);
   if (q6Val) q6Val.textContent = AI_RECOMMEND_SLIDER_LABELS.q6(prefs.q6);
   if (q7Val) q7Val.textContent = AI_RECOMMEND_SLIDER_LABELS.q7(prefs.q7);
+  updateAiRecommendSliderColors();
 }
 
 function saveAiRecommendFormPrefs(prefs) {
@@ -1702,6 +1750,9 @@ document.getElementById('rankingYearFilter')?.addEventListener('change', () => {
     populateRankingFilters();
     renderRanking();
   }
+});
+document.getElementById('recommendGenerateBtn')?.addEventListener('click', () => {
+  if (activeBookTab === 'recommend') renderYondaRecommend();
 });
 document.getElementById('recommendRefreshBtn')?.addEventListener('click', () => {
   if (activeBookTab === 'recommend') renderYondaRecommend();

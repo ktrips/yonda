@@ -13,7 +13,7 @@ AI推しでAPIエラーが出る場合の確認手順と対処法です。
 
 ### 設定ファイルの場所
 
-- 設定は `yonda/.ai_config.json` に保存されます
+- 設定は `~/.config/yonda/ai_config.json` に保存されます（環境変数 `YONDA_AI_CONFIG_PATH` で変更可）
 - 内容例: `{"provider": "gemini", "api_key": "AIza..."}`
 
 ---

@@ -16,10 +16,12 @@ import library_service
 from adapters.kindle import KindleAdapter
 from adapters.base import LibraryCredentials
 
+from config_paths import get_ai_config_path, ensure_config_dir
+
 APP_DIR = Path(__file__).resolve().parent
 os.chdir(APP_DIR)
 
-AI_CONFIG_PATH = APP_DIR / ".ai_config.json"
+AI_CONFIG_PATH = get_ai_config_path()
 
 # Kindle OTP ログイン用セッション（session_id -> {cookies, otp_page_html}）
 _kindle_otp_sessions: dict[str, dict] = {}
@@ -316,11 +318,13 @@ def _load_ai_config():
 
 
 def _save_ai_config(provider: str, api_key: str):
-    """AI設定を保存"""
+    """AI設定を保存（~/.config/yonda/ai_config.json）"""
+    ensure_config_dir()
     key = _sanitize_api_key(api_key.strip())
     data = {"provider": provider, "api_key": key}
     with open(AI_CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    AI_CONFIG_PATH.chmod(0o600)
 
 
 def _extract_field_value(line: str) -> str:
@@ -571,7 +575,7 @@ def _build_ai_recommend_system_prompt(form_prefs: dict) -> str:
         return "ファンタジー・SF"
 
     prefs = []
-    prefs.append(f"性別: {q0_label(form_prefs.get('q0', 0))}")
+    prefs.append(f"性別: {q0_label(form_prefs.get('q0', 100))}")
     prefs.append(f"職業: {q2_label(form_prefs.get('q2', 50))}")
     prefs.append(f"年代: {q1_label(form_prefs.get('q1', 50))}")
     prefs.append(f"読書頻度: {q6_label(form_prefs.get('q6', 25))}")
