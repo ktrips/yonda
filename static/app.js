@@ -124,6 +124,8 @@ function sourceLabel(source) { return SOURCE_LABELS[source] || source || ''; }
 
 const AFFILIATE_TAG_KEY = 'yonda_affiliate_tag';
 const DEFAULT_AFFILIATE_TAG = 'ktrip-22';
+const DEFAULT_PAGE_KEY = 'yonda_default_page';
+const DEFAULT_PAGE = 'yonda';
 
 function getAffiliateTag() {
   try {
@@ -138,6 +140,22 @@ function getAffiliateTag() {
 function setAffiliateTag(tag) {
   try {
     localStorage.setItem(AFFILIATE_TAG_KEY, (tag || '').trim());
+  } catch (_) {}
+}
+
+function getDefaultPage() {
+  try {
+    const v = localStorage.getItem(DEFAULT_PAGE_KEY);
+    if (v && ['yonda', 'yomu', 'oshi'].includes(v)) return v;
+  } catch (_) {}
+  return DEFAULT_PAGE;
+}
+
+function setDefaultPage(page) {
+  try {
+    if (page && ['yonda', 'yomu', 'oshi'].includes(page)) {
+      localStorage.setItem(DEFAULT_PAGE_KEY, page);
+    }
   } catch (_) {}
 }
 
@@ -982,7 +1000,7 @@ let aiRecommendMode = '5questions';  // 5questions | mbti | strength
 const AI_RECOMMEND_MODE_DESCRIPTIONS = {
   '5questions': '会話するうちに、あなたにぴったりな推し本を探します。まずはあなたの基本的な事を教えて下さい。',
   'mbti': 'MBTI診断の質問に答えながら、あなたの性格タイプに合った本を提案します。',
-  'strength': 'Strength Finder（強みの資質）に基づいて、あなたに最適な本を提案します。',
+  'strength': '強み診断の質問に答えながら、あなたの強み・得意なことに合った本を提案します。',
 };
 
 function updateAiRecommendProvider(provider, model) {
@@ -1897,7 +1915,11 @@ function closeCredentialModal() {
 async function openSettingsModal() {
   const modal = document.getElementById('settingsModal');
   const input = document.getElementById('affiliateTagInput');
+  const defaultPageSelect = document.getElementById('defaultPageSelect');
   const statusEl = document.getElementById('settingsModalStatus');
+  if (defaultPageSelect) {
+    defaultPageSelect.value = getDefaultPage();
+  }
   if (input) {
     const stored = localStorage.getItem(AFFILIATE_TAG_KEY);
     input.value = stored === null ? DEFAULT_AFFILIATE_TAG : (stored || '');
@@ -1927,11 +1949,15 @@ function closeSettingsModal() {
 
 async function saveSettings() {
   const tagInput = document.getElementById('affiliateTagInput');
+  const defaultPageSelect = document.getElementById('defaultPageSelect');
   const aiProvider = document.getElementById('aiProviderSelect');
   const aiKey = document.getElementById('aiApiKeyInput');
   const statusEl = document.getElementById('settingsModalStatus');
   const tag = (tagInput?.value || '').trim();
   setAffiliateTag(tag);
+  if (defaultPageSelect) {
+    setDefaultPage(defaultPageSelect.value);
+  }
   try {
     const res = await fetch('/api/ai-config', {
       method: 'POST',
@@ -2448,6 +2474,8 @@ document.getElementById('statFavorite')?.addEventListener('click', (e) => {
 /* --- Init --- */
 
 async function init() {
+  activeMainTab = getDefaultPage();
+
   try {
     const libRes = await fetch(API.libraries);
     const libData = await libRes.json();

@@ -650,7 +650,7 @@ def _build_ai_recommend_system_prompt(form_prefs: dict, mode: str = "5questions"
 AI_RECOMMEND_INIT_MESSAGES = {
     "5questions": "こんにちは。AI推しをお願いします。まず「AI推しへようこそ！5つの質問で、あなたにピッタリな本を推すので、短くてもいいので答えて下さいね。」と挨拶した後、最初の質問（Q1. 今の気分）をしてください。",
     "mbti": "こんにちは。MBTI診断で選書します。まず「MBTI診断で選書へようこそ！いくつか質問に答えてもらって、あなたの性格タイプに合った本を提案しますね。」と挨拶した後、MBTIの最初の軸（外向型E vs 内向型I）に関する質問をしてください。",
-    "strength": "こんにちは。Strength Finderで選書します。まず「Strength Finderで選書へようこそ！あなたの強みや得意なことに合わせた本を提案します。いくつか質問に答えてくださいね。」と挨拶した後、強みに関する最初の質問をしてください。",
+    "strength": "こんにちは。強み診断で選書します。まず「強み診断で選書へようこそ！あなたの強みや得意なことに合わせた本を提案します。いくつか質問に答えてくださいね。」と挨拶した後、強みに関する最初の質問をしてください。",
 }
 
 
@@ -823,7 +823,7 @@ def api_yonda_recommend():
     api_key = (cfg.get("api_key") or "").strip()
     provider = (cfg.get("provider") or "gemini").lower()
     if not api_key:
-        return jsonify({"success": False, "error": "AI設定が未設定です。Amazon/AI設定からAPIキーを登録してください"}), 400
+        return jsonify({"success": False, "error": "AI設定が未設定です。アプリ設定からAPIキーを登録してください"}), 400
 
     completed_summary = "\n".join(
         "- 『{}』（{}）{}".format(b.get("title", ""), b.get("author", ""), b.get("genre", ""))

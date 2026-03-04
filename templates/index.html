@@ -37,7 +37,7 @@
       </button>
       <div class="hamburger-menu" id="hamburgerMenu">
         <button type="button" class="menu-item menu-item-fetch" id="menuFetchDirect">読書記録を取込み</button>
-        <button type="button" class="menu-item" id="menuAmazonAi">Amazon/AI設定</button>
+        <button type="button" class="menu-item" id="menuAmazonAi">アプリ設定</button>
         <a href="{{ url_for('help_page') }}" class="menu-help-link" target="_blank" rel="noopener">設定のヘルプ</a>
         <select id="librarySelect" class="menu-select" style="display:none;" aria-hidden="true">
           <option value="setagaya">世田谷区立図書館</option>
@@ -171,8 +171,8 @@
       <!-- Yomu: これから検索 -->
       <div id="mainContentYomu" class="main-content" style="display:none;">
         <div class="book-search-section" id="bookSearchSection">
-          <p class="book-search-headline"><strong>読みたい本検索</strong></p>
-          <p class="book-search-description">読みたい本の名前か著者を入れて下さい。<br>本の写真を撮るだけで、情報を収集して、一番お得に手に入る方法を探してくれます。（Amazon、Kindle、Audible、メルカリ、ブックオフ、図書館）</p>
+          <p class="book-search-headline"><strong>次に読みたい本検索</strong></p>
+          <p class="book-search-description">読みたい本の名前か著者を入れて下さい。<br>本の写真を撮るだけで、情報を収集して、一番お得に手に入る方法を探してくれます。<br>（Amazon、Kindle、Audible、メルカリ、ブックオフ、図書館）</p>
           <div class="book-search-input-row">
             <input type="text" id="searchInput" class="book-search-input" placeholder="タイトル・著者で検索…">
             <button type="button" class="btn btn-secondary" id="bookPhotoBtn">
@@ -188,12 +188,12 @@
       <!-- Oshi: AI推し -->
       <div id="mainContentOshi" class="main-content" style="display:none;">
         <div class="ai-recommend-section" id="aiRecommendSection">
+          <p class="ai-recommend-headline"><strong>AIであなたにぴったりな推し本をオススメ</strong></p>
           <div class="ai-recommend-mode-menu" id="aiRecommendModeMenu">
-            <button type="button" class="ai-recommend-mode-btn active" data-mode="5questions">簡単な質問で選書</button>
-            <button type="button" class="ai-recommend-mode-btn" data-mode="mbti">MBTI診断で選書</button>
-            <button type="button" class="ai-recommend-mode-btn" data-mode="strength">Strength Finderで選書</button>
+            <button type="button" class="ai-recommend-mode-btn active" data-mode="5questions">５質問で推し</button>
+            <button type="button" class="ai-recommend-mode-btn" data-mode="mbti">MBTI診断で推し</button>
+            <button type="button" class="ai-recommend-mode-btn" data-mode="strength">強み診断で推し</button>
           </div>
-          <p class="ai-recommend-headline"><strong>AIであなたにピッタリの推し本オススメします！</strong></p>
           <p class="ai-recommend-description" id="aiRecommendDescription">会話するうちに、あなたにぴったりな推し本を探します。まずはあなたの基本的な事を教えて下さい。<span id="aiRecommendProvider" class="ai-recommend-provider"></span></p>
           <div class="ai-recommend-form" id="aiRecommendForm">
             <div class="ai-recommend-form-row-wrap ai-recommend-row-1">
@@ -261,6 +261,18 @@
         <button type="button" class="modal-close" id="settingsModalClose" aria-label="閉じる">&times;</button>
       </div>
       <div class="modal-body">
+        <h3 class="modal-section-title">アプリ設定</h3>
+        <div class="modal-field">
+          <label for="defaultPageSelect">デフォルトのページ:</label>
+          <select id="defaultPageSelect" class="modal-input">
+            <option value="yonda">Yonda（読んだ本ページ）</option>
+            <option value="yomu">Yomu（読みたい本検索）</option>
+            <option value="oshi">Oshi（AI選書サービス）</option>
+          </select>
+        </div>
+        <p class="modal-note">アプリ起動時に最初に表示するページを選択します。</p>
+
+        <hr class="modal-divider">
         <div class="modal-field">
           <label for="affiliateTagInput">アフィリエイトタグ（Kindle・Audible リンク用）:</label>
           <input type="text" id="affiliateTagInput" class="modal-input" placeholder="例: ktrip-22">
@@ -286,6 +298,13 @@
         <div class="modal-actions">
           <button type="button" class="btn btn-primary" id="settingsSaveBtn">保存</button>
         </div>
+
+        <hr class="modal-divider">
+        <p class="modal-note">Check AI usages:</p>
+        <p class="modal-links">
+          <a href="https://platform.openai.com/usage" target="_blank" rel="noopener">OpenAI Usage</a><br>
+          <a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">Google Cloud Billing</a>
+        </p>
       </div>
     </div>
   </div>
