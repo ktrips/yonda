@@ -35,10 +35,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Create GCP credentials file
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          python3 -c "
+          import os, json
+          key = os.environ.get('GCP_SA_KEY', '')
+          if not key.strip():
+              raise SystemExit('GCP_SA_KEY is empty. Add the service account JSON to GitHub Secrets.')
+          try:
+              json.loads(key)
+          except json.JSONDecodeError as e:
+              raise SystemExit(f'GCP_SA_KEY is invalid JSON: {e}. Ensure the full JSON is copied (from { to }).')
+          with open('gcp-key.json', 'w') as f:
+              f.write(key)
+          print('Credentials file created')
+          "
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json_path: gcp-key.json
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
