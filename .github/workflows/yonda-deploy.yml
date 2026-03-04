@@ -35,10 +35,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create GCP credentials file
+      - name: Install gcloud and authenticate
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
         run: |
+          # gcloud が未インストールならインストール（ubuntu runner には入っている場合あり）
+          if ! command -v gcloud &>/dev/null; then
+            curl -sSL https://sdk.cloud.google.com | bash -s -- --disable-prompts --install-dir="$HOME"
+            echo "$HOME/google-cloud-sdk/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/google-cloud-sdk/bin:$PATH"
+          fi
+          # 認証ファイル作成
           python3 -c "
           import os, json
           key = os.environ.get('GCP_SA_KEY', '')
@@ -52,19 +60,9 @@ jobs:
               f.write(key)
           print('Credentials file created')
           "
-
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json_path: ${{ github.workspace }}/gcp-key.json
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-
-      - name: Remove credentials file
-        run: rm -f gcp-key.json
+          gcloud auth activate-service-account --key-file=gcp-key.json
+          gcloud config set project "$GCP_PROJECT_ID"
+          rm -f gcp-key.json
 
       - name: Prepare auth files for full deploy
         if: ${{ github.event.inputs.image_only != 'true' }}
