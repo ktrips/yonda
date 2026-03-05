@@ -22,6 +22,7 @@ let activeMainTab = 'yonda'; // 'yonda' | 'yomu' | 'oshi'
 let activeBookTab = 'read'; // 'read' = 読んだ/途中, 'ranking' = ランキング, 'recommend' = オススメ (Yonda内)
 let monthlyChart = null;
 let genreChart = null;
+let chartMode = 'count';  // 'count' | 'runtime'
 const PAGE_SIZE = 100;
 const NO_COVER = 'data:image/svg+xml,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="90" viewBox="0 0 64 90">' +
@@ -78,6 +79,15 @@ function formatProgress(book) {
   const pct = book.percent_complete;
   if (pct == null || pct <= 0) return null;
   return `${Math.round(pct)}%`;
+}
+
+/** 再生時間（分）を「X時間Y分」形式で返す。Audible用 */
+function formatRuntime(min) {
+  const m = (min || 0) | 0;
+  if (m <= 0) return null;
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  return h > 0 ? `${h}時間${rest}分` : `${rest}分`;
 }
 
 /** 積読期間の日数を返す（読了日 or 本日 − 取得日） */
@@ -436,7 +446,7 @@ function updateBookTabLabels() {
     else if (rating === 'not_completed') label = `途中（${toReadCount}）`;
     else if (rating === 'yearly_completed') label = `${year}年（${yearlyCount}）`;
     else if (rating === 'favorite') label = `お気に入り（${favoriteCount}）`;
-    else if (rating === 'all') label = `すべて（${allCount}）`;
+    else if (rating === 'all') label = `すべて（全${allCount}冊）`;
     else if (rating === '5') label = `★★★★★（${allBooks.filter(b => (displayRating(b) || 0) >= 5).length}）`;
     else if (rating === '4') label = `★★★★☆以上（${allBooks.filter(b => (displayRating(b) || 0) >= 4).length}）`;
     else if (rating === '3') label = `★★★☆☆以上（${allBooks.filter(b => (displayRating(b) || 0) >= 3).length}）`;
@@ -1451,13 +1461,31 @@ function renderCharts() {
 function renderMonthlyChart() {
   const monthMap = {};
   const compMonthMap = {};
+  const runtimeMonthMap = {};
+  const useRuntime = chartMode === 'runtime';
   for (const b of allBooks) {
     const d = b.loan_date || '';
+    const runtime = (b.runtime_length_min || 0) | 0;
     if (d.length >= 7) {
       const ym = d.substring(0, 7);
       if (!monthMap[ym]) monthMap[ym] = { library: 0, audible: 0 };
+      if (!runtimeMonthMap[ym]) runtimeMonthMap[ym] = 0;
       if (b.source === 'audible_jp') {
         monthMap[ym].audible++;
+        if (useRuntime && b.completed && runtime > 0) {
+          const compYm = (b.completed_date || '').substring(0, 7);
+          if (compYm.length >= 7) {
+            runtimeMonthMap[compYm] = (runtimeMonthMap[compYm] || 0) + runtime;
+          }
+        }
+      } else if (b.source === 'setagaya') {
+        monthMap[ym].library++;
+        if (useRuntime && b.completed && runtime > 0) {
+          const compYm = (b.completed_date || '').substring(0, 7);
+          if (compYm.length >= 7) {
+            runtimeMonthMap[compYm] = (runtimeMonthMap[compYm] || 0) + runtime;
+          }
+        }
       } else {
         monthMap[ym].library++;
       }
@@ -1468,11 +1496,13 @@ function renderMonthlyChart() {
     }
   }
 
-  const allMonths = new Set([...Object.keys(monthMap), ...Object.keys(compMonthMap)]);
+  const allMonths = new Set([...Object.keys(monthMap), ...Object.keys(compMonthMap), ...Object.keys(runtimeMonthMap)]);
   const labels = [...allMonths].sort();
   const last24 = labels.slice(-24);
-  const libData = last24.map(k => (monthMap[k]?.library || 0));
-  const audData = last24.map(k => (monthMap[k]?.audible || 0));
+  const libData = useRuntime ? last24.map(() => 0) : last24.map(k => (monthMap[k]?.library || 0));
+  const audData = useRuntime
+    ? last24.map(k => Math.round(((runtimeMonthMap[k] || 0) / 60) * 10) / 10)
+    : last24.map(k => (monthMap[k]?.audible || 0));
   const compData = last24.map(k => (compMonthMap[k] || 0));
   const shortLabels = last24.map(k => {
     const [y, m] = k.split('-');
@@ -1482,38 +1512,39 @@ function renderMonthlyChart() {
   const ctx = document.getElementById('monthlyChart');
   if (monthlyChart) monthlyChart.destroy();
 
+  const datasets = [
+    ...(useRuntime ? [] : [{
+      label: '図書館',
+      data: libData,
+      backgroundColor: 'rgba(107,66,38,0.65)',
+      borderRadius: 2,
+      barPercentage: 0.7,
+    }]),
+    {
+      label: useRuntime ? '読了（試聴時間）' : 'Audible',
+      data: audData,
+      backgroundColor: 'rgba(192,94,32,0.55)',
+      borderRadius: 2,
+      barPercentage: 0.7,
+    },
+    {
+      label: '読了',
+      data: compData,
+      type: 'line',
+      borderColor: '#5a7a3a',
+      backgroundColor: 'rgba(90,122,58,0.15)',
+      borderWidth: 2,
+      pointRadius: 2,
+      pointBackgroundColor: '#5a7a3a',
+      fill: true,
+      tension: 0.3,
+    },
+  ];
   monthlyChart = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: shortLabels,
-      datasets: [
-        {
-          label: '図書館',
-          data: libData,
-          backgroundColor: 'rgba(107,66,38,0.65)',
-          borderRadius: 2,
-          barPercentage: 0.7,
-        },
-        {
-          label: 'Audible',
-          data: audData,
-          backgroundColor: 'rgba(192,94,32,0.55)',
-          borderRadius: 2,
-          barPercentage: 0.7,
-        },
-        {
-          label: '読了',
-          data: compData,
-          type: 'line',
-          borderColor: '#5a7a3a',
-          backgroundColor: 'rgba(90,122,58,0.15)',
-          borderWidth: 2,
-          pointRadius: 2,
-          pointBackgroundColor: '#5a7a3a',
-          fill: true,
-          tension: 0.3,
-        },
-      ],
+      datasets,
     },
     options: {
       responsive: true,
@@ -1530,20 +1561,35 @@ function renderMonthlyChart() {
               const idx = items[0].dataIndex;
               return last24[idx];
             },
+            label: (item) => {
+              const v = item.raw;
+              const lbl = item.dataset.label || '';
+              if (useRuntime && lbl.includes('試聴時間')) {
+                const h = Math.floor(v);
+                const m = Math.round((v - h) * 60);
+                return `${lbl}: ${h}時間${m}分`;
+              }
+              if (lbl === '読了') return `${lbl}: ${v}冊`;
+              return `${lbl}: ${v}${useRuntime ? '時間' : '冊'}`;
+            },
           },
         },
       },
       scales: {
         x: {
-          stacked: true,
+          stacked: !useRuntime,
           grid: { display: false },
           ticks: { font: { size: 10 }, maxRotation: 0 },
         },
         y: {
-          stacked: true,
+          stacked: !useRuntime,
           beginAtZero: true,
           grid: { color: 'rgba(0,0,0,0.05)' },
-          ticks: { font: { size: 10 }, stepSize: 10 },
+          ticks: {
+            font: { size: 10 },
+            stepSize: useRuntime ? undefined : 10,
+            callback: (v) => (useRuntime ? (v ? v + 'h' : '0') : v),
+          },
         },
       },
     },
@@ -1551,13 +1597,20 @@ function renderMonthlyChart() {
 }
 
 function renderGenreChart() {
-  const genreCount = {};
+  const genreData = {};
+  const useRuntime = chartMode === 'runtime';
   for (const b of allBooks) {
     const g = displayGenre(b.genre) || 'その他';
-    genreCount[g] = (genreCount[g] || 0) + 1;
+    if (!genreData[g]) genreData[g] = { count: 0, runtime: 0 };
+    genreData[g].count++;
+    if (useRuntime && (b.source === 'audible_jp' || b.source === 'setagaya') && b.completed) {
+      genreData[g].runtime += (b.runtime_length_min || 0) | 0;
+    }
   }
 
-  const sorted = Object.entries(genreCount)
+  const sorted = Object.entries(genreData)
+    .map(([g, d]) => [g, useRuntime ? Math.round((d.runtime / 60) * 10) / 10 : d.count])
+    .filter(([, v]) => v > 0)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 15);
 
@@ -1603,7 +1656,15 @@ function renderGenreChart() {
         tooltip: {
           callbacks: {
             title: (items) => fullLabels[items[0].dataIndex],
-            label: (item) => `${item.raw} 冊`,
+            label: (item) => {
+              const v = item.raw;
+              if (chartMode === 'runtime') {
+                const h = Math.floor(v);
+                const m = Math.round((v - h) * 60);
+                return `${h}時間${m}分`;
+              }
+              return `${v} 冊`;
+            },
           },
         },
       },
@@ -1611,7 +1672,11 @@ function renderGenreChart() {
         x: {
           beginAtZero: true,
           grid: { color: 'rgba(0,0,0,0.05)' },
-          ticks: { font: { size: 10 }, stepSize: 50 },
+          ticks: {
+            font: { size: 10 },
+            stepSize: chartMode === 'runtime' ? undefined : 50,
+            callback: (v) => (chartMode === 'runtime' ? (v ? v + 'h' : '0') : v),
+          },
         },
         y: {
           grid: { display: false },
@@ -1709,6 +1774,18 @@ function openBookDetail(book) {
   }
   document.getElementById('bookDetailLink').href = detailHref;
   document.getElementById('bookDetailLink').style.display = book.detail_url ? '' : 'none';
+  const searchQ = `${book.title || ''} ${book.author || ''}`.trim() || book.title || '';
+  const urls = getBookSearchUrls(searchQ);
+  const amazonEl = document.getElementById('bookDetailAmazon');
+  const mercariEl = document.getElementById('bookDetailMercari');
+  if (amazonEl) {
+    amazonEl.href = urls.amazon;
+    amazonEl.style.display = searchQ ? '' : 'none';
+  }
+  if (mercariEl) {
+    mercariEl.href = urls.mercari;
+    mercariEl.style.display = searchQ ? '' : 'none';
+  }
   const summaryText = book.full_summary || book.summary || '';
   document.getElementById('bookDetailSummary').textContent = summaryText || '（概要なし）';
   modal.classList.add('open');
@@ -1771,6 +1848,7 @@ function renderCardView(books) {
           <div class="book-card-author">${escapeHtml(book.author || '')}</div>
           ${genreHtml}
           <div class="book-card-meta">
+            ${(book.runtime_length_min || 0) > 0 ? `<span class="book-card-runtime">${formatRuntime(book.runtime_length_min)} · </span>` : ''}
             ${book.completed && book.completed_date ? `<span>読了: ${formatDateOnly(book.completed_date)}</span>` : (formatProgress(book) ? `<span>進捗: ${formatProgress(book)}</span>` : `<span>${formatDate(book.loan_date)}</span>`)}
             ${(t => t != null ? ` · 積読: ${t}日` : '')(getTsundokuDays(book))}
           </div>
@@ -1800,9 +1878,10 @@ function renderTableView(books) {
           <div>${completedBadge}${favoriteBadge}${escapeHtml(book.title)}</div>
           ${supplementHtml ? `<div class="title-supplement-cell">${supplementHtml}</div>` : ''}
         </td>
-        <td>${escapeHtml(book.author || '')}</td>
+        <td class="col-author" title="${escapeHtml(book.author || '')}">${escapeHtml(book.author || '')}</td>
         <td class="col-summary" title="${summary ? escapeHtml(summary) : ''}">${summaryCell}</td>
         <td class="col-genre">${genre}</td>
+        <td class="col-runtime">${(book.runtime_length_min || 0) > 0 ? formatRuntime(book.runtime_length_min) : '—'}</td>
         <td>${formatDate(book.loan_date)}</td>
         <td>${book.completed ? formatDateOnly(book.completed_date) : (formatProgress(book) || '—')}</td>
         <td class="col-tsundoku">${tsundokuStr}</td>
@@ -1817,9 +1896,10 @@ function renderTableView(books) {
         <tr>
           <th class="col-cover"></th>
           <th class="col-title">タイトル</th>
-          <th class="th-sortable" data-sort-asc="author_group" data-sort-desc="author_group" title="クリックでソート">著者</th>
+          <th class="col-author th-sortable" data-sort-asc="author_group" data-sort-desc="author_group" title="クリックでソート">著者</th>
           <th class="col-summary">概要</th>
           <th class="col-genre">ジャンル</th>
+          <th class="col-runtime">再生時間</th>
           <th class="th-sortable" data-sort-asc="tsundoku_desc" data-sort-desc="date_desc" title="クリックでソート">取得日</th>
           <th class="th-sortable" data-sort-asc="completed_date_asc" data-sort-desc="completed_date_desc" title="クリックでソート">読了日</th>
           <th class="th-sortable" data-sort-asc="tsundoku_desc" data-sort-desc="tsundoku_desc" title="クリックでソート">積読</th>
@@ -1860,6 +1940,15 @@ function renderPagination(start) {
 
 document.getElementById('chartToggle')?.addEventListener('click', () => {
   document.getElementById('chartSection')?.classList.toggle('open');
+});
+
+document.querySelectorAll('.chart-mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.chart-mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    chartMode = btn.dataset.mode || 'count';
+    renderCharts();
+  });
 });
 
 document.querySelectorAll('.chart-tab').forEach(tab => {

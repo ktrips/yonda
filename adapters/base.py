@@ -31,6 +31,7 @@ class BookRecord:
     review_headline: str = ""   # レビュー見出し（Audible 等）
     catalog_rating: float = 0.0  # 総合評価（ktrips 優先、なければ全体平均、0–5）
     catalog_rating_content: str = ""  # 評価内容（ktrips のレビュー本文、Audible 等）
+    runtime_length_min: int = 0  # 再生時間（分）。Audible 等のオーディオブック用
 
     def to_dict(self) -> dict:
         return {
@@ -54,6 +55,7 @@ class BookRecord:
             "review_headline": self.review_headline,
             "catalog_rating": self.catalog_rating,
             "catalog_rating_content": self.catalog_rating_content,
+            "runtime_length_min": self.runtime_length_min,
         }
 
 

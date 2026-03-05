@@ -113,11 +113,17 @@
             <span class="chart-toggle-arrow">▼</span>
           </div>
           <div class="chart-body">
-            <div class="chart-genre-filter">
-              <label for="genreFilter">ジャンル:</label>
-              <select id="genreFilter" class="filter-select">
-                <option value="all">すべて</option>
-              </select>
+            <div class="chart-controls-row">
+              <div class="chart-genre-filter">
+                <label for="genreFilter">ジャンル:</label>
+                <select id="genreFilter" class="filter-select">
+                  <option value="all">すべて</option>
+                </select>
+              </div>
+              <div class="chart-mode-toggle">
+                <button type="button" class="chart-mode-btn active" data-mode="count">冊数</button>
+                <button type="button" class="chart-mode-btn" data-mode="runtime">試聴時間</button>
+              </div>
             </div>
             <div class="chart-tabs">
               <button type="button" class="chart-tab active" data-tab="monthly">月別</button>
@@ -424,7 +430,11 @@
               <span id="bookDetailCompleted" class="book-detail-completed"></span>
             </div>
             <div class="book-detail-comment" id="bookDetailComment"></div>
-            <a id="bookDetailLink" href="#" target="_blank" rel="noopener" class="btn btn-primary">詳細ページを開く</a>
+            <div class="book-detail-links">
+              <a id="bookDetailLink" href="#" target="_blank" rel="noopener" class="btn btn-primary">詳細ページを開く</a>
+              <a id="bookDetailAmazon" href="#" target="_blank" rel="noopener" class="btn btn-secondary">Amazon</a>
+              <a id="bookDetailMercari" href="#" target="_blank" rel="noopener" class="btn btn-secondary">メルカリ</a>
+            </div>
           </div>
         </div>
         <div class="book-detail-summary-wrap">

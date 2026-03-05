@@ -157,6 +157,7 @@ class SetagayaAdapter(LibraryAdapter):
             book.comment = "" if re.search(r"ワンクリック予約|ボタン.*デザイン", raw_comment) else raw_comment
             book.completed = book.rating > 0
             book.source = self.library_id
+            book.runtime_length_min = 240  # 図書館の本は一律4時間
 
             books.append(book)
 

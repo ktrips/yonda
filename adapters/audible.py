@@ -160,6 +160,7 @@ class AudibleJPAdapter(LibraryAdapter):
                 completed_date=completed_date,
                 percent_complete=percent_complete,
                 favorite=is_favorite,
+                runtime_length_min=int(runtime) if runtime else 0,
             )
             books.append(book)
 
