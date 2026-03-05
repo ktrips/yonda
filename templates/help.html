@@ -22,9 +22,17 @@
 <body>
   <div class="container">
     <div class="help-page">
-      <a href="{{ url_for('index') }}" class="help-back">← アプリに戻る</a>
+      <a href="{{ url_for('index') }}" class="help-back" id="helpBackLink">← アプリに戻る</a>
       <h1>設定のヘルプ</h1>
-      <p>各ソースの読書記録を取得するための設定手順です。</p>
+      <p><a href="{{ url_for('help_usage_page') }}">Yondaの使い方</a>は別ページでご確認ください。</p>
+
+      <h2>アプリ設定</h2>
+      <p>メニュー → アプリ設定 で以下を設定できます。</p>
+      <ul>
+        <li><strong>デフォルトのページ</strong>：起動時に表示するページ（Yonda / Yomu / Oshi）</li>
+        <li><strong>アフィリエイトタグ</strong>：Kindle・Audible リンクに付与するタグ</li>
+        <li><strong>AI プロバイダ・API キー</strong>：写真から本検索、AI推しで使用</li>
+      </ul>
 
       <h2>世田谷区立図書館</h2>
       <ul>
@@ -63,7 +71,7 @@
       </ul>
 
       <h2>AI推し・写真検索（APIエラーが出る場合）</h2>
-      <p>AI推しや写真から本を検索するには、メニュー → アプリ設定 で API キーを登録してください。</p>
+      <p>AI推し（５質問で推し、MBTI診断で推し、強み診断で推し）や写真から本を検索するには、メニュー → アプリ設定 で API キーを登録してください。</p>
       <ul>
         <li><strong>401 エラー</strong>: APIキーが無効。Google AI Studio または OpenAI で新しいキーを発行し、再設定</li>
         <li><strong>403 エラー</strong>: APIが有効化されていない、または課金設定が必要</li>
@@ -71,9 +79,19 @@
         <li><strong>400 エラー</strong>: 無料枠の地域制限の可能性。課金を有効化するか、別プロバイダ（OpenAI ↔ Gemini）に切り替えて試す</li>
       </ul>
       <p>詳細は <code>docs/AI_TROUBLESHOOTING.md</code> を参照してください。</p>
+      <p>AI の利用状況確認：<a href="https://platform.openai.com/usage" target="_blank" rel="noopener">OpenAI Usage</a>、<a href="https://console.cloud.google.com/billing" target="_blank" rel="noopener">Google Cloud Billing</a></p>
 
       <p style="margin-top: 1.5rem; font-size: 0.8rem;">認証情報はこのPC上のローカルファイルに保存され、外部には送信されません。</p>
     </div>
   </div>
+  <script>
+    (function(){
+      var el = document.getElementById('helpBackLink');
+      if (el && window !== window.parent) {
+        el.textContent = '← 閉じる';
+        el.href = '#'; el.onclick = function(e){ e.preventDefault(); window.parent.postMessage('yondaCloseHelpModal','*'); };
+      }
+    })();
+  </script>
 </body>
 </html>

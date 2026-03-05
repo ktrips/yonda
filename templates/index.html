@@ -36,9 +36,12 @@
         <span></span><span></span><span></span>
       </button>
       <div class="hamburger-menu" id="hamburgerMenu">
-        <button type="button" class="menu-item menu-item-fetch" id="menuFetchDirect">読書記録を取込み</button>
+        <button type="button" class="menu-link menu-link-btn" data-help-url="{{ url_for('help_usage_page') }}" data-help-title="Yondaの使い方">Yondaの使い方</button>
+        <hr class="menu-separator">
+        <button type="button" class="menu-item menu-item-fetch" id="menuFetchDirect">読書記録取込み</button>
         <button type="button" class="menu-item" id="menuAmazonAi">アプリ設定</button>
-        <a href="{{ url_for('help_page') }}" class="menu-help-link" target="_blank" rel="noopener">設定のヘルプ</a>
+        <hr class="menu-separator">
+        <button type="button" class="menu-link menu-link-btn" data-help-url="{{ url_for('help_page') }}" data-help-title="設定のヘルプ">設定ヘルプ</button>
         <select id="librarySelect" class="menu-select" style="display:none;" aria-hidden="true">
           <option value="setagaya">世田谷区立図書館</option>
           <option value="audible_jp">Audible Japan</option>
@@ -88,10 +91,9 @@
                 <select id="sortSelect" class="filter-select">
                   <option value="completed_date_desc">読了日（新しい順）</option>
                   <option value="completed_date_asc">読了日（古い順）</option>
-                  <option value="date_desc">日付（新しい順）</option>
-                  <option value="date_asc">日付（古い順）</option>
-                  <option value="author_asc">著者（あ→わ）</option>
-                  <option value="author_desc">著者（わ→あ）</option>
+                  <option value="date_desc">取得日（新しい順）</option>
+                  <option value="tsundoku_desc">積読期間（長い順）</option>
+                  <option value="author_group">著者グループ（冊数多い順）</option>
                   <option value="rating_desc">評価（高い順）</option>
                   <option value="rating_asc">評価（低い順）</option>
                 </select>
@@ -190,9 +192,9 @@
         <div class="ai-recommend-section" id="aiRecommendSection">
           <p class="ai-recommend-headline"><strong>AIであなたにぴったりな推し本をオススメ</strong></p>
           <div class="ai-recommend-mode-menu" id="aiRecommendModeMenu">
-            <button type="button" class="ai-recommend-mode-btn active" data-mode="5questions">５質問で推し</button>
-            <button type="button" class="ai-recommend-mode-btn" data-mode="mbti">MBTI診断で推し</button>
-            <button type="button" class="ai-recommend-mode-btn" data-mode="strength">強み診断で推し</button>
+            <button type="button" class="ai-recommend-mode-btn active" data-mode="5questions">5つの質問推し</button>
+            <button type="button" class="ai-recommend-mode-btn" data-mode="mbti">MBTI推し</button>
+            <button type="button" class="ai-recommend-mode-btn" data-mode="strength">強み診断推し</button>
           </div>
           <p class="ai-recommend-description" id="aiRecommendDescription">会話するうちに、あなたにぴったりな推し本を探します。まずはあなたの基本的な事を教えて下さい。<span id="aiRecommendProvider" class="ai-recommend-provider"></span></p>
           <div class="ai-recommend-form" id="aiRecommendForm">
@@ -253,11 +255,24 @@
     </div>
   </div>
 
+  <!-- ヘルプポップアップモーダル -->
+  <div class="modal-overlay" id="helpModal">
+    <div class="modal modal-help">
+      <div class="modal-header">
+        <h2 id="helpModalTitle">—</h2>
+        <button type="button" class="modal-close" id="helpModalClose" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="modal-body modal-body-iframe">
+        <iframe id="helpModalIframe" title="ヘルプ" src="about:blank"></iframe>
+      </div>
+    </div>
+  </div>
+
   <!-- 設定モーダル -->
   <div class="modal-overlay" id="settingsModal">
     <div class="modal">
       <div class="modal-header">
-        <h2>設定</h2>
+        <h2>設定 <button type="button" class="modal-header-help-link" data-help-url="{{ url_for('help_page') }}" data-help-title="設定のヘルプ">設定のヘルプ</button></h2>
         <button type="button" class="modal-close" id="settingsModalClose" aria-label="閉じる">&times;</button>
       </div>
       <div class="modal-body">
@@ -271,13 +286,14 @@
           </select>
         </div>
         <p class="modal-note">アプリ起動時に最初に表示するページを選択します。</p>
-
-        <hr class="modal-divider">
-        <div class="modal-field">
-          <label for="affiliateTagInput">アフィリエイトタグ（Kindle・Audible リンク用）:</label>
-          <input type="text" id="affiliateTagInput" class="modal-input" placeholder="例: ktrip-22">
+        <p class="modal-note"><button type="button" class="modal-link-btn" id="affiliateTagToggle">アフィリエイトタグ</button></p>
+        <div id="affiliateTagSection" class="modal-field-group" style="display:none;">
+          <div class="modal-field">
+            <label for="affiliateTagInput">アフィリエイトタグ（Kindle・Audible リンク用）:</label>
+            <input type="text" id="affiliateTagInput" class="modal-input" placeholder="例: ktrip-22">
+          </div>
+          <p class="modal-note">本検索や詳細ページの Kindle・Audible リンクに &amp;tag=xxx を付与します。空欄でデフォルト（ktrip-22）を使用。</p>
         </div>
-        <p class="modal-note">本検索や詳細ページの Kindle・Audible リンクに &amp;tag=xxx を付与します。空欄で無効。</p>
 
         <hr class="modal-divider">
         <h3 class="modal-section-title">写真から本を検索（AI）</h3>

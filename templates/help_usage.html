@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yondaの使い方 — Yonda? 最近何読んだ？</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .help-page { max-width: 640px; margin: 0 auto; padding: 2rem 1rem; }
+    .help-page h1 { font-size: 1.4rem; margin-bottom: 1.5rem; color: var(--accent); }
+    .help-page h2 { font-size: 1rem; margin: 1.25rem 0 0.5rem; color: var(--text); }
+    .help-page p, .help-page ul { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+    .help-page ul { padding-left: 1.25rem; }
+    .help-page a { color: var(--accent); }
+    .help-back { display: inline-block; margin-bottom: 1rem; font-size: 0.85rem; }
+    .help-nav { display: flex; gap: 1rem; margin-bottom: 1.5rem; font-size: 0.95rem; }
+    .help-nav a { text-decoration: none; }
+    .help-nav a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="help-page">
+      <a href="{{ url_for('index') }}" class="help-back" id="helpBackLink">← アプリに戻る</a>
+      <h1>Yondaの使い方</h1>
+      <nav class="help-nav">
+        <a href="#yonda">読んだ？</a>
+        <a href="#yomu">何読む？</a>
+        <a href="#oshi">AI推し</a>
+      </nav>
+
+      <h2 id="yonda">読んだ？</h2>
+      <p>読書記録の表示・管理</p>
+      <ul>
+        <li>読んだ / ランキング / オススメのタブ切り替え</li>
+        <li>フィルター（検索、ソース、状態、並べ替え）</li>
+        <li>カード表示 / テーブル表示の切り替え</li>
+        <li>本の概要をカード・テーブルに表示</li>
+        <li>読書グラフ（月別・ジャンル別）</li>
+        <li>Yonda オススメ：読了本の傾向から AI で 5 冊推薦</li>
+      </ul>
+
+      <h2 id="yomu">読む？</h2>
+      <p>次に読みたい本検索</p>
+      <ul>
+        <li>タイトル・著者で価格比較検索</li>
+        <li>写真を撮ると AI またはバーコード・OCR で本の情報を抽出して検索</li>
+        <li>Amazon、Kindle、Audible、メルカリ、ブックオフ、図書館の在庫・価格を一覧表示</li>
+      </ul>
+
+      <h2 id="oshi">AI推し</h2>
+      <p>AI による本の提案</p>
+      <ul>
+        <li>5つの質問推し：簡単な質問に答えて本を提案</li>
+        <li>MBTI推し：性格タイプに合った本を提案</li>
+        <li>強み診断推し：強み・得意なことに合った本を提案</li>
+      </ul>
+    </div>
+  </div>
+  <script>
+    (function(){
+      var el = document.getElementById('helpBackLink');
+      if (el && window !== window.parent) {
+        el.textContent = '← 閉じる';
+        el.href = '#'; el.onclick = function(e){ e.preventDefault(); window.parent.postMessage('yondaCloseHelpModal','*'); };
+      }
+    })();
+  </script>
+</body>
+</html>

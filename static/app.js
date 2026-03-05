@@ -80,6 +80,21 @@ function formatProgress(book) {
   return `${Math.round(pct)}%`;
 }
 
+/** 積読期間の日数を返す（読了日 or 本日 − 取得日） */
+function getTsundokuDays(book) {
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const endStr = (book.completed_date || '').trim().substring(0, 10) || todayStr;
+  const startStr = (book.loan_date || '').trim().substring(0, 10);
+  if (!startStr) return null;
+  const m1 = startStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const m2 = endStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m1 || !m2) return null;
+  const d1 = new Date(parseInt(m1[1], 10), parseInt(m1[2], 10) - 1, parseInt(m1[3], 10));
+  const d2 = new Date(parseInt(m2[1], 10), parseInt(m2[2], 10) - 1, parseInt(m2[3], 10));
+  return Math.round((d2 - d1) / (24 * 60 * 60 * 1000));
+}
+
 /** 評価コメントを短縮して返す（Audible: review_headline、他: comment） */
 function ratingCommentText(book, maxLen = 40) {
   const text = (book.source === 'audible_jp' ? book.review_headline : book.comment) || '';
@@ -130,7 +145,7 @@ const DEFAULT_PAGE = 'yonda';
 function getAffiliateTag() {
   try {
     const t = localStorage.getItem(AFFILIATE_TAG_KEY);
-    if (t === null) return DEFAULT_AFFILIATE_TAG; // 未設定時はデフォルト
+    if (t === null || (t || '').trim() === '') return DEFAULT_AFFILIATE_TAG;
     return t.trim();
   } catch (_) {
     return DEFAULT_AFFILIATE_TAG;
@@ -999,7 +1014,7 @@ let aiRecommendMode = '5questions';  // 5questions | mbti | strength
 
 const AI_RECOMMEND_MODE_DESCRIPTIONS = {
   '5questions': '会話するうちに、あなたにぴったりな推し本を探します。まずはあなたの基本的な事を教えて下さい。',
-  'mbti': 'MBTI診断の質問に答えながら、あなたの性格タイプに合った本を提案します。',
+  'mbti': 'MBTIの質問に答えながら、あなたの性格タイプに合った本を提案します。MBTI結果がわかってる人は、いきなり「ENTJ」や「指揮官」など入れてくれれば、それに合った本をすぐに選書します！',
   'strength': '強み診断の質問に答えながら、あなたの強み・得意なことに合った本を提案します。',
 };
 
@@ -1366,14 +1381,46 @@ document.getElementById('aiRecommendInput')?.addEventListener('keydown', (e) => 
 function applySorting(books) {
   const sort = document.getElementById('sortSelect').value;
   const compDate = (book) => book.completed_date || book.loan_date || '';
+  if (sort === 'author_group') {
+    const byAuthor = {};
+    for (const b of books) {
+      const a = (b.author || '').trim() || '（著者不明）';
+      if (!byAuthor[a]) byAuthor[a] = [];
+      byAuthor[a].push(b);
+    }
+    const unknownKey = '（著者不明）';
+    const sortedAuthors = Object.entries(byAuthor)
+      .sort((a, b) => {
+        if (a[0] === unknownKey) return 1;
+        if (b[0] === unknownKey) return -1;
+        return b[1].length - a[1].length;
+      })
+      .map(([, arr]) => arr);
+    for (const arr of sortedAuthors) {
+      arr.sort((a, b) => compDate(b).localeCompare(compDate(a)));
+    }
+    return sortedAuthors.flat();
+  }
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  function parseYmd(s) {
+    const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)) : null;
+  }
+  function tsundokuDays(book) {
+    const endStr = (book.completed_date || '').trim().substring(0, 10) || todayStr;
+    const startStr = (book.loan_date || '').trim().substring(0, 10);
+    const d1 = parseYmd(startStr);
+    const d2 = parseYmd(endStr);
+    if (!d1 || !d2) return 0;
+    return Math.round((d2 - d1) / (24 * 60 * 60 * 1000));
+  }
   return books.sort((a, b) => {
     switch (sort) {
       case 'completed_date_desc': return compDate(b).localeCompare(compDate(a));
       case 'completed_date_asc': return compDate(a).localeCompare(compDate(b));
       case 'date_desc': return (b.loan_date || '').localeCompare(a.loan_date || '');
-      case 'date_asc': return (a.loan_date || '').localeCompare(b.loan_date || '');
-      case 'author_asc': return (a.author || '').localeCompare(b.author || '', 'ja');
-      case 'author_desc': return (b.author || '').localeCompare(a.author || '', 'ja');
+      case 'tsundoku_desc': return tsundokuDays(b) - tsundokuDays(a);
       case 'rating_desc': return (displayRating(b) || 0) - (displayRating(a) || 0);
       case 'rating_asc': return (displayRating(a) || 0) - (displayRating(b) || 0);
       default: return compDate(b).localeCompare(compDate(a));
@@ -1674,9 +1721,18 @@ function closeBookDetail() {
 
 function renderCardView(books) {
   let lastYear = null;
+  let lastAuthor = null;
   const sort = document.getElementById('sortSelect').value;
-  const showYearHeaders = ['date_desc', 'date_asc', 'completed_date_desc', 'completed_date_asc'].includes(sort);
+  const showYearHeaders = ['date_desc', 'completed_date_desc', 'completed_date_asc'].includes(sort);
+  const showAuthorHeaders = sort === 'author_group';
   const useCompletedDate = sort.startsWith('completed_date');
+  const authorCounts = showAuthorHeaders ? {} : null;
+  if (showAuthorHeaders) {
+    for (const b of books) {
+      const a = (b.author || '').trim() || '（著者不明）';
+      authorCounts[a] = (authorCounts[a] || 0) + 1;
+    }
+  }
 
   return books.map((book, i) => {
     let header = '';
@@ -1686,6 +1742,13 @@ function renderCardView(books) {
       if (year && year !== lastYear) {
         lastYear = year;
         header = `<div class="year-group-header">${escapeHtml(year)}年</div>`;
+      }
+    } else if (showAuthorHeaders) {
+      const authorKey = (book.author || '').trim() || '（著者不明）';
+      if (authorKey !== lastAuthor) {
+        lastAuthor = authorKey;
+        const cnt = authorCounts[authorKey] || 0;
+        header = `<div class="year-group-header">${escapeHtml(authorKey)}（${cnt}冊）</div>`;
       }
     }
 
@@ -1710,6 +1773,7 @@ function renderCardView(books) {
           ${genreHtml}
           <div class="book-card-meta">
             ${book.completed && book.completed_date ? `<span>読了: ${formatDateOnly(book.completed_date)}</span>` : (formatProgress(book) ? `<span>進捗: ${formatProgress(book)}</span>` : `<span>${formatDate(book.loan_date)}</span>`)}
+            ${(t => t != null ? ` · 積読: ${t}日` : '')(getTsundokuDays(book))}
           </div>
           ${summaryHtml}
         </div>
@@ -1727,6 +1791,8 @@ function renderTableView(books) {
     const supplementHtml = titleSupplementHtml(book);
     const summary = (book.summary || '').trim();
     const summaryCell = summary ? escapeHtml(summary.length > 80 ? summary.substring(0, 80) + '…' : summary) : '—';
+    const tsundoku = getTsundokuDays(book);
+    const tsundokuStr = tsundoku != null ? tsundoku + '日' : '—';
     return `
       <tr class="book-row-clickable ${book.completed ? 'row-completed' : ''}" data-book-index="${i}" role="button" tabindex="0">
         <td class="col-cover"><img src="${escapeHtml(book.cover_url || NO_COVER)}" alt=""
@@ -1736,17 +1802,12 @@ function renderTableView(books) {
           ${supplementHtml ? `<div class="title-supplement-cell">${supplementHtml}</div>` : ''}
         </td>
         <td>${escapeHtml(book.author || '')}</td>
-        <td class="col-genre">${genre}</td>
         <td class="col-summary" title="${summary ? escapeHtml(summary) : ''}">${summaryCell}</td>
+        <td class="col-genre">${genre}</td>
         <td>${formatDate(book.loan_date)}</td>
         <td>${book.completed ? formatDateOnly(book.completed_date) : (formatProgress(book) || '—')}</td>
+        <td class="col-tsundoku">${tsundokuStr}</td>
         <td>${srcBadge}</td>
-        <td class="col-rating">
-          <div class="rating-cell">
-            ${book.source === 'audible_jp' ? starsHtml(displayRating(book), { asLink: true, source: book.source, detailUrl: getAudibleRatingUrl(book) }) : starsHtml(book.rating)}
-            ${ratingCommentText(book) ? `<div class="rating-comment" title="${escapeHtml((book.source === 'audible_jp' ? book.review_headline : book.comment) || '')}">${escapeHtml(ratingCommentText(book))}</div>` : ''}
-          </div>
-        </td>
       </tr>
     `;
   }).join('');
@@ -1757,13 +1818,13 @@ function renderTableView(books) {
         <tr>
           <th class="col-cover"></th>
           <th class="col-title">タイトル</th>
-          <th class="th-sortable" data-sort-asc="author_asc" data-sort-desc="author_desc" title="クリックでソート">著者</th>
-          <th class="col-genre">ジャンル</th>
+          <th class="th-sortable" data-sort-asc="author_group" data-sort-desc="author_group" title="クリックでソート">著者</th>
           <th class="col-summary">概要</th>
-          <th class="th-sortable" data-sort-asc="date_asc" data-sort-desc="date_desc" title="クリックでソート">日付</th>
+          <th class="col-genre">ジャンル</th>
+          <th class="th-sortable" data-sort-asc="tsundoku_desc" data-sort-desc="date_desc" title="クリックでソート">取得日</th>
           <th class="th-sortable" data-sort-asc="completed_date_asc" data-sort-desc="completed_date_desc" title="クリックでソート">読了日</th>
+          <th class="th-sortable" data-sort-asc="tsundoku_desc" data-sort-desc="tsundoku_desc" title="クリックでソート">積読</th>
           <th>ソース</th>
-          <th class="th-sortable" data-sort-asc="rating_asc" data-sort-desc="rating_desc" title="クリックでソート">評価</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -1922,8 +1983,10 @@ async function openSettingsModal() {
   }
   if (input) {
     const stored = localStorage.getItem(AFFILIATE_TAG_KEY);
-    input.value = stored === null ? DEFAULT_AFFILIATE_TAG : (stored || '');
+    input.value = (stored === null || (stored || '').trim() === '') ? DEFAULT_AFFILIATE_TAG : (stored || '');
   }
+  const affiliateSection = document.getElementById('affiliateTagSection');
+  if (affiliateSection) affiliateSection.style.display = 'none';
   const aiProvider = document.getElementById('aiProviderSelect');
   const aiKey = document.getElementById('aiApiKeyInput');
   if (aiProvider && aiKey) {
@@ -2270,11 +2333,41 @@ document.getElementById('menuAmazonAi')?.addEventListener('click', () => {
   document.getElementById('hamburgerMenu')?.classList.remove('open');
   openSettingsModal();
 });
+document.querySelectorAll('[data-help-url]').forEach((el) => {
+  el.addEventListener('click', () => {
+    const url = el.getAttribute('data-help-url');
+    const title = el.getAttribute('data-help-title') || 'ヘルプ';
+    document.getElementById('hamburgerMenu')?.classList.remove('open');
+    document.getElementById('helpModalTitle').textContent = title;
+    document.getElementById('helpModalIframe').src = url;
+    document.getElementById('helpModal').classList.add('open');
+  });
+});
+document.getElementById('helpModalClose')?.addEventListener('click', () => {
+  document.getElementById('helpModal').classList.remove('open');
+  document.getElementById('helpModalIframe').src = 'about:blank';
+});
+document.getElementById('helpModal')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) {
+    document.getElementById('helpModal').classList.remove('open');
+    document.getElementById('helpModalIframe').src = 'about:blank';
+  }
+});
+window.addEventListener('message', (e) => {
+  if (e.data === 'yondaCloseHelpModal') {
+    document.getElementById('helpModal')?.classList.remove('open');
+    document.getElementById('helpModalIframe').src = 'about:blank';
+  }
+});
 document.getElementById('settingsModalClose')?.addEventListener('click', closeSettingsModal);
 document.getElementById('settingsModal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeSettingsModal();
 });
 document.getElementById('settingsSaveBtn')?.addEventListener('click', saveSettings);
+document.getElementById('affiliateTagToggle')?.addEventListener('click', () => {
+  const section = document.getElementById('affiliateTagSection');
+  if (section) section.style.display = section.style.display === 'none' ? 'block' : 'none';
+});
 document.getElementById('credentialModalClose')?.addEventListener('click', closeCredentialModal);
 document.getElementById('credentialModal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeCredentialModal();
