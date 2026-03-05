@@ -1422,7 +1422,6 @@ function applySorting(books) {
       case 'date_desc': return (b.loan_date || '').localeCompare(a.loan_date || '');
       case 'tsundoku_desc': return tsundokuDays(b) - tsundokuDays(a);
       case 'rating_desc': return (displayRating(b) || 0) - (displayRating(a) || 0);
-      case 'rating_asc': return (displayRating(a) || 0) - (displayRating(b) || 0);
       default: return compDate(b).localeCompare(compDate(a));
     }
   });
@@ -2510,18 +2509,19 @@ document.getElementById('bookList')?.addEventListener('keydown', (e) => {
 document.querySelectorAll('.header-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     const tabVal = tab.dataset.mainTab;
-    if (tabVal === activeMainTab) return;
+    if (tabVal === activeMainTab && tabVal !== 'yonda') return;
     activeMainTab = tabVal;
     document.getElementById('hamburgerMenu')?.classList.remove('open');
     document.getElementById('filterMenuPanel')?.classList.remove('open');
     if (tabVal === 'yonda') {
       document.getElementById('sourceFilter').value = 'all';
       document.getElementById('genreFilter').value = 'all';
-      document.getElementById('ratingFilter').value = 'all';
+      document.getElementById('ratingFilter').value = 'completed';
       document.getElementById('sortSelect').value = 'completed_date_desc';
       activeBookTab = 'read';
       document.querySelectorAll('.book-tab').forEach(t => t.classList.remove('active'));
       document.getElementById('tabRead')?.classList.add('active');
+      updateBookTabLabels();
       applyFilters();
     }
     updateMainTabVisibility();
