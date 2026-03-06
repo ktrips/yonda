@@ -132,12 +132,21 @@
             <div class="chart-tabs">
               <button type="button" class="chart-tab active" data-tab="monthly">月別</button>
               <button type="button" class="chart-tab" data-tab="genre">ジャンル別</button>
+              <button type="button" class="chart-tab" data-tab="relation">関連性</button>
             </div>
             <div class="chart-canvas-wrap" id="chartMonthlyWrap">
               <canvas id="monthlyChart"></canvas>
             </div>
             <div class="chart-canvas-wrap" id="chartGenreWrap" style="display:none;">
               <canvas id="genreChart"></canvas>
+            </div>
+            <div class="chart-canvas-wrap chart-relation-wrap" id="chartRelationWrap" style="display:none;">
+              <div class="relation-heatmap-mode">
+                <button type="button" class="chart-mode-btn relation-mode-btn active" data-relation-mode="genre_rating">ジャンル×評価</button>
+                <button type="button" class="chart-mode-btn relation-mode-btn" data-relation-mode="author_genre">著者×ジャンル</button>
+              </div>
+              <div id="relationHeatmap" class="relation-heatmap"></div>
+              <p class="relation-heatmap-legend" id="relationHeatmapLegend">ジャンル × 評価の分布（色が濃いほど冊数が多い）</p>
             </div>
           </div>
         </div>
