@@ -467,7 +467,8 @@ header {
 }
 .ai-recommend-form {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.35rem 0.5rem;
   margin-bottom: 1rem;
@@ -481,10 +482,6 @@ header {
   gap: 0.35rem 0.6rem;
 }
 /* デスクトップ: 1行目=性別・年代・読書頻度、2行目=職業・ジャンル */
-.ai-recommend-form {
-  flex-direction: row;
-  flex-wrap: wrap;
-}
 .ai-recommend-row-1 { order: 1; flex: 1 1 auto; min-width: 140px; }
 .ai-recommend-row-3 { order: 2; flex: 1 1 auto; min-width: 140px; }
 .ai-recommend-row-2 { order: 3; flex: 1 1 100%; }
@@ -1591,26 +1588,12 @@ header {
     min-width: 0;
   }
   .ai-recommend-input-row .btn { flex-shrink: 0; }
-  /* モバイル: 性別・年代 | 職業 | 本の種類（ジャンル）の段分け（読書頻度は非表示） */
+  /* モバイル: 性別・年代 | 職業・ジャンル | 読書頻度 の3段表示 */
   .ai-recommend-form {
     flex-direction: column;
     flex-wrap: nowrap;
   }
-  .ai-recommend-row-1,
-  .ai-recommend-row-2,
-  .ai-recommend-row-3 {
-    order: unset;
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-  .ai-recommend-row-1 { order: 1; }
-  .ai-recommend-row-2 {
-    order: 2;
-    flex-direction: column;
-  }
-  .ai-recommend-row-2 .ai-recommend-form-group {
-    flex: 1 1 auto;
-    width: 100%;
-  }
-  .ai-recommend-row-3 { order: 3; display: none; }  /* モバイルでは読書頻度を非表示 */
+  .ai-recommend-row-1 { order: 1; flex: 1 1 auto; min-width: 0; }
+  .ai-recommend-row-2 { order: 2; flex: 1 1 auto; min-width: 0; }
+  .ai-recommend-row-3 { order: 3; flex: 1 1 auto; min-width: 0; }
 }

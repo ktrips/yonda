@@ -58,6 +58,20 @@ function displayRating(book) {
   return book.rating || 0;
 }
 
+/** 途中: Audibleで再生したが読了していない / 図書館で借りているが評価を付けていない */
+function isInProgress(book) {
+  if (book.completed) return false;
+  if (book.source === 'audible_jp' && (book.percent_complete || 0) > 0) return true;
+  const isLibrary = book.source && book.source !== 'audible_jp' && book.source !== 'kindle';
+  if (isLibrary && (book.loan_date || '').trim()) return true;
+  return false;
+}
+
+/** 未読: 読了でも途中でもないもの */
+function isUnread(book) {
+  return !book.completed && !isInProgress(book);
+}
+
 function formatDate(d) {
   if (!d) return '—';
   return d;
@@ -81,13 +95,30 @@ function formatProgress(book) {
   return `${Math.round(pct)}%`;
 }
 
-/** 再生時間（分）を「X時間Y分」形式で返す。Audible用 */
+/** 検索用: スペース・括弧・特殊文字を除去して正規化。「村上春樹」で「村上 春樹」もヒット */
+function normalizeForSearch(str) {
+  if (!str) return '';
+  return String(str)
+    .toLowerCase()
+    .replace(/\s+/g, '')                    // 半角・全角スペース、改行など
+    .replace(/[　\u3000]+/g, '')           // 全角スペース
+    .replace(/[（）\(\)\[\]【】「」『』〔〕〈〉《》［］｛｝、。・：；！？]/g, '')  // 括弧・句読点
+    .replace(/[－―ー\-‐−]/g, '');         // ハイフン類
+}
+
+/** 正規化した検索語がテキストに含まれるか */
+function matchesSearch(normalizedQuery, text) {
+  if (!normalizedQuery) return true;
+  const n = normalizeForSearch(text);
+  return n.includes(normalizedQuery);
+}
+
+/** 再生時間（分）を「X.X時間」形式で返す。Audible用 */
 function formatRuntime(min) {
   const m = (min || 0) | 0;
   if (m <= 0) return null;
-  const h = Math.floor(m / 60);
-  const rest = m % 60;
-  return h > 0 ? `${h}時間${rest}分` : `${rest}分`;
+  const h = Math.round((m / 60) * 10) / 10;
+  return `${h}時間`;
 }
 
 /** 積読期間の日数を返す（読了日 or 本日 − 取得日） */
@@ -282,6 +313,28 @@ function genreTags(genre) {
   return genre.split(' / ').map(g => g.trim()).filter(Boolean);
 }
 
+/** ジャンル選択時: 詳細分類（/ の2番目）でグループ表示用のキーを返す */
+function getSubGenreForGrouping(book, selectedGenre) {
+  const tags = genreTags(book.genre || '');
+  const disp = displayGenre(book.genre || '');
+  if (disp !== selectedGenre) return null;
+  if (tags.length <= 1) return selectedGenre;
+  return tags[1];
+}
+
+/** ジャンル選択時: 詳細分類でグループ化し、冊数多い順に並べ替えた配列を返す */
+function groupBySubGenreForDisplay(books, selectedGenre) {
+  const bySub = {};
+  for (const b of books) {
+    const sg = getSubGenreForGrouping(b, selectedGenre);
+    const key = sg || selectedGenre;
+    if (!bySub[key]) bySub[key] = [];
+    bySub[key].push(b);
+  }
+  const groups = Object.entries(bySub).sort((a, b) => b[1].length - a[1].length);
+  return groups.flatMap(([, arr]) => arr);
+}
+
 /* --- Data loading --- */
 
 async function loadFromFile() {
@@ -429,7 +482,8 @@ function updateStats() {
 
 function updateBookTabLabels() {
   const readCount = allBooks.filter(b => b.completed).length;
-  const toReadCount = allBooks.filter(b => !b.completed).length;
+  const inProgressCount = allBooks.filter(b => isInProgress(b)).length;
+  const unreadCount = allBooks.filter(b => isUnread(b)).length;
   const year = new Date().getFullYear();
   const yearlyCount = allBooks.filter(b =>
     b.completed && b.completed_date && b.completed_date.startsWith(String(year))
@@ -443,7 +497,8 @@ function updateBookTabLabels() {
   if (tabRead) {
     let label;
     if (rating === 'completed') label = `読んだ（${readCount}）`;
-    else if (rating === 'not_completed') label = `途中（${toReadCount}）`;
+    else if (rating === 'in_progress') label = `途中（${inProgressCount}）`;
+    else if (rating === 'not_completed') label = `未読（${unreadCount}）`;
     else if (rating === 'yearly_completed') label = `${year}年（${yearlyCount}）`;
     else if (rating === 'favorite') label = `お気に入り（${favoriteCount}）`;
     else if (rating === 'all') label = `すべて（全${allCount}冊）`;
@@ -491,6 +546,8 @@ function updateMainTabVisibility() {
   document.querySelectorAll('.header-tab').forEach(t => t.classList.remove('active'));
   const activeTab = document.querySelector(`.header-tab[data-main-tab="${activeMainTab}"]`);
   if (activeTab) activeTab.classList.add('active');
+  const headerSearch = document.querySelector('.header-search');
+  if (headerSearch) headerSearch.style.display = activeMainTab === 'yonda' ? '' : 'none';
 }
 
 function updateTabContentVisibility() {
@@ -804,18 +861,19 @@ function applyFilters() {
     return;
   }
 
-  const search = (document.getElementById('searchInputYonda')?.value || '').toLowerCase();
+  const searchRaw = (document.getElementById('searchInputYonda')?.value || '').trim();
+  const searchNorm = normalizeForSearch(searchRaw);
   const source = document.getElementById('sourceFilter').value;
   const genre = document.getElementById('genreFilter').value;
   const rating = document.getElementById('ratingFilter').value;
 
   let books = [...allBooks];
 
-  if (search) {
+  if (searchNorm) {
     books = books.filter(b =>
-      (b.title || '').toLowerCase().includes(search) ||
-      (b.author || '').toLowerCase().includes(search) ||
-      (b.comment || '').toLowerCase().includes(search)
+      matchesSearch(searchNorm, b.title) ||
+      matchesSearch(searchNorm, b.author) ||
+      matchesSearch(searchNorm, b.comment)
     );
   }
   if (source !== 'all') {
@@ -826,13 +884,15 @@ function applyFilters() {
   }
   if (rating === 'completed') {
     books = books.filter(b => b.completed);
+  } else if (rating === 'in_progress') {
+    books = books.filter(b => isInProgress(b));
   } else if (rating === 'yearly_completed') {
     const year = new Date().getFullYear();
     books = books.filter(b =>
       b.completed && b.completed_date && b.completed_date.startsWith(String(year))
     );
   } else if (rating === 'not_completed') {
-    books = books.filter(b => !b.completed);
+    books = books.filter(b => isUnread(b));
   } else if (rating === 'favorite') {
     books = books.filter(b => b.favorite);
   } else if (rating !== 'all') {
@@ -841,10 +901,12 @@ function applyFilters() {
   }
 
   books = applySorting(books);
+  if (genre !== 'all') books = groupBySubGenreForDisplay(books, genre);
   filteredBooks = books;
   currentPage = 0;
   updateTabContentVisibility();
   renderBooks();
+  renderCharts();
 }
 
 /* --- 本検索（外部リンク表示） --- */
@@ -1439,6 +1501,25 @@ function applySorting(books) {
 
 /* --- Charts --- */
 
+/** ソース・状態・ジャンルでフィルタした本リスト（チャート用。検索・並べ替えは含まない） */
+function getBooksForChart() {
+  const source = document.getElementById('sourceFilter')?.value || 'all';
+  const genre = document.getElementById('genreFilter')?.value || 'all';
+  const rating = document.getElementById('ratingFilter')?.value || 'all';
+  let books = [...allBooks];
+  if (source !== 'all') books = books.filter(b => b.source === source);
+  if (genre !== 'all') books = books.filter(b => (displayGenre(b.genre) || 'その他') === genre);
+  if (rating === 'completed') books = books.filter(b => b.completed);
+  else if (rating === 'in_progress') books = books.filter(b => isInProgress(b));
+  else if (rating === 'yearly_completed') {
+    const year = new Date().getFullYear();
+    books = books.filter(b => b.completed && b.completed_date && b.completed_date.startsWith(String(year)));
+  } else if (rating === 'not_completed') books = books.filter(b => isUnread(b));
+  else if (rating === 'favorite') books = books.filter(b => b.favorite);
+  else if (rating !== 'all') books = books.filter(b => b.rating >= (parseInt(rating) || 0));
+  return books;
+}
+
 const GENRE_COLORS = [
   'rgba(107,66,38,0.7)', 'rgba(192,94,32,0.7)', 'rgba(90,122,58,0.7)',
   'rgba(58,100,140,0.7)', 'rgba(160,80,100,0.7)', 'rgba(180,140,60,0.7)',
@@ -1463,7 +1544,8 @@ function renderMonthlyChart() {
   const compMonthMap = {};
   const runtimeMonthMap = {};
   const useRuntime = chartMode === 'runtime';
-  for (const b of allBooks) {
+  const books = getBooksForChart();
+  for (const b of books) {
     const d = b.loan_date || '';
     const runtime = (b.runtime_length_min || 0) | 0;
     if (d.length >= 7) {
@@ -1565,9 +1647,8 @@ function renderMonthlyChart() {
               const v = item.raw;
               const lbl = item.dataset.label || '';
               if (useRuntime && lbl.includes('試聴時間')) {
-                const h = Math.floor(v);
-                const m = Math.round((v - h) * 60);
-                return `${lbl}: ${h}時間${m}分`;
+                const h = Math.round(v * 10) / 10;
+                return `${lbl}: ${h}時間`;
               }
               if (lbl === '読了') return `${lbl}: ${v}冊`;
               return `${lbl}: ${v}${useRuntime ? '時間' : '冊'}`;
@@ -1599,7 +1680,8 @@ function renderMonthlyChart() {
 function renderGenreChart() {
   const genreData = {};
   const useRuntime = chartMode === 'runtime';
-  for (const b of allBooks) {
+  const books = getBooksForChart();
+  for (const b of books) {
     const g = displayGenre(b.genre) || 'その他';
     if (!genreData[g]) genreData[g] = { count: 0, runtime: 0 };
     genreData[g].count++;
@@ -1659,9 +1741,8 @@ function renderGenreChart() {
             label: (item) => {
               const v = item.raw;
               if (chartMode === 'runtime') {
-                const h = Math.floor(v);
-                const m = Math.round((v - h) * 60);
-                return `${h}時間${m}分`;
+                const h = Math.round(v * 10) / 10;
+                return `${h}時間`;
               }
               return `${v} 冊`;
             },
@@ -1706,15 +1787,24 @@ function renderBooks() {
   empty.style.display = 'none';
   const start = currentPage * PAGE_SIZE;
   const pageBooks = filteredBooks.slice(start, start + PAGE_SIZE);
+  const prevBook = start > 0 ? filteredBooks[start - 1] : null;
+  const selectedGenre = document.getElementById('genreFilter')?.value || 'all';
+  let subGenreCounts = {};
+  if (selectedGenre !== 'all') {
+    for (const b of filteredBooks) {
+      const sg = getSubGenreForGrouping(b, selectedGenre) || selectedGenre;
+      subGenreCounts[sg] = (subGenreCounts[sg] || 0) + 1;
+    }
+  }
   window._currentPageBooks = pageBooks;
   const isCard = document.getElementById('viewCard').classList.contains('active');
 
   if (isCard) {
     list.className = 'book-grid';
-    list.innerHTML = renderCardView(pageBooks);
+    list.innerHTML = renderCardView(pageBooks, selectedGenre, prevBook, subGenreCounts);
   } else {
     list.className = '';
-    list.innerHTML = renderTableView(pageBooks);
+    list.innerHTML = renderTableView(pageBooks, selectedGenre, prevBook, subGenreCounts);
   }
 
   list.style.display = isCard ? 'grid' : 'block';
@@ -1795,12 +1885,14 @@ function closeBookDetail() {
   document.getElementById('bookDetailModal').classList.remove('open');
 }
 
-function renderCardView(books) {
+function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreCounts = {}) {
   let lastYear = null;
   let lastAuthor = null;
+  let lastSubGenre = prevBook && selectedGenre !== 'all' ? getSubGenreForGrouping(prevBook, selectedGenre) : null;
   const sort = document.getElementById('sortSelect').value;
   const showYearHeaders = ['date_desc', 'completed_date_desc', 'completed_date_asc'].includes(sort);
   const showAuthorHeaders = sort === 'author_group';
+  const showSubGenreHeaders = selectedGenre !== 'all';
   const useCompletedDate = sort.startsWith('completed_date');
   const authorCounts = showAuthorHeaders ? {} : null;
   if (showAuthorHeaders) {
@@ -1812,7 +1904,14 @@ function renderCardView(books) {
 
   return books.map((book, i) => {
     let header = '';
-    if (showYearHeaders) {
+    if (showSubGenreHeaders) {
+      const sg = getSubGenreForGrouping(book, selectedGenre) || selectedGenre;
+      if (sg !== lastSubGenre) {
+        lastSubGenre = sg;
+        const cnt = subGenreCounts[sg] || 0;
+        header = `<div class="year-group-header">${escapeHtml(sg)}（${cnt}冊）</div>`;
+      }
+    } else if (showYearHeaders) {
       const dateStr = useCompletedDate ? (book.completed_date || book.loan_date || '') : (book.loan_date || '');
       const year = dateStr.substring(0, 4);
       if (year && year !== lastYear) {
@@ -1859,8 +1958,20 @@ function renderCardView(books) {
   }).join('');
 }
 
-function renderTableView(books) {
+function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenreCounts = {}) {
+  let lastSubGenre = prevBook && selectedGenre !== 'all' ? getSubGenreForGrouping(prevBook, selectedGenre) : null;
+  const showSubGenreHeaders = selectedGenre !== 'all';
+
   const rows = books.map((book, i) => {
+    let headerRow = '';
+    if (showSubGenreHeaders) {
+      const sg = getSubGenreForGrouping(book, selectedGenre) || selectedGenre;
+      if (sg !== lastSubGenre) {
+        lastSubGenre = sg;
+        const cnt = subGenreCounts[sg] || 0;
+        headerRow = `<tr class="rating-group-row"><td colspan="10" class="rating-group-header">${escapeHtml(sg)}（${cnt}冊）</td></tr>`;
+      }
+    }
     const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span>` : '';
     const completedBadge = book.completed ? '<span class="badge-completed">読了</span> ' : '';
     const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
@@ -1870,7 +1981,7 @@ function renderTableView(books) {
     const summaryCell = summary ? escapeHtml(summary.length > 80 ? summary.substring(0, 80) + '…' : summary) : '—';
     const tsundoku = getTsundokuDays(book);
     const tsundokuStr = tsundoku != null ? tsundoku + '日' : '—';
-    return `
+    return headerRow + `
       <tr class="book-row-clickable ${book.completed ? 'row-completed' : ''}" data-book-index="${i}" role="button" tabindex="0">
         <td class="col-cover"><img src="${escapeHtml(book.cover_url || NO_COVER)}" alt=""
             loading="lazy" onerror="this.src='${NO_COVER}'"></td>
@@ -2683,6 +2794,7 @@ async function init() {
       error.style.display = 'block';
     }
   }
+  updateMainTabVisibility();
 }
 
 if (document.readyState === 'loading') {

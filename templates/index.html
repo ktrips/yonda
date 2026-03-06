@@ -17,6 +17,9 @@
         <button type="button" class="header-tab" id="mainTabYomu" data-main-tab="yomu"><span class="header-tab-en">Yomu</span><span class="header-tab-ja">何読む？</span></button>
         <button type="button" class="header-tab" id="mainTabOshi" data-main-tab="oshi"><span class="header-tab-en">Oshi</span><span class="header-tab-ja">AI推し</span></button>
       </div>
+      <div class="header-search">
+        <input type="text" id="searchInputYonda" class="header-search-input" placeholder="タイトル・著者…" aria-label="検索">
+      </div>
       <div class="header-stats" id="headerStats">
         <a href="#" class="header-stat" id="statRated" title="読了リスト">
           <span class="header-stat-value" id="statRatedVal">0</span>
@@ -61,10 +64,6 @@
           <div class="filter-bar" id="filterBar">
             <div class="filter-menu-panel" id="filterMenuPanel">
               <div class="filter-group">
-                <label for="searchInputYonda">検索:</label>
-                <input type="text" id="searchInputYonda" class="filter-search-input" placeholder="タイトル・著者…">
-              </div>
-              <div class="filter-group">
                 <label for="sourceFilter">ソース:</label>
                 <select id="sourceFilter" class="filter-select">
                   <option value="all">すべて</option>
@@ -77,6 +76,7 @@
                 <label for="ratingFilter">状態:</label>
                 <select id="ratingFilter" class="filter-select">
                   <option value="completed">読了</option>
+                  <option value="in_progress">途中</option>
                   <option value="not_completed">未読</option>
                   <option value="all">すべて</option>
                   <option value="yearly_completed">今年の読了</option>
@@ -97,6 +97,12 @@
                   <option value="rating_desc">評価（高い順）</option>
                 </select>
               </div>
+              <div class="filter-group">
+                <label for="genreFilter">ジャンル:</label>
+                <select id="genreFilter" class="filter-select">
+                  <option value="all">すべて</option>
+                </select>
+              </div>
               <div class="filter-group filter-group-view">
                 <label>表示:</label>
                 <div class="view-toggle">
@@ -114,12 +120,6 @@
           </div>
           <div class="chart-body">
             <div class="chart-controls-row">
-              <div class="chart-genre-filter">
-                <label for="genreFilter">ジャンル:</label>
-                <select id="genreFilter" class="filter-select">
-                  <option value="all">すべて</option>
-                </select>
-              </div>
               <div class="chart-mode-toggle">
                 <button type="button" class="chart-mode-btn active" data-mode="count">冊数</button>
                 <button type="button" class="chart-mode-btn" data-mode="runtime">試聴時間</button>
