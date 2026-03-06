@@ -468,12 +468,14 @@ async function submitFetchOtp() {
 function updateStats() {
   const year = new Date().getFullYear();
   const completed = allBooks.filter(b => b.completed).length;
+  const inProgress = allBooks.filter(b => isInProgress(b)).length;
   const yearlyCompleted = allBooks.filter(b =>
     b.completed && b.completed_date && b.completed_date.startsWith(String(year))
   ).length;
   const favorite = allBooks.filter(b => b.favorite).length;
 
   document.getElementById('statRatedVal').textContent = completed;
+  document.getElementById('statTsundokuVal').textContent = inProgress;
   document.getElementById('statYearlyVal').textContent = yearlyCompleted;
   document.getElementById('statYearlyLabel').textContent = year + '年';
   document.getElementById('statFavoriteVal').textContent = favorite;
@@ -2735,6 +2737,17 @@ document.getElementById('statRated')?.addEventListener('click', (e) => {
   activeMainTab = 'yonda';
   activeBookTab = 'read';
   document.getElementById('ratingFilter').value = 'completed';
+  document.querySelectorAll('.book-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tabRead')?.classList.add('active');
+  updateBookTabLabels();
+  updateMainTabVisibility();
+  applyFilters();
+});
+document.getElementById('statTsundoku')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  activeMainTab = 'yonda';
+  activeBookTab = 'read';
+  document.getElementById('ratingFilter').value = 'in_progress';
   document.querySelectorAll('.book-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tabRead')?.classList.add('active');
   updateBookTabLabels();
