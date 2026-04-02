@@ -226,9 +226,150 @@ class KindleAdapter(LibraryAdapter):
         logger.info("Amazon OTP 認証成功")
         return True
 
+    @staticmethod
+    def _extract_progress_from_item(item: dict) -> tuple[float, str, bool]:
+        """FIONA ownership API item から読書進捗情報を抽出
+        返り値: (percent_complete, last_read_date_str, is_finished)"""
+        percent = 0.0
+        for key in ("percentRead", "percent_read", "percentComplete", "percent_complete",
+                    "readingProgress", "readPercent", "reading_percent", "furthestReadPercent"):
+            val = item.get(key)
+            if isinstance(val, (int, float)) and val > 0:
+                percent = float(val)
+                break
+
+        last_read_date = ""
+        for key in ("lastReadDate", "last_read_date", "lastReadTimestamp",
+                    "lastOpenedDate", "lastAccessDate", "last_opened_date",
+                    "lastAccessTime", "lastSyncTime"):
+            val = item.get(key)
+            if val and isinstance(val, str):
+                last_read_date = val.strip()
+                if last_read_date:
+                    break
+
+        is_finished = False
+        if item.get("isFinished") is True or item.get("is_finished") is True:
+            is_finished = True
+        elif item.get("percentRead") == 100.0 or item.get("percent_read") == 100.0:
+            is_finished = True
+        else:
+            status = str(item.get("readingStatus") or item.get("reading_status") or "").strip().lower()
+            if status in ("read", "finished", "completed", "done"):
+                is_finished = True
+
+        return percent, last_read_date, is_finished
+
+    @staticmethod
+    def _generate_cover_url(asin: str) -> str:
+        """ASIN からカバー画像 URL を生成
+        Amazon のカバー画像は複数の URL パターンで提供されている"""
+        if not asin:
+            return ""
+        asin = asin.strip()
+        # 優先順位順で複数の URL パターンを返す（呼び出し側で最初に使用可能なものを試す）
+        return f"https://m.media-amazon.com/images/P/{asin}.09.L.jpg"
+
+    @staticmethod
+    def _determine_completion(percent: float, is_finished: bool, status_str: str) -> bool:
+        """複数シグナルから completed bool を決定
+        Kindle は章末で 100% に届かないため、95% 以上で完了と判定"""
+        if is_finished:
+            return True
+        status_lower = status_str.strip().lower()
+        if status_lower in ("read", "finished", "completed"):
+            return True
+        if percent >= 95.0:
+            return True
+        return False
+
+    def _fetch_reading_progress(
+        self, session: requests.Session, asins: list[str]
+    ) -> dict[str, dict]:
+        """FIONA reading-progress エンドポイントから読書進捗を取得
+        複数のエンドポイント候補を試す
+        返り値: {asin: {"percent_complete": float, "last_read_date": str, "is_finished": bool}}
+        失敗時は {} を返す（never raises）"""
+        if not asins:
+            return {}
+
+        progress_map: dict[str, dict] = {}
+
+        # エンドポイント候補を複数用意
+        endpoint_candidates = [
+            "/gp/digital/fiona/manage/features/reading-progress/ajax/queryReadingProgress.html",
+            "/gp/digital/fiona/reading/ajax/queryProgress.html",
+            "/gp/digital/fiona/manage/features/progress/ajax/queryProgress.html",
+        ]
+
+        ajax_headers = {
+            "X-Requested-With": "XMLHttpRequest",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        }
+
+        try:
+            # ASIN をバッチ処理（50個ずつ）
+            batch_size = 50
+            for i in range(0, len(asins), batch_size):
+                batch_asins = asins[i:i+batch_size]
+                batch_asin_str = ",".join(batch_asins)
+
+                # 各エンドポイント候補を試す
+                for endpoint in endpoint_candidates:
+                    try:
+                        api_url = AMAZON_JP + endpoint
+                        r = session.post(
+                            api_url,
+                            data={"asins": batch_asin_str, "type": "KINDLE"},
+                            headers=ajax_headers,
+                            timeout=20,
+                        )
+                        r.raise_for_status()
+                        data = json.loads(r.text)
+
+                        items = data.get("data", {}).get("items", []) if isinstance(data, dict) else []
+                        if not items:
+                            items = data.get("items", []) if isinstance(data, dict) else []
+
+                        if items:
+                            for item in items:
+                                if not isinstance(item, dict):
+                                    continue
+                                asin = (item.get("asin") or item.get("contentId") or "").strip()
+                                if asin:
+                                    percent = float(item.get("percentRead") or
+                                                  item.get("percent_read") or
+                                                  item.get("percentComplete") or
+                                                  item.get("furthestReadPercent") or 0.0)
+                                    last_read = (item.get("lastReadDate") or
+                                               item.get("last_read_date") or
+                                               item.get("lastAccessDate") or
+                                               item.get("lastAccessTime") or "").strip()
+                                    is_finished = (item.get("isFinished") is True or
+                                                 item.get("reading_status", "").lower() in ("read", "finished"))
+                                    progress_map[asin] = {
+                                        "percent_complete": percent,
+                                        "last_read_date": last_read,
+                                        "is_finished": is_finished,
+                                    }
+                            # エンドポイントが成功したらそれ以降の候補は試さない
+                            logger.debug("Reading progress API 成功: %s (%d items)", endpoint, len(items))
+                            break
+                    except (json.JSONDecodeError, requests.RequestException, ValueError) as e:
+                        logger.debug("エンドポイント %s 失敗: %s (次を試します)", endpoint, type(e).__name__)
+                        continue
+
+            if progress_map:
+                logger.info("Kindle reading progress: %d 冊の進捗情報を取得", len(progress_map))
+            return progress_map
+        except Exception as e:
+            logger.debug("_fetch_reading_progress 全体エラー (無視します): %s", e)
+            return {}
+
     def _fetch_from_amazon(self, session: requests.Session) -> list[BookRecord]:
-        """Amazon FIONA API から購入済み Kindle タイトルを取得"""
-        books: list[BookRecord] = []
+        """Amazon FIONA API から購入済み Kindle タイトルを取得（読書進捗情報を含む）"""
+        raw_items: list[dict] = []
         offset = 0
         count = 100
         seen_asins: set[str] = set()
@@ -251,6 +392,7 @@ class KindleAdapter(LibraryAdapter):
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         }
 
+        # ステップ 1: オーナーシップ API からすべてのアイテムを収集
         while True:
             try:
                 r = session.post(
@@ -270,7 +412,7 @@ class KindleAdapter(LibraryAdapter):
                 data = json.loads(raw)
             except (json.JSONDecodeError, requests.RequestException, ValueError) as e:
                 logger.exception("FIONA API 取得失敗: %s", e)
-                if not books:
+                if not raw_items:
                     msg = str(e) if isinstance(e, ValueError) else ""
                     path = self._find_data_path()
                     if path:
@@ -297,44 +439,100 @@ class KindleAdapter(LibraryAdapter):
                 if not asin or asin in seen_asins:
                     continue
                 seen_asins.add(asin)
-                title = (item.get("title") or "").strip()
-                if isinstance(title, str):
-                    title = html.unescape(title)
-                purchase_date = (
-                    item.get("purchaseDate")
-                    or item.get("purchase_date")
-                    or item.get("dateAdded")
-                    or item.get("acquisitionDate")
-                    or ""
-                )
-
-                book = BookRecord(
-                    title=title or "不明なタイトル",
-                    author="",
-                    loan_date=self._format_date(str(purchase_date)),
-                    loan_location="Kindle",
-                    rating=0,
-                    comment="",
-                    cover_url="",
-                    detail_url=f"https://www.amazon.co.jp/dp/{asin}" if asin else "",
-                    catalog_number=asin,
-                    completed=False,
-                    source=self.library_id,
-                    genre="",
-                    summary="",
-                    full_summary="",
-                    completed_date="",
-                    favorite=False,
-                    review_headline="",
-                    catalog_rating=0.0,
-                )
-                books.append(book)
+                raw_items.append(item)
 
             offset += len(items)
             if offset >= total or len(items) == 0:
                 break
 
-        logger.info("Kindle Amazon: %d 冊取得", len(books))
+        # ステップ 2: すべての ASIN について読書進捗情報を一括取得
+        all_asins = [item.get("asin") or item.get("contentId") for item in raw_items]
+        all_asins = [a.strip() for a in all_asins if a]
+        progress_map = self._fetch_reading_progress(session, all_asins)
+        logger.info("Kindle reading progress: %d 冊の進捗情報を取得", len(progress_map))
+
+        # ステップ 3: BookRecord を生成（進捗データを含める）
+        books: list[BookRecord] = []
+        for item in raw_items:
+            asin = (item.get("asin") or item.get("contentId") or "").strip()
+            title = (item.get("title") or "").strip()
+            if isinstance(title, str):
+                title = html.unescape(title)
+            purchase_date = (
+                item.get("purchaseDate")
+                or item.get("purchase_date")
+                or item.get("dateAdded")
+                or item.get("acquisitionDate")
+                or ""
+            )
+
+            # オーナーシップ API のフィールドから進捗を抽出
+            ownership_percent, ownership_date, ownership_finished = self._extract_progress_from_item(item)
+
+            # プログレス API のデータとマージ（プログレス API を優先）
+            percent_complete = ownership_percent
+            last_read_date = ownership_date
+            is_finished = ownership_finished
+
+            if asin in progress_map:
+                prog = progress_map[asin]
+                if prog.get("percent_complete", 0.0) > percent_complete:
+                    percent_complete = prog["percent_complete"]
+                if prog.get("last_read_date") and not last_read_date:
+                    last_read_date = prog["last_read_date"]
+                if prog.get("is_finished"):
+                    is_finished = True
+
+            # 完了判定
+            completed = self._determine_completion(percent_complete, is_finished, "")
+
+            # 完了日の決定（読了済みの場合のみ）
+            completed_date = ""
+            if completed and last_read_date:
+                completed_date = self._format_date(last_read_date)
+
+            # カバー画像の取得
+            # 1. FIONA API のレスポンスから直接取得を試す
+            cover_url = ""
+            for key in ("productImage", "coverUrl", "imageUrl", "imageUrl500", "bookCoverImage",
+                       "image", "coverImage", "cover_url"):
+                val = item.get(key)
+                if val and isinstance(val, str):
+                    cover_url = val.strip()
+                    if cover_url:
+                        break
+
+            # 2. API から取得できない場合は ASIN から生成
+            if not cover_url and asin:
+                cover_url = self._generate_cover_url(asin)
+
+            book = BookRecord(
+                title=title or "不明なタイトル",
+                author="",
+                loan_date=self._format_date(str(purchase_date)),
+                loan_location="Kindle",
+                rating=0,
+                comment="",
+                cover_url=cover_url,
+                detail_url=f"https://www.amazon.co.jp/dp/{asin}" if asin else "",
+                catalog_number=asin,
+                completed=completed,
+                source=self.library_id,
+                genre="",
+                summary="",
+                full_summary="",
+                completed_date=completed_date,
+                percent_complete=percent_complete,
+                favorite=False,
+                review_headline="",
+                catalog_rating=0.0,
+            )
+            books.append(book)
+
+        logger.info("Kindle Amazon: %d 冊取得（%d 冊読了, %.1f%% 平均進捗）",
+                   len(books),
+                   sum(1 for b in books if b.completed),
+                   sum(b.percent_complete for b in books) / len(books) if books else 0)
         return books
 
     def _find_data_path(self) -> Optional[Path]:
@@ -399,6 +597,29 @@ class KindleAdapter(LibraryAdapter):
             title = self._xml_title(item)
             author = self._xml_author(item)
 
+            # XML から読書進捗を抽出
+            percent_complete = float(self._xml_text(item, "percent_read") or 0)
+            if not percent_complete:
+                percent_complete = float(self._xml_text(item, "percentComplete") or 0)
+            if not percent_complete:
+                percent_complete = float(self._xml_text(item, "furthestReadPercent") or 0)
+
+            last_read_date = (self._xml_text(item, "last_read_date") or
+                            self._xml_text(item, "lastAccessDate") or
+                            self._xml_text(item, "lastSyncTime") or "")
+
+            reading_status = self._xml_text(item, "reading_status").lower()
+            is_finished = (reading_status in ("read", "finished", "completed", "done") or
+                          self._xml_text(item, "is_finished").lower() == "true")
+            completed = self._determine_completion(percent_complete, is_finished, "")
+
+            completed_date = ""
+            if completed and last_read_date:
+                completed_date = self._format_date(last_read_date)
+
+            # カバー画像 URL を生成
+            cover_url = self._generate_cover_url(asin) if asin else ""
+
             book = BookRecord(
                 title=title or "不明なタイトル",
                 author=author,
@@ -406,15 +627,16 @@ class KindleAdapter(LibraryAdapter):
                 loan_location="Kindle",
                 rating=0,
                 comment="",
-                cover_url="",
+                cover_url=cover_url,
                 detail_url=f"https://www.amazon.co.jp/dp/{asin}" if asin else "",
                 catalog_number=asin,
-                completed=False,
+                completed=completed,
                 source=self.library_id,
                 genre="",
                 summary="",
                 full_summary="",
-                completed_date="",
+                completed_date=completed_date,
+                percent_complete=percent_complete,
                 favorite=False,
                 review_headline="",
                 catalog_rating=0.0,
@@ -524,6 +746,52 @@ class KindleAdapter(LibraryAdapter):
                 else:
                     author = str(authors) if authors else ""
 
+                # SQLite 属性から読書進捗を抽出
+                percent_complete = 0.0
+                for key in ("reading_percent", "readingPercent", "percent_read", "percentRead",
+                           "furthestReadPercent", "furthest_read_percent"):
+                    val = attrs.get(key)
+                    if isinstance(val, (int, float)) and val > 0:
+                        percent_complete = float(val)
+                        break
+
+                last_read_date = ""
+                for key in ("last_read_date", "lastReadDate", "last_access_date", "lastAccessDate",
+                           "lastSyncTime", "last_sync_time"):
+                    val = attrs.get(key)
+                    if val and isinstance(val, str):
+                        last_read_date = val.strip()
+                        if last_read_date:
+                            break
+
+                # LPR（Last Page Read）から読書進捗を推定（Kindle 独自フィールド）
+                lpr = attrs.get("lpr") or attrs.get("furthest_page_read") or 0
+                total_pages = attrs.get("total_pages") or attrs.get("pages") or 0
+                if total_pages and isinstance(lpr, (int, float)) and isinstance(total_pages, (int, float)):
+                    if total_pages > 0:
+                        calculated_percent = (float(lpr) / float(total_pages)) * 100
+                        if calculated_percent > percent_complete:
+                            percent_complete = calculated_percent
+
+                # 完了判定（read_status や reading_status から）
+                is_finished = False
+                for status_key in ("reading_status", "readingStatus", "read_status", "readStatus"):
+                    status = str(attrs.get(status_key) or "").strip().lower()
+                    if status in ("read", "finished", "completed", "done"):
+                        is_finished = True
+                        break
+                if attrs.get("is_finished") is True or attrs.get("isFinished") is True:
+                    is_finished = True
+
+                completed = self._determine_completion(percent_complete, is_finished, "")
+
+                completed_date = ""
+                if completed and last_read_date:
+                    completed_date = self._format_date(last_read_date)
+
+                # カバー画像 URL を生成
+                cover_url = self._generate_cover_url(asin) if asin else ""
+
                 book = BookRecord(
                     title=(title or "不明なタイトル").strip(),
                     author=(author or "").strip(),
@@ -531,15 +799,16 @@ class KindleAdapter(LibraryAdapter):
                     loan_location="Kindle",
                     rating=0,
                     comment="",
-                    cover_url="",
+                    cover_url=cover_url,
                     detail_url=f"https://www.amazon.co.jp/dp/{asin}" if asin else "",
                     catalog_number=asin,
-                    completed=False,
+                    completed=completed,
                     source=self.library_id,
                     genre="",
                     summary="",
                     full_summary="",
-                    completed_date="",
+                    completed_date=completed_date,
+                    percent_complete=percent_complete,
                     favorite=False,
                     review_headline="",
                     catalog_rating=0.0,

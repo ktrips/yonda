@@ -487,19 +487,45 @@ def _save_markdown(adapter, records: list[BookRecord]) -> None:
         "",
         f"全{len(records)}冊（読了 {completed_count}冊）。",
         "",
-        f"| # | 状態 | タイトル | 著者 | ジャンル | {date_label} | 評価 |",
-        "|---|------|---------|------|---------|--------|------|",
     ]
-    for i, r in enumerate(records, 1):
-        title = r.title.replace("|", "｜")
-        author = r.author.replace("|", "｜")
-        genre = r.genre.replace("|", "｜")[:40] if r.genre else "—"
-        stars = "★" * r.rating + "☆" * (5 - r.rating) if r.rating else "—"
-        detail = f"[{title}]({r.detail_url})" if r.detail_url else title
-        status = "読了" if r.completed else ""
-        lines.append(
-            f"| {i} | {status} | {detail} | {author} | {genre} | {r.loan_date} | {stars} |"
-        )
+
+    # Kindle の場合は読書進捗情報を表示
+    if is_kindle:
+        avg_progress = sum(r.percent_complete for r in records) / len(records) if records else 0
+        lines.extend([
+            f"読書進捗: 平均 {avg_progress:.1f}%",
+            "",
+            "| # | 状態 | タイトル | 著者 | ジャンル | 購入日 | 進捗 | 読了日 | 評価 |",
+            "|---|------|---------|------|---------|--------|------|--------|------|",
+        ])
+        for i, r in enumerate(records, 1):
+            title = r.title.replace("|", "｜")
+            author = r.author.replace("|", "｜")
+            genre = r.genre.replace("|", "｜")[:40] if r.genre else "—"
+            stars = "★" * r.rating + "☆" * (5 - r.rating) if r.rating else "—"
+            detail = f"[{title}]({r.detail_url})" if r.detail_url else title
+            status = "読了" if r.completed else "読中" if r.percent_complete > 0 else ""
+            progress = f"{r.percent_complete:.0f}%" if r.percent_complete > 0 else "—"
+            completed_date = r.completed_date if r.completed_date else "—"
+            lines.append(
+                f"| {i} | {status} | {detail} | {author} | {genre} | {r.loan_date} | {progress} | {completed_date} | {stars} |"
+            )
+    else:
+        # その他の図書館（Audible や Setagaya）
+        lines.extend([
+            f"| # | 状態 | タイトル | 著者 | ジャンル | {date_label} | 評価 |",
+            "|---|------|---------|------|---------|--------|------|",
+        ])
+        for i, r in enumerate(records, 1):
+            title = r.title.replace("|", "｜")
+            author = r.author.replace("|", "｜")
+            genre = r.genre.replace("|", "｜")[:40] if r.genre else "—"
+            stars = "★" * r.rating + "☆" * (5 - r.rating) if r.rating else "—"
+            detail = f"[{title}]({r.detail_url})" if r.detail_url else title
+            status = "読了" if r.completed else ""
+            lines.append(
+                f"| {i} | {status} | {detail} | {author} | {genre} | {r.loan_date} | {stars} |"
+            )
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with open(md_path, "w", encoding="utf-8") as f:

@@ -1296,6 +1296,34 @@ header {
   -webkit-box-orient: vertical; overflow: hidden;
 }
 
+/* === Kindle Progress Bar === */
+.progress-bar-container {
+  width: 100%; height: 18px;
+  background: var(--accent-light);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border);
+  margin: 0.35rem 0 0.25rem 0;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--audible-accent), var(--accent));
+  transition: width 0.3s ease;
+}
+.progress-bar-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text);
+  text-shadow: 0 1px 1px rgba(255,255,255,0.6);
+  user-select: none;
+  pointer-events: none;
+}
+
 /* === Badges === */
 .badge-completed {
   display: inline-block; padding: 0.08rem 0.35rem;

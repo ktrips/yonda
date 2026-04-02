@@ -96,6 +96,17 @@ function formatProgress(book) {
   return `${Math.round(pct)}%`;
 }
 
+/** Kindle 用: 読書進捗バーの HTML を生成 */
+function renderProgressBar(book) {
+  const pct = book.percent_complete;
+  if (pct == null || pct <= 0) return '';
+  const rounded = Math.round(pct);
+  return `<div class="progress-bar-container" title="${rounded}% 読了">
+    <div class="progress-bar-fill" style="width: ${rounded}%"></div>
+    <div class="progress-bar-text">${rounded}%</div>
+  </div>`;
+}
+
 /** 検索用: スペース・括弧・特殊文字を除去して正規化。「村上春樹」で「村上 春樹」もヒット */
 function normalizeForSearch(str) {
   if (!str) return '';
@@ -2040,6 +2051,7 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
     const genreHtml = book.genre ? `<span class="book-card-genre">${escapeHtml(book.genre)}</span>` : '';
     const supplementHtml = titleSupplementHtml(book);
     const summaryHtml = book.summary ? `<div class="book-card-summary">${escapeHtml(book.summary)}</div>` : '';
+    const progressBarHtml = book.source === 'kindle' && (book.percent_complete || 0) > 0 ? renderProgressBar(book) : '';
 
     return header + `
       <div class="book-card book-card-clickable${book.completed ? ' completed' : ''}${srcClass}" data-book-index="${i}" role="button" tabindex="0">
@@ -2050,6 +2062,7 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
           ${supplementHtml ? `<div class="book-card-title-supplement">${supplementHtml}</div>` : ''}
           <div class="book-card-author">${escapeHtml(book.author || '')}</div>
           ${genreHtml}
+          ${progressBarHtml}
           <div class="book-card-meta">
             ${(book.runtime_length_min || 0) > 0 ? `<span class="book-card-runtime">${formatRuntime(book.runtime_length_min)} · </span>` : ''}
             ${book.completed && book.completed_date ? `<span>読了: ${formatDateOnly(book.completed_date)}</span>` : (formatProgress(book) ? `<span>進捗: ${formatProgress(book)}</span>` : `<span>${formatDate(book.loan_date)}</span>`)}
