@@ -200,6 +200,15 @@ header {
 .menu-item:hover { background: var(--accent-light); }
 .menu-item:last-child { margin-bottom: 0; }
 .menu-item-fetch { font-weight: 600; color: var(--accent); }
+.menu-sync-dates {
+  padding: 0.1rem 0.75rem 0.4rem;
+}
+.menu-sync-date-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 0.75rem; line-height: 1.7;
+}
+.menu-sync-date-label { color: var(--text-secondary); }
+.menu-sync-date-value { color: var(--text-tertiary, #aaa); font-variant-numeric: tabular-nums; }
 .menu-library-select { margin-bottom: 0.75rem; }
 .menu-library-select label { font-size: 0.8rem; color: var(--text-secondary); }
 .menu-select {

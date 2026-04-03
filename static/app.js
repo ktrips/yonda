@@ -190,6 +190,36 @@ function getAudibleRatingUrl(book) {
 const SOURCE_LABELS = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'Kindle' };
 function sourceLabel(source) { return SOURCE_LABELS[source] || source || ''; }
 
+function formatSyncDate(isoStr) {
+  if (!isoStr) return '未取得';
+  try {
+    const d = new Date(isoStr);
+    const M = d.getMonth() + 1;
+    const D = d.getDate();
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return `${M}/${D} ${h}:${m}`;
+  } catch { return '不明'; }
+}
+
+function updateMenuSyncDates(sources) {
+  const el = document.getElementById('menuSyncDates');
+  if (!el) return;
+  const map = {};
+  for (const s of (sources || [])) map[s.library_id] = s.fetch_date;
+  const rows = [
+    { id: 'setagaya',   label: '図書館' },
+    { id: 'audible_jp', label: 'Audible' },
+    { id: 'kindle',     label: 'Kindle' },
+  ];
+  el.innerHTML = rows.map(({ id, label }) =>
+    `<div class="menu-sync-date-row">` +
+    `<span class="menu-sync-date-label">${label}</span>` +
+    `<span class="menu-sync-date-value">${formatSyncDate(map[id])}</span>` +
+    `</div>`
+  ).join('');
+}
+
 const AFFILIATE_TAG_KEY = 'yonda_affiliate_tag';
 const DEFAULT_AFFILIATE_TAG = 'ktrip-22';
 const DEFAULT_PAGE_KEY = 'yonda_default_page';
@@ -365,6 +395,7 @@ async function loadFromFile() {
     const sources = data.sources || [];
     updateStats();
     populateSourceFilter(sources);
+    updateMenuSyncDates(sources);
     populateGenreFilter();
     showFilters();
     applyFilters();
@@ -429,6 +460,7 @@ async function fetchFromLibrary(opts = {}) {
       const sources = data.sources || [];
       updateStats();
       populateSourceFilter(sources);
+      updateMenuSyncDates(sources);
       populateGenreFilter();
       showFilters();
       applyFilters();
