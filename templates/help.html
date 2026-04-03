@@ -70,6 +70,20 @@
         <li>Amazon API が失敗した場合、自動でローカルファイル（<code>BookData.sqlite</code>）から取得されます</li>
       </ul>
 
+      <h2>定期自動取得（Cloud Run 環境）</h2>
+      <p>Cloud Run にデプロイした場合、Cloud Scheduler により毎日自動でデータが取得・保存されます。</p>
+      <ul>
+        <li><strong>朝 06:00 / 昼 12:00 / 夕 18:00（JST）</strong>に図書館・Audible・Kindle を一括取得</li>
+        <li>取得結果は GCS バケットに自動保存されます</li>
+        <li>一部ソースが失敗しても他ソースの取得は継続されます</li>
+      </ul>
+      <p><strong>Kindle のクラウド自動取得</strong></p>
+      <ul>
+        <li>Amazon メール・パスワードを登録し、OTP（2段階認証）なしの設定であれば自動取得可能</li>
+        <li>OTP が必要な設定の場合は自動取得がスキップされます（他ソースは継続）</li>
+        <li><code>BookData.sqlite</code> を GCS バケットに配置し、環境変数 <code>YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite</code> を設定する方法でも取得可能</li>
+      </ul>
+
       <h2>AI推し・写真検索（APIエラーが出る場合）</h2>
       <p>AI推し（５質問で推し、MBTI診断で推し、強み診断で推し）や写真から本を検索するには、メニュー → アプリ設定 で API キーを登録してください。</p>
       <ul>

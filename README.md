@@ -112,6 +112,24 @@ Google Cloud Run へのデプロイ方法は 2 通りあります。
 
 詳細は [DEPLOY.md](DEPLOY.md) を参照。`yonda.ktrips.net` としてホスティング可能。
 
+### 定期自動取得（Cloud Scheduler）
+
+フルデプロイ時に Cloud Scheduler ジョブが自動作成され、毎日 3 回データを取得して GCS に保存します。
+
+| ジョブ名 | 時刻（JST） | 対象 |
+|----------|-------------|------|
+| `yonda-fetch-morning` | 06:00 | 図書館・Audible・Kindle |
+| `yonda-fetch-noon` | 12:00 | 図書館・Audible・Kindle |
+| `yonda-fetch-evening` | 18:00 | 図書館・Audible・Kindle |
+
+取得先エンドポイント: `POST https://yonda.ktrips.net/api/fetch` with `{"library_id": "all"}`
+
+> **Kindle のクラウド取得について**  
+> Cloud Run 環境には Kindle for Mac がないため、以下いずれかの方法で取得可能です。  
+> - Amazon メール・パスワードを登録（OTP なし設定の場合）  
+> - `BookData.sqlite` を GCS バケットに配置し、`YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite` を設定  
+> OTP が必要な場合は Kindle のみスキップされ、他ソースの取得は継続されます。
+
 ### GitHub Actions セットアップ（初回のみ）
 
 GitHub Actions でデプロイするには、以下を設定してください。
@@ -143,7 +161,8 @@ gcloud iam service-accounts create github-actions-yonda \
 ```bash
 for role in "roles/run.admin" "roles/artifactregistry.admin" "roles/cloudbuild.builds.builder" \
   "roles/storage.admin" "roles/secretmanager.admin" "roles/iam.serviceAccountUser" \
-  "roles/serviceusage.serviceUsageAdmin" "roles/logging.viewer"; do
+  "roles/serviceusage.serviceUsageAdmin" "roles/logging.viewer" \
+  "roles/cloudscheduler.admin"; do
   gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member="serviceAccount:github-actions-yonda@${PROJECT_ID}.iam.gserviceaccount.com" \
     --role="$role" --quiet

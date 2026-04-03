@@ -996,6 +996,18 @@ def api_fetch():
 
         if library_id == "kindle":
             return _api_fetch_kindle(session_id, otp)
+        if library_id == "all":
+            errors = {}
+            for lid in ["setagaya", "audible_jp", "kindle"]:
+                try:
+                    library_service.fetch_and_save(lid)
+                except Exception as e:
+                    errors[lid] = str(e)
+            combined = library_service.load_saved()
+            result = {"success": True, **(combined or {})}
+            if errors:
+                result["errors"] = errors
+            return jsonify(result)
         library_service.fetch_and_save(library_id)
         combined = library_service.load_saved()
         return jsonify({"success": True, **(combined or {})})

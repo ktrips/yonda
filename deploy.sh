@@ -44,6 +44,7 @@ gcloud services enable \
   cloudbuild.googleapis.com \
   secretmanager.googleapis.com \
   storage.googleapis.com \
+  cloudscheduler.googleapis.com \
   --quiet
 
 # ---------- 2. Artifact Registry リポジトリ作成 ----------
@@ -200,12 +201,58 @@ if ! gcloud run domain-mappings describe \
     --quiet || true
 fi
 
+# ---------- 9. Cloud Scheduler 定期取得ジョブ ----------
+echo ""
+echo ">>> Cloud Scheduler ジョブを設定（6時/12時/18時 JST）..."
+
+FETCH_URL="https://${DOMAIN}/api/fetch"
+FETCH_BODY='{"library_id":"all"}'
+SCHEDULER_REGION="asia-northeast1"
+
+setup_scheduler_job() {
+  local job_name="$1"
+  local schedule="$2"
+  if gcloud scheduler jobs describe "${job_name}" \
+       --location="${SCHEDULER_REGION}" --format='value(name)' 2>/dev/null; then
+    gcloud scheduler jobs update http "${job_name}" \
+      --location="${SCHEDULER_REGION}" \
+      --schedule="${schedule}" \
+      --uri="${FETCH_URL}" \
+      --message-body="${FETCH_BODY}" \
+      --headers="Content-Type=application/json" \
+      --time-zone="Asia/Tokyo" \
+      --attempt-deadline=540s \
+      --quiet
+    echo "    ✔ ${job_name} (更新)"
+  else
+    gcloud scheduler jobs create http "${job_name}" \
+      --location="${SCHEDULER_REGION}" \
+      --schedule="${schedule}" \
+      --uri="${FETCH_URL}" \
+      --message-body="${FETCH_BODY}" \
+      --headers="Content-Type=application/json" \
+      --time-zone="Asia/Tokyo" \
+      --attempt-deadline=540s \
+      --quiet
+    echo "    ✔ ${job_name} (新規作成)"
+  fi
+}
+
+setup_scheduler_job "yonda-fetch-morning" "0 6 * * *"
+setup_scheduler_job "yonda-fetch-noon"    "0 12 * * *"
+setup_scheduler_job "yonda-fetch-evening" "0 18 * * *"
+
 echo ""
 echo "============================================"
 echo "  デプロイ完了!"
 echo ""
 echo "  Cloud Run URL : ${SERVICE_URL}"
 echo "  カスタムドメイン: https://${DOMAIN}"
+echo ""
+echo "  定期取得スケジュール (JST):"
+echo "    朝  06:00  yonda-fetch-morning"
+echo "    昼  12:00  yonda-fetch-noon"
+echo "    夕  18:00  yonda-fetch-evening"
 echo ""
 echo "  ★ DNS 設定が必要です:"
 echo "    ${DOMAIN} → CNAME → ghs.googlehosted.com."

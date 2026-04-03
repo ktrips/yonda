@@ -90,6 +90,7 @@ jobs:
             cloudbuild.googleapis.com \
             secretmanager.googleapis.com \
             storage.googleapis.com \
+            cloudscheduler.googleapis.com \
             --quiet
 
       - name: Create Artifact Registry repository
@@ -229,3 +230,39 @@ jobs:
               --region=${{ env.REGION }} \
               --quiet || true
           fi
+
+      - name: Setup Cloud Scheduler (fetch 6/12/18 JST)
+        if: ${{ github.event.inputs.image_only != 'true' }}
+        run: |
+          FETCH_URL="https://${{ env.DOMAIN }}/api/fetch"
+          FETCH_BODY='{"library_id":"all"}'
+          setup_job() {
+            local name="$1" schedule="$2"
+            if gcloud scheduler jobs describe "${name}" \
+                 --location=${{ env.REGION }} --format='value(name)' 2>/dev/null; then
+              gcloud scheduler jobs update http "${name}" \
+                --location=${{ env.REGION }} \
+                --schedule="${schedule}" \
+                --uri="${FETCH_URL}" \
+                --message-body="${FETCH_BODY}" \
+                --headers="Content-Type=application/json" \
+                --time-zone="Asia/Tokyo" \
+                --attempt-deadline=540s \
+                --quiet
+              echo "  ✔ ${name} (更新)"
+            else
+              gcloud scheduler jobs create http "${name}" \
+                --location=${{ env.REGION }} \
+                --schedule="${schedule}" \
+                --uri="${FETCH_URL}" \
+                --message-body="${FETCH_BODY}" \
+                --headers="Content-Type=application/json" \
+                --time-zone="Asia/Tokyo" \
+                --attempt-deadline=540s \
+                --quiet
+              echo "  ✔ ${name} (新規作成)"
+            fi
+          }
+          setup_job "yonda-fetch-morning" "0 6 * * *"
+          setup_job "yonda-fetch-noon"    "0 12 * * *"
+          setup_job "yonda-fetch-evening" "0 18 * * *"
