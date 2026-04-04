@@ -93,13 +93,29 @@ python -m app
 
 | 変数 | 説明 |
 |------|------|
-| `YONDA_DATA_DIR` | データ保存先ディレクトリ |
+| `YONDA_DATA_DIR` | データ保存先ディレクトリ（Cloud Runでは`/mnt/data`にGCSマウント） |
 | `YONDA_CONFIG_DIR` | 認証・設定ファイルのディレクトリ（デフォルト: `~/.config/yonda`） |
 | `YONDA_AI_CONFIG_PATH` | AI 設定ファイルのパス |
 | `YONDA_CREDS_PATH` | 図書館認証ファイルのパス |
 | `YONDA_AUTH_FILE` | Audible 認証ファイル（auth_jp.json）のパス |
 | `YONDA_KINDLE_SQLITE_PATH` | Kindle BookData.sqlite のパス（任意） |
 | `YONDA_KINDLE_XML_PATH` | KindleSyncMetadataCache.xml のパス（任意） |
+
+**ローカル起動時にクラウドのデータを参照する場合:**
+
+```bash
+# GCSFUSEをインストール（macOS）
+brew install --cask google-cloud-sdk
+brew install gcsfuse
+
+# GCSバケットをマウント
+mkdir -p ~/yonda-gcs-mount
+gcsfuse airgo-trip-yonda-data ~/yonda-gcs-mount
+
+# アプリ起動
+export YONDA_DATA_DIR=~/yonda-gcs-mount
+python -m app
+```
 
 ## デプロイ
 

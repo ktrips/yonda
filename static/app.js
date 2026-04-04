@@ -194,10 +194,12 @@ function formatSyncDate(isoStr) {
   if (!isoStr) return '未取得';
   try {
     const d = new Date(isoStr);
-    const M = d.getMonth() + 1;
-    const D = d.getDate();
-    const h = String(d.getHours()).padStart(2, '0');
-    const m = String(d.getMinutes()).padStart(2, '0');
+    // 日本時間（JST）に変換
+    const jst = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+    const M = jst.getMonth() + 1;
+    const D = jst.getDate();
+    const h = String(jst.getHours()).padStart(2, '0');
+    const m = String(jst.getMinutes()).padStart(2, '0');
     return `${M}/${D} ${h}:${m}`;
   } catch { return '不明'; }
 }
@@ -216,8 +218,79 @@ function updateMenuSyncDates(sources) {
     `<div class="menu-sync-date-row">` +
     `<span class="menu-sync-date-label">${label}</span>` +
     `<span class="menu-sync-date-value">${formatSyncDate(map[id])}</span>` +
+    `<button class="menu-sync-fetch-btn" onclick="manualFetchSource('${id}')" title="手動で取得">↻</button>` +
     `</div>`
   ).join('');
+}
+
+async function manualFetchSource(sourceId) {
+  const btn = event.target;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  btn.style.opacity = '0.5';
+
+  try {
+    const response = await fetch('/api/fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ library_id: sourceId })
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      showToast(`${sourceId}の取得が完了しました`, 'success');
+      // データを再読み込み
+      await loadBooks();
+    } else if (data.needs_otp) {
+      // Kindle OTP が必要な場合
+      const otp = prompt('Kindle の2段階認証コード（OTP）を入力してください:');
+      if (otp) {
+        const otpResponse = await fetch('/api/fetch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            library_id: 'kindle',
+            session_id: data.session_id,
+            otp: otp
+          })
+        });
+        const otpData = await otpResponse.json();
+        if (otpData.success) {
+          showToast('Kindleの取得が完了しました', 'success');
+          await loadBooks();
+        } else {
+          showToast(`エラー: ${otpData.error || '取得に失敗しました'}`, 'error');
+        }
+      }
+    } else {
+      showToast(`エラー: ${data.error || '取得に失敗しました'}`, 'error');
+    }
+  } catch (err) {
+    console.error('取得エラー:', err);
+    showToast('取得に失敗しました', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+    btn.style.opacity = '1';
+  }
+}
+
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);' +
+    'background:#333;color:#fff;padding:12px 24px;border-radius:8px;z-index:10000;' +
+    'box-shadow:0 4px 12px rgba(0,0,0,0.3);animation:slideUp 0.3s ease;';
+  if (type === 'success') toast.style.background = '#4caf50';
+  if (type === 'error') toast.style.background = '#f44336';
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = 'slideDown 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 }
 
 const AFFILIATE_TAG_KEY = 'yonda_affiliate_tag';

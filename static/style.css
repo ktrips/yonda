@@ -204,11 +204,21 @@ header {
   padding: 0.1rem 0.75rem 0.4rem;
 }
 .menu-sync-date-row {
-  display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 0.75rem; line-height: 1.7;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 0.75rem; line-height: 1.7; gap: 0.5rem;
 }
 .menu-sync-date-label { color: var(--text-secondary); }
-.menu-sync-date-value { color: var(--text-tertiary, #aaa); font-variant-numeric: tabular-nums; }
+.menu-sync-date-value { color: var(--text-tertiary, #aaa); font-variant-numeric: tabular-nums; flex: 1; }
+.menu-sync-fetch-btn {
+  background: transparent; border: none; cursor: pointer;
+  color: var(--accent); font-size: 1rem; padding: 0.2rem 0.4rem;
+  border-radius: 4px; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+  min-width: 24px; height: 24px;
+}
+.menu-sync-fetch-btn:hover { background: var(--accent-light); transform: rotate(90deg); }
+.menu-sync-fetch-btn:active { transform: scale(0.9) rotate(90deg); }
+.menu-sync-fetch-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .menu-library-select { margin-bottom: 0.75rem; }
 .menu-library-select label { font-size: 0.8rem; color: var(--text-secondary); }
 .menu-select {

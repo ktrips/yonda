@@ -80,24 +80,28 @@ if ! gsutil ls -b "gs://${BUCKET_NAME}" 2>/dev/null; then
   gsutil mb -l "${REGION}" "gs://${BUCKET_NAME}"
 fi
 
-# 既存データがあればアップロード
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-LOCAL_DATA_DIR="${SCRIPT_DIR}/data"
-if [[ -d "${LOCAL_DATA_DIR}" ]]; then
-  echo ">>> 既存データファイルを GCS にアップロード..."
-  for f in library_books.json audible_books.json kindle_books.json; do
-    if [[ -f "${LOCAL_DATA_DIR}/${f}" ]]; then
-      gsutil -q cp "${LOCAL_DATA_DIR}/${f}" "gs://${BUCKET_NAME}/${f}"
-      echo "    ✔ ${f}"
+# ローカルデータのアップロードはスキップ（環境変数 UPLOAD_LOCAL_DATA=1 で有効化）
+if [[ "${UPLOAD_LOCAL_DATA}" == "1" ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  LOCAL_DATA_DIR="${SCRIPT_DIR}/data"
+  if [[ -d "${LOCAL_DATA_DIR}" ]]; then
+    echo ">>> 既存データファイルを GCS にアップロード..."
+    for f in library_books.json audible_books.json kindle_books.json; do
+      if [[ -f "${LOCAL_DATA_DIR}/${f}" ]]; then
+        gsutil -q cp "${LOCAL_DATA_DIR}/${f}" "gs://${BUCKET_NAME}/${f}"
+        echo "    ✔ ${f}"
+      fi
+    done
+    CREDS_SRC="${LOCAL_DATA_DIR}/.credentials.json"
+    [[ -f "${CREDS_SRC}" ]] || CREDS_SRC=".credentials.json"
+    [[ -f "${CREDS_SRC}" ]] || CREDS_SRC="${HOME}/.config/yonda/credentials.json"
+    if [[ -f "${CREDS_SRC}" ]]; then
+      gsutil -q cp "${CREDS_SRC}" "gs://${BUCKET_NAME}/.credentials.json"
+      echo "    ✔ .credentials.json"
     fi
-  done
-  CREDS_SRC="${LOCAL_DATA_DIR}/.credentials.json"
-  [[ -f "${CREDS_SRC}" ]] || CREDS_SRC=".credentials.json"
-  [[ -f "${CREDS_SRC}" ]] || CREDS_SRC="${HOME}/.config/yonda/credentials.json"
-  if [[ -f "${CREDS_SRC}" ]]; then
-    gsutil -q cp "${CREDS_SRC}" "gs://${BUCKET_NAME}/.credentials.json"
-    echo "    ✔ .credentials.json"
   fi
+else
+  echo ">>> ローカルデータのアップロードはスキップ（UPLOAD_LOCAL_DATA=1で有効化）"
 fi
 
 # ---------- 5. Secret Manager にシークレットを登録 ----------
@@ -219,7 +223,7 @@ setup_scheduler_job() {
       --schedule="${schedule}" \
       --uri="${FETCH_URL}" \
       --message-body="${FETCH_BODY}" \
-      --headers="Content-Type=application/json" \
+      --update-headers="Content-Type=application/json" \
       --time-zone="Asia/Tokyo" \
       --attempt-deadline=540s \
       --quiet

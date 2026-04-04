@@ -133,20 +133,18 @@ jobs:
             --quiet
           echo "✔ イメージ更新デプロイ完了"
 
-      - name: Create GCS bucket and upload data
+      - name: Create GCS bucket (データアップロードはスキップ)
         if: ${{ github.event.inputs.image_only != 'true' }}
         run: |
           BUCKET_NAME="${{ secrets.GCP_PROJECT_ID }}-${{ env.BUCKET_NAME_PREFIX }}"
           if ! gsutil ls -b "gs://${BUCKET_NAME}" 2>/dev/null; then
             gsutil mb -l ${{ env.REGION }} "gs://${BUCKET_NAME}"
+            echo "  ✔ GCS バケット作成"
           fi
-          for f in library_books.json audible_books.json kindle_books.json; do
-            if [[ -f "data/${f}" ]]; then
-              gsutil -q cp "data/${f}" "gs://${BUCKET_NAME}/${f}"
-              echo "  ✔ ${f}"
-            fi
-          done
-          if [[ -f "data/.credentials.json" ]]; then
+          echo ">>> ローカルデータのアップロードはスキップ（クラウド側で定期取得）"
+          # ローカルの古いデータをアップロードしない
+          # データはCloud Scheduler経由で自動取得される
+          if [[ -f "data/.credentials.json" && ! -f "gs://${BUCKET_NAME}/.credentials.json" ]]; then
             gsutil -q cp "data/.credentials.json" "gs://${BUCKET_NAME}/.credentials.json"
             echo "  ✔ .credentials.json"
           fi
