@@ -185,7 +185,8 @@ gcloud run deploy "${SERVICE_NAME}" \
   --update-env-vars "\
 YONDA_DATA_DIR=${DATA_MOUNT},\
 YONDA_AUTH_FILE=${SECRETS_MOUNT}/auth_jp.json,\
-YONDA_CREDS_PATH=${DATA_MOUNT}/.credentials.json" \
+YONDA_CREDS_PATH=${DATA_MOUNT}/.credentials.json,\
+YONDA_KINDLE_SESSION_PATH=${DATA_MOUNT}/kindle_session.json" \
   --quiet
 
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \

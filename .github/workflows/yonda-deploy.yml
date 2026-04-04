@@ -23,6 +23,7 @@ env:
   REPO_NAME: yonda-repo
   BUCKET_NAME_PREFIX: yonda-data
   DOMAIN: yonda.ktrips.net
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   deploy:
@@ -213,7 +214,7 @@ jobs:
             --add-volume "name=data-vol,type=cloud-storage,bucket=${BUCKET_NAME}" \
             --add-volume-mount "volume=data-vol,mount-path=/mnt/data" \
             --set-secrets "/secrets/auth_jp.json=${AUTH_SECRET}:latest" \
-            --update-env-vars "YONDA_DATA_DIR=/mnt/data,YONDA_AUTH_FILE=/secrets/auth_jp.json,YONDA_CREDS_PATH=/mnt/data/.credentials.json" \
+            --update-env-vars "YONDA_DATA_DIR=/mnt/data,YONDA_AUTH_FILE=/secrets/auth_jp.json,YONDA_CREDS_PATH=/mnt/data/.credentials.json,YONDA_KINDLE_SESSION_PATH=/mnt/data/kindle_session.json" \
             --quiet
           echo "✔ Cloud Run デプロイ完了"
 

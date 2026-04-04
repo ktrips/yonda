@@ -180,11 +180,25 @@ def fetch_and_save(library_id: str) -> dict:
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                               "AppleWebKit/537.36 (KHTML, like Gecko) "
                               "Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
             })
-            if not adapter.login(session, LibraryCredentials(
-                user_id=creds["user_id"], password=creds["password"]
-            )):
-                raise RuntimeError("Amazon へのログインに失敗しました。メールアドレスとパスワードを確認してください。")
+
+            # 1. 保存済みセッションを試す
+            session_loaded = adapter.load_session(session)
+            session_valid = False
+            if session_loaded:
+                logger.info("保存済みセッションを検証中...")
+                session_valid = adapter.verify_session(session)
+
+            # 2. セッションが無効なら再ログイン
+            if not session_valid:
+                logger.info("Amazon に再ログイン中...")
+                if not adapter.login(session, LibraryCredentials(
+                    user_id=creds["user_id"], password=creds["password"]
+                )):
+                    raise RuntimeError("Amazon へのログインに失敗しました。メールアドレスとパスワードを確認してください。")
+
+            # 3. データ取得（取得成功時にセッションが自動保存される）
             records = adapter.fetch_history(session)
         else:
             if not adapter.login(None, None):

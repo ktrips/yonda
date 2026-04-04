@@ -8,7 +8,9 @@ import os
 import plistlib
 import re
 import sqlite3
+import time
 import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -48,6 +50,9 @@ _KINDLE_SQLITE_PATHS = [
 
 class KindleAdapter(LibraryAdapter):
     """Kindle 蔵書アダプタ。Amazonログイン または KindleSyncMetadataCache.xml / BookData.sqlite から取得。"""
+
+    # セッションの有効期限（デフォルト7日間）
+    SESSION_EXPIRY_DAYS = 7
 
     @property
     def library_id(self) -> str:
@@ -225,6 +230,106 @@ class KindleAdapter(LibraryAdapter):
 
         logger.info("Amazon OTP 認証成功")
         return True
+
+    @staticmethod
+    def _get_session_path() -> Path:
+        """セッションファイルのパスを取得"""
+        from config_paths import get_kindle_session_path
+        return get_kindle_session_path()
+
+    def save_session(self, session: requests.Session) -> None:
+        """セッションクッキーを保存"""
+        try:
+            from config_paths import ensure_config_dir
+            ensure_config_dir()
+            session_path = self._get_session_path()
+
+            # クッキーを辞書形式で保存
+            cookies_dict = requests.utils.dict_from_cookiejar(session.cookies)
+            expiry_time = datetime.now() + timedelta(days=self.SESSION_EXPIRY_DAYS)
+
+            session_data = {
+                "cookies": cookies_dict,
+                "expiry": expiry_time.isoformat(),
+                "saved_at": datetime.now().isoformat(),
+            }
+
+            with open(session_path, "w", encoding="utf-8") as f:
+                json.dump(session_data, f, ensure_ascii=False, indent=2)
+            session_path.chmod(0o600)
+            logger.info("Kindle セッションを保存しました（有効期限: %s）", expiry_time.strftime("%Y-%m-%d %H:%M"))
+        except Exception as e:
+            logger.warning("セッション保存に失敗: %s", e)
+
+    def load_session(self, session: requests.Session) -> bool:
+        """保存済みセッションを読み込む。有効期限切れの場合は False を返す"""
+        try:
+            session_path = self._get_session_path()
+            if not session_path.exists():
+                return False
+
+            with open(session_path, "r", encoding="utf-8") as f:
+                session_data = json.load(f)
+
+            # 有効期限チェック
+            expiry_str = session_data.get("expiry")
+            if not expiry_str:
+                logger.debug("セッションに有効期限がありません")
+                return False
+
+            expiry_time = datetime.fromisoformat(expiry_str)
+            if datetime.now() >= expiry_time:
+                logger.info("Kindle セッションの有効期限が切れています")
+                session_path.unlink(missing_ok=True)
+                return False
+
+            # クッキーを復元
+            cookies_dict = session_data.get("cookies", {})
+            if not cookies_dict:
+                logger.debug("セッションにクッキーがありません")
+                return False
+
+            session.cookies.update(requests.utils.cookiejar_from_dict(cookies_dict))
+            saved_at = session_data.get("saved_at", "不明")
+            logger.info("Kindle セッションを読み込みました（保存日時: %s、有効期限: %s）",
+                       saved_at[:19] if len(saved_at) >= 19 else saved_at,
+                       expiry_time.strftime("%Y-%m-%d %H:%M"))
+            return True
+        except Exception as e:
+            logger.debug("セッション読み込みに失敗: %s", e)
+            return False
+
+    def verify_session(self, session: requests.Session) -> bool:
+        """セッションが有効かチェック（FIONA 管理ページにアクセス）"""
+        try:
+            r = session.get(AMAZON_JP + "/gp/digital/fiona/manage", timeout=15, allow_redirects=True)
+            r.raise_for_status()
+
+            # サインインページにリダイレクトされた場合は無効
+            if "signin" in r.url.lower() and "fiona" not in r.url.lower():
+                logger.info("Kindle セッションが無効です（ログインが必要）")
+                return False
+
+            # FIONA ページにアクセスできれば有効
+            if "fiona" in r.url.lower() or "digital" in r.url.lower():
+                logger.info("Kindle セッションは有効です")
+                return True
+
+            logger.debug("Kindle セッション検証: 予期しないURL - %s", r.url)
+            return False
+        except requests.RequestException as e:
+            logger.debug("セッション検証に失敗: %s", e)
+            return False
+
+    def clear_session(self) -> None:
+        """保存済みセッションを削除"""
+        try:
+            session_path = self._get_session_path()
+            if session_path.exists():
+                session_path.unlink()
+                logger.info("Kindle セッションを削除しました")
+        except Exception as e:
+            logger.warning("セッション削除に失敗: %s", e)
 
     @staticmethod
     def _extract_progress_from_item(item: dict) -> tuple[float, str, bool]:
@@ -533,6 +638,10 @@ class KindleAdapter(LibraryAdapter):
                    len(books),
                    sum(1 for b in books if b.completed),
                    sum(b.percent_complete for b in books) / len(books) if books else 0)
+
+        # 取得成功時はセッションを保存（次回の自動取得で再利用）
+        self.save_session(session)
+
         return books
 
     def _find_data_path(self) -> Optional[Path]:

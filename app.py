@@ -1047,6 +1047,8 @@ def _api_fetch_kindle(session_id: str, otp: str):
         if not adapter.submit_otp(session, otp, data.get("otp_page_html")):
             return jsonify({"success": False, "error": "OTP が正しくありません。もう一度お試しください。"}), 401
         records = adapter.fetch_history(session)
+        # OTP認証成功後もセッションを保存（次回自動取得時に再利用）
+        adapter.save_session(session)
         combined = library_service.save_kindle_records_and_load(records)
         return jsonify({"success": True, **combined})
 
@@ -1064,6 +1066,8 @@ def _api_fetch_kindle(session_id: str, otp: str):
     ok, needs_otp, otp_page_html = adapter._login_amazon(session, creds_obj)
     if ok:
         records = adapter.fetch_history(session)
+        # ログイン成功時もセッションを保存（次回自動取得時に再利用）
+        adapter.save_session(session)
         combined = library_service.save_kindle_records_and_load(records)
         return jsonify({"success": True, **combined})
     if needs_otp and otp_page_html:
@@ -1174,6 +1178,8 @@ def api_kindle_login():
 
         if ok:
             library_service.save_credentials("kindle", user_id, password)
+            # ログイン成功時もセッションを保存（次回自動取得時に再利用）
+            adapter.save_session(session)
             return jsonify({"success": True, "message": "ログインに成功しました"})
         if needs_otp and otp_page_html:
             session_id = str(uuid.uuid4())
@@ -1220,6 +1226,8 @@ def api_kindle_login_otp():
         adapter = KindleAdapter()
         if adapter.submit_otp(session, otp, data.get("otp_page_html")):
             library_service.save_credentials("kindle", data["user_id"], data["password"])
+            # OTP認証成功時もセッションを保存（次回自動取得時に再利用）
+            adapter.save_session(session)
             return jsonify({"success": True, "message": "ログインに成功しました"})
         return jsonify({"success": False, "error": "OTP が正しくありません。もう一度お試しください。"}), 401
     except Exception as e:

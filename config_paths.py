@@ -83,3 +83,13 @@ def ensure_config_dir() -> Path:
     d = _config_dir()
     _ensure_secure_dir(d)
     return d
+
+
+# Kindle セッション（セッションクッキー保存）
+def get_kindle_session_path() -> Path:
+    """Kindle セッションクッキーの保存先パス"""
+    path = os.environ.get("YONDA_KINDLE_SESSION_PATH")
+    if path:
+        return Path(path).expanduser().resolve()
+    cfg_dir = _config_dir()
+    return cfg_dir / "kindle_session.json"

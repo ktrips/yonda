@@ -63,9 +63,15 @@ python -m app
 
 ## Kindle の取得方法
 
-1. **Amazon ログイン**: 認証情報を登録し、2段階認証（OTP）が必要な場合は取得時に OTP を入力
+1. **Amazon ログイン（推奨）**: 認証情報を登録し、初回のみ2段階認証（OTP）を入力。**セッションが自動保存されるため、次回以降は OTP なしで自動取得できます**
 2. **ローカルファイル**: Kindle for Mac を起動して蔵書を同期し、認証なしで取得
 3. **フォールバック**: 認証 + ローカルファイルを用意しておくと、API 失敗時に自動でローカルから取得
+
+### セッション永続化
+
+- 初回 OTP 認証後、セッションが `~/.config/yonda/kindle_session.json` に7日間保存されます
+- Cloud Scheduler による定期取得時、保存済みセッションが自動再利用されます
+- セッションが無効になった場合のみ、再ログイン（OTP 必要）が行われます
 
 詳細は [docs/KINDLE_SETUP.md](docs/KINDLE_SETUP.md) を参照。
 
@@ -100,6 +106,7 @@ python -m app
 | `YONDA_AUTH_FILE` | Audible 認証ファイル（auth_jp.json）のパス |
 | `YONDA_KINDLE_SQLITE_PATH` | Kindle BookData.sqlite のパス（任意） |
 | `YONDA_KINDLE_XML_PATH` | KindleSyncMetadataCache.xml のパス（任意） |
+| `YONDA_KINDLE_SESSION_PATH` | Kindle セッションファイルのパス（デフォルト: `~/.config/yonda/kindle_session.json`） |
 
 **ローカル起動時にクラウドのデータを参照する場合:**
 
@@ -142,9 +149,15 @@ Google Cloud Run へのデプロイ方法は 2 通りあります。
 
 > **Kindle のクラウド取得について**  
 > Cloud Run 環境には Kindle for Mac がないため、以下いずれかの方法で取得可能です。  
-> - Amazon メール・パスワードを登録（OTP なし設定の場合）  
+> - **Amazon メール・パスワードを登録**（推奨）: 初回のみ OTP 入力が必要ですが、**セッションが自動保存されるため、次回以降は OTP なしで自動取得できます**（セッション有効期限: 7日間）  
 > - `BookData.sqlite` を GCS バケットに配置し、`YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite` を設定  
-> OTP が必要な場合は Kindle のみスキップされ、他ソースの取得は継続されます。
+> 
+> **セッション永続化機能**により、OTP 認証後のセッションが `~/.config/yonda/kindle_session.json` に保存され、次回以降は保存済みセッションが再利用されます。セッション管理スクリプトで状態確認が可能です:
+> ```bash
+> python scripts/kindle_session_manager.py status   # セッション状態確認
+> python scripts/kindle_session_manager.py verify   # 有効性検証
+> python scripts/kindle_session_manager.py clear    # セッション削除
+> ```
 
 ### GitHub Actions セットアップ（初回のみ）
 
