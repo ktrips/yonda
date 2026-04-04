@@ -51,14 +51,16 @@
       </ul>
 
       <h2>Kindle</h2>
-      <p><strong>方法1: Amazon にログイン</strong></p>
+      <p><strong>方法1: Amazon にログイン（推奨）</strong></p>
       <ul>
         <li>メニュー → アカウント設定でソース「Kindle」を選択</li>
         <li>Amazon メールアドレスとパスワードを入力し「ログインテスト & 保存」</li>
         <li>2段階認証（OTP）が有効な場合、「読書記録を取得」時に OTP 入力画面が表示されます</li>
         <li>OTP を入力して「OTP を送信して取得」をクリック</li>
+        <li><strong>セッション永続化</strong>：OTP 認証後のセッションが自動保存され、<strong>次回以降は OTP なしで取得できます</strong>（有効期間: 約7日）</li>
+        <li>セッションが切れた場合のみ、再度 OTP 入力が必要になります</li>
       </ul>
-      <p><strong>方法2: ローカルファイル（推奨）</strong></p>
+      <p><strong>方法2: ローカルファイル</strong></p>
       <ul>
         <li>Kindle for Mac/PC をインストールし、蔵書を同期しておく</li>
         <li>データファイルが自動検出されれば、認証なしで取得可能</li>
@@ -76,12 +78,14 @@
         <li><strong>朝 06:00 / 昼 12:00 / 夕 18:00（JST）</strong>に図書館・Audible・Kindle を一括取得</li>
         <li>取得結果は GCS バケットに自動保存されます</li>
         <li>一部ソースが失敗しても他ソースの取得は継続されます</li>
+        <li>メニューの「読書記録取込み」で、ソースごとの最終取得日時を確認できます</li>
       </ul>
       <p><strong>Kindle のクラウド自動取得</strong></p>
       <ul>
-        <li>Amazon メール・パスワードを登録し、OTP（2段階認証）なしの設定であれば自動取得可能</li>
-        <li>OTP が必要な設定の場合は自動取得がスキップされます（他ソースは継続）</li>
-        <li><code>BookData.sqlite</code> を GCS バケットに配置し、環境変数 <code>YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite</code> を設定する方法でも取得可能</li>
+        <li>Amazon メール・パスワードを登録し、初回のみ手動で OTP 入力して取得を実行します</li>
+        <li>認証後セッションが GCS に自動保存され、以降は Cloud Scheduler が <strong>OTP なしで自動取得</strong>します（有効期間: 約7日）</li>
+        <li>セッション期限切れ後は、再度手動で OTP 入力が必要です</li>
+        <li>または <code>BookData.sqlite</code> を GCS バケットに配置し、<code>YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite</code> を設定する方法でも取得可能</li>
       </ul>
 
       <h2>AI推し・写真検索（APIエラーが出る場合）</h2>

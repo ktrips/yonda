@@ -23,6 +23,7 @@
 - **評価・お気に入り**: 本ごとに★評価とお気に入り登録（Audible はカタログ評価を表示）
 - **表紙**: Open Library / Google Books API で自動取得
 - **Yonda オススメ**: 読了本の傾向から未読本を AI で 5 冊推薦
+- **最終同期日時**: メニューの「読書記録取込み」にソースごとの最終取得日時を表示（例: `図書館 4/3 06:00`）
 
 ### Yomu（何読む？）— 次に読みたい本検索
 
@@ -79,9 +80,9 @@ python -m app
 
 | ファイル | ソース |
 |----------|--------|
-| `library_books.json` | 図書館 |
-| `audible_books.json` | Audible |
-| `kindle_books.json` | Kindle |
+| `library_books.json` | 図書館（`fetch_date` フィールドに最終取得日時を記録） |
+| `audible_books.json` | Audible（同上） |
+| `kindle_books.json` | Kindle（同上） |
 | `BookData.sqlite` | Kindle（ローカル同期用） |
 
 読書データは `yonda/data/`（環境変数 `YONDA_DATA_DIR` で変更可能）。

@@ -27,10 +27,19 @@
       <a href="{{ url_for('index') }}" class="help-back" id="helpBackLink">← アプリに戻る</a>
       <h1>Yondaの使い方</h1>
       <nav class="help-nav">
+        <a href="#fetch">読書記録取込み</a>
         <a href="#yonda">読んだ？</a>
         <a href="#yomu">何読む？</a>
         <a href="#oshi">AI推し</a>
       </nav>
+
+      <h2 id="fetch">読書記録取込み</h2>
+      <p>メニュー右上の「読書記録取込み」から各ソースのデータを取得します。</p>
+      <ul>
+        <li>メニューを開くと、図書館・Audible・Kindle の<strong>最終取得日時</strong>がソースごとに表示されます</li>
+        <li>「読書記録取込み」をタップすると取得ソースを選択できます</li>
+        <li>Cloud Run 環境では <strong>毎日 06:00 / 12:00 / 18:00（JST）</strong>に自動取得されるため、手動操作は不要です</li>
+      </ul>
 
       <h2 id="yonda">読んだ？</h2>
       <p>読書記録の表示・管理</p>

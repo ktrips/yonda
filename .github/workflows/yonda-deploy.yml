@@ -144,9 +144,11 @@ jobs:
           echo ">>> ローカルデータのアップロードはスキップ（クラウド側で定期取得）"
           # ローカルの古いデータをアップロードしない
           # データはCloud Scheduler経由で自動取得される
-          if [[ -f "data/.credentials.json" && ! -f "gs://${BUCKET_NAME}/.credentials.json" ]]; then
-            gsutil -q cp "data/.credentials.json" "gs://${BUCKET_NAME}/.credentials.json"
-            echo "  ✔ .credentials.json"
+          if [[ -f "data/.credentials.json" ]]; then
+            if ! gsutil -q stat "gs://${BUCKET_NAME}/.credentials.json" 2>/dev/null; then
+              gsutil -q cp "data/.credentials.json" "gs://${BUCKET_NAME}/.credentials.json"
+              echo "  ✔ .credentials.json"
+            fi
           fi
 
       - name: Create or update secrets
@@ -246,8 +248,8 @@ jobs:
                 --headers="Content-Type=application/json" \
                 --time-zone="Asia/Tokyo" \
                 --attempt-deadline=540s \
-                --quiet
-              echo "  ✔ ${name} (更新)"
+                --quiet \
+              && echo "  ✔ ${name} (更新)" || echo "  ⚠ ${name} 更新スキップ（権限不足）"
             else
               gcloud scheduler jobs create http "${name}" \
                 --location=${{ env.REGION }} \
@@ -257,10 +259,11 @@ jobs:
                 --headers="Content-Type=application/json" \
                 --time-zone="Asia/Tokyo" \
                 --attempt-deadline=540s \
-                --quiet
-              echo "  ✔ ${name} (新規作成)"
+                --quiet \
+              && echo "  ✔ ${name} (新規作成)" || echo "  ⚠ ${name} 作成スキップ（権限不足）"
             fi
           }
           setup_job "yonda-fetch-morning" "0 6 * * *"
           setup_job "yonda-fetch-noon"    "0 12 * * *"
           setup_job "yonda-fetch-evening" "0 18 * * *"
+          echo "  ℹ Cloud Scheduler の権限が不足している場合はローカルで手動設定してください"
