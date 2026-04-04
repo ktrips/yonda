@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API ドキュメント — Yonda</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .doc-page { max-width: 780px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+    .doc-page h1 { font-size: 1.5rem; margin-bottom: 0.4rem; color: var(--accent); font-family: var(--font-title); }
+    .doc-page .subtitle { font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 2rem; }
+    .doc-page h2 { font-size: 1.05rem; margin: 2.5rem 0 0.75rem; color: var(--text); border-bottom: 2px solid var(--border); padding-bottom: 0.35rem; }
+    .doc-page h3 { font-size: 0.92rem; margin: 1.5rem 0 0.4rem; color: var(--text); }
+    .doc-page p { font-size: 0.88rem; color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.6rem; }
+    .doc-page ul { font-size: 0.88rem; color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; padding-left: 1.25rem; }
+    .doc-page a { color: var(--accent); }
+    .doc-back { display: inline-block; margin-bottom: 1.5rem; font-size: 0.85rem; }
+
+    /* エンドポイントバッジ */
+    .endpoint {
+      display: flex; align-items: flex-start; gap: 0.6rem;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 0.75rem 1rem;
+      margin-bottom: 0.75rem; flex-wrap: wrap;
+    }
+    .method {
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;
+      padding: 0.2rem 0.5rem; border-radius: 3px; flex-shrink: 0; margin-top: 1px;
+    }
+    .method.get  { background: #d4f0d4; color: #2a6b2a; }
+    .method.post { background: #fce8d8; color: #7a3010; }
+    .endpoint-path { font-family: monospace; font-size: 0.88rem; color: var(--text); word-break: break-all; }
+    .endpoint-desc { width: 100%; font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.2rem; }
+
+    /* パラメータテーブル */
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin: 0.75rem 0 1.25rem; }
+    th { text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);
+         padding: 0.35rem 0.6rem; border-bottom: 2px solid var(--border); background: var(--accent-light); }
+    td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--text); }
+    td code { font-size: 0.78rem; background: var(--accent-light); padding: 0.1rem 0.3rem; border-radius: 3px; }
+    tr:last-child td { border-bottom: none; }
+
+    /* コードブロック */
+    pre {
+      background: #2b2219; color: #f0e8d8;
+      border-radius: var(--radius); padding: 1rem 1.2rem;
+      font-size: 0.78rem; line-height: 1.6; overflow-x: auto;
+      margin: 0.5rem 0 1.25rem; font-family: 'Menlo', 'Monaco', monospace;
+    }
+    pre .c  { color: #8a7968; }  /* comment */
+    pre .k  { color: #c8963e; }  /* keyword / key */
+    pre .s  { color: #a8d8a8; }  /* string */
+    pre .n  { color: #f0e8d8; }  /* number / base */
+
+    /* インラインコード */
+    code { font-size: 0.8em; background: var(--accent-light); padding: 0.1rem 0.3rem; border-radius: 3px; }
+
+    /* ベース URL ボックス */
+    .base-url-box {
+      display: flex; align-items: center; gap: 0.75rem;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-left: 4px solid var(--accent); border-radius: var(--radius);
+      padding: 0.75rem 1rem; margin-bottom: 1rem;
+    }
+    .base-url-label { font-size: 0.72rem; font-weight: 700; color: var(--text-secondary); flex-shrink: 0; }
+    .base-url-value { font-family: monospace; font-size: 0.9rem; color: var(--accent); font-weight: 600; }
+
+    /* セクション番号 */
+    .section-tag {
+      display: inline-block; background: var(--accent); color: #fff;
+      font-size: 0.65rem; font-weight: 700; padding: 0.15rem 0.4rem;
+      border-radius: 3px; margin-right: 0.4rem; vertical-align: middle;
+    }
+
+    /* Slack コマンド表 */
+    .cmd-table td:first-child { font-family: monospace; white-space: nowrap; color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="doc-page">
+      <a href="{{ url_for('index') }}" class="doc-back">← Yonda に戻る</a>
+
+      <h1>Yonda API ドキュメント</h1>
+      <p class="subtitle">読書記録にアクセスするための REST API です。</p>
+
+      <!-- ベース URL -->
+      <h2><span class="section-tag">1</span>ベース URL</h2>
+      <div class="base-url-box">
+        <span class="base-url-label">本番</span>
+        <span class="base-url-value">https://yonda.ktrips.net</span>
+      </div>
+      <div class="base-url-box">
+        <span class="base-url-label">ローカル</span>
+        <span class="base-url-value">http://localhost:8080</span>
+      </div>
+
+      <!-- 認証 -->
+      <h2><span class="section-tag">2</span>認証</h2>
+      <p>現在、認証は不要です（パブリックアクセス）。<br>
+        Slack コマンド (<code>/slack/command</code>) は <strong>Slack 署名検証</strong>（<code>SLACK_SIGNING_SECRET</code> 環境変数）で保護されています。</p>
+
+      <!-- /api/v1/books -->
+      <h2><span class="section-tag">3</span>エンドポイント</h2>
+
+      <h3>書籍一覧</h3>
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/v1/books</span>
+        <span class="endpoint-desc">読書記録を条件でフィルタリングして返します。</span>
+      </div>
+
+      <table>
+        <thead><tr><th>パラメータ</th><th>型</th><th>デフォルト</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr><td><code>status</code></td><td>string</td><td><code>all</code></td><td><code>read</code> 読了 / <code>unread</code> 未読 / <code>in_progress</code> 読中 / <code>all</code></td></tr>
+          <tr><td><code>source</code></td><td>string</td><td><code>all</code></td><td><code>kindle</code> / <code>audible_jp</code> / <code>setagaya</code> / <code>all</code></td></tr>
+          <tr><td><code>q</code></td><td>string</td><td>—</td><td>タイトル・著者の部分一致検索</td></tr>
+          <tr><td><code>sort</code></td><td>string</td><td><code>loan_date_desc</code></td><td><code>loan_date_desc</code> / <code>completed_date_desc</code> / <code>percent_desc</code> / <code>title_asc</code></td></tr>
+          <tr><td><code>limit</code></td><td>integer</td><td><code>50</code></td><td>最大 200</td></tr>
+          <tr><td><code>offset</code></td><td>integer</td><td><code>0</code></td><td>ページオフセット</td></tr>
+        </tbody>
+      </table>
+
+      <p><strong>リクエスト例:</strong></p>
+<pre><span class="c"># 読了済みの Kindle 本（新しい順）</span>
+GET /api/v1/books?status=read&source=kindle&sort=completed_date_desc
+
+<span class="c"># 読んでいる途中の本</span>
+GET /api/v1/books?status=in_progress
+
+<span class="c"># タイトル検索</span>
+GET /api/v1/books?q=ハリーポッター&limit=10</pre>
+
+      <p><strong>レスポンス:</strong></p>
+<pre>{
+  <span class="k">"success"</span>: <span class="s">true</span>,
+  <span class="k">"total"</span>: <span class="n">42</span>,
+  <span class="k">"offset"</span>: <span class="n">0</span>,
+  <span class="k">"limit"</span>: <span class="n">50</span>,
+  <span class="k">"books"</span>: [
+    {
+      <span class="k">"title"</span>:            <span class="s">"本のタイトル"</span>,
+      <span class="k">"author"</span>:           <span class="s">"著者名"</span>,
+      <span class="k">"loan_date"</span>:        <span class="s">"2024-01-15"</span>,   <span class="c">// 購入日・貸出日</span>
+      <span class="k">"completed"</span>:        <span class="s">true</span>,
+      <span class="k">"completed_date"</span>:   <span class="s">"2024-03-10"</span>,
+      <span class="k">"percent_complete"</span>: <span class="n">100.0</span>,
+      <span class="k">"cover_url"</span>:        <span class="s">"https://m.media-amazon.com/..."</span>,
+      <span class="k">"detail_url"</span>:       <span class="s">"https://www.amazon.co.jp/dp/B0XXXXX"</span>,
+      <span class="k">"catalog_number"</span>:   <span class="s">"B0XXXXX"</span>,       <span class="c">// ASIN または図書館番号</span>
+      <span class="k">"source"</span>:           <span class="s">"kindle"</span>,
+      <span class="k">"genre"</span>:            <span class="s">"小説"</span>,
+      <span class="k">"rating"</span>:           <span class="n">4</span>,
+      <span class="k">"favorite"</span>:         <span class="s">false</span>
+    }
+  ]
+}</pre>
+
+      <!-- /api/v1/books/stats -->
+      <h3>統計情報</h3>
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/v1/books/stats</span>
+        <span class="endpoint-desc">総冊数・読了数・ソース別の内訳などの統計を返します。</span>
+      </div>
+
+<pre>{
+  <span class="k">"success"</span>:              <span class="s">true</span>,
+  <span class="k">"total"</span>:               <span class="n">150</span>,
+  <span class="k">"read"</span>:                <span class="n">80</span>,
+  <span class="k">"in_progress"</span>:         <span class="n">12</span>,
+  <span class="k">"unread"</span>:              <span class="n">58</span>,
+  <span class="k">"read_this_year"</span>:      <span class="n">24</span>,
+  <span class="k">"avg_percent_complete"</span>: <span class="n">45.3</span>,
+  <span class="k">"by_source"</span>: {
+    <span class="k">"kindle"</span>:     { <span class="k">"total"</span>: <span class="n">100</span>, <span class="k">"read"</span>: <span class="n">60</span>, <span class="k">"in_progress"</span>: <span class="n">10</span>, <span class="k">"unread"</span>: <span class="n">30</span> },
+    <span class="k">"audible_jp"</span>: { <span class="k">"total"</span>: <span class="n">40</span>,  <span class="k">"read"</span>: <span class="n">18</span>, <span class="k">"in_progress"</span>: <span class="n">2</span>,  <span class="k">"unread"</span>: <span class="n">20</span> },
+    <span class="k">"setagaya"</span>:   { <span class="k">"total"</span>: <span class="n">10</span>,  <span class="k">"read"</span>: <span class="n">2</span>,  <span class="k">"in_progress"</span>: <span class="n">0</span>,  <span class="k">"unread"</span>: <span class="n">8</span>  }
+  }
+}</pre>
+
+      <!-- /api/v1/books/:catalog_number -->
+      <h3>書籍詳細</h3>
+      <div class="endpoint">
+        <span class="method get">GET</span>
+        <span class="endpoint-path">/api/v1/books/<strong>{catalog_number}</strong></span>
+        <span class="endpoint-desc">ASIN や図書館番号で1冊を取得します。</span>
+      </div>
+
+<pre><span class="c"># Kindle の本を ASIN で取得</span>
+GET /api/v1/books/B0XXXXX</pre>
+
+<pre>{
+  <span class="k">"success"</span>: <span class="s">true</span>,
+  <span class="k">"book"</span>: { <span class="c">/* 書籍オブジェクト（上記と同じ形式）*/</span> }
+}
+
+<span class="c">// 見つからない場合</span>
+{ <span class="k">"success"</span>: <span class="s">false</span>, <span class="k">"error"</span>: <span class="s">"該当する書籍が見つかりません"</span> }  <span class="c">// 404</span></pre>
+
+      <!-- Slack -->
+      <h2><span class="section-tag">4</span>Slack コマンド</h2>
+      <div class="endpoint">
+        <span class="method post">POST</span>
+        <span class="endpoint-path">/slack/command</span>
+        <span class="endpoint-desc">Slack Slash Command <code>/yonda</code> のエンドポイント。Slack 署名検証あり。</span>
+      </div>
+
+      <p>Slack App に Slash Command <code>/yonda</code> を設定し、Request URL にこのエンドポイントを指定してください。<br>
+        環境変数 <code>SLACK_SIGNING_SECRET</code> の設定が必要です。</p>
+
+      <table class="cmd-table">
+        <thead><tr><th>コマンド</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr><td>/yonda read</td><td>直近の読了済みの本（最大5冊）</td></tr>
+          <tr><td>/yonda reading</td><td>読んでいる途中の本（進捗の高い順）</td></tr>
+          <tr><td>/yonda unread</td><td>未読の本</td></tr>
+          <tr><td>/yonda stats</td><td>統計情報（総冊数・ソース別など）</td></tr>
+          <tr><td>/yonda &lt;キーワード&gt;</td><td>タイトル・著者で検索</td></tr>
+          <tr><td>/yonda help</td><td>ヘルプを表示</td></tr>
+        </tbody>
+      </table>
+
+      <!-- 書籍オブジェクト一覧 -->
+      <h2><span class="section-tag">5</span>書籍オブジェクトのフィールド一覧</h2>
+      <table>
+        <thead><tr><th>フィールド</th><th>型</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr><td><code>title</code></td><td>string</td><td>タイトル</td></tr>
+          <tr><td><code>author</code></td><td>string</td><td>著者</td></tr>
+          <tr><td><code>loan_date</code></td><td>string</td><td>購入日・貸出日（YYYY-MM-DD）</td></tr>
+          <tr><td><code>completed</code></td><td>boolean</td><td>読了済みかどうか</td></tr>
+          <tr><td><code>completed_date</code></td><td>string</td><td>読了日（YYYY-MM-DD）</td></tr>
+          <tr><td><code>percent_complete</code></td><td>number</td><td>読書進捗 0.0〜100.0（Kindle / Audible）</td></tr>
+          <tr><td><code>cover_url</code></td><td>string</td><td>カバー画像 URL</td></tr>
+          <tr><td><code>detail_url</code></td><td>string</td><td>Amazon / 図書館の詳細ページ URL</td></tr>
+          <tr><td><code>catalog_number</code></td><td>string</td><td>ASIN または図書館番号</td></tr>
+          <tr><td><code>source</code></td><td>string</td><td><code>kindle</code> / <code>audible_jp</code> / <code>setagaya</code></td></tr>
+          <tr><td><code>genre</code></td><td>string</td><td>ジャンル</td></tr>
+          <tr><td><code>rating</code></td><td>integer</td><td>評価 0〜5</td></tr>
+          <tr><td><code>favorite</code></td><td>boolean</td><td>お気に入り</td></tr>
+          <tr><td><code>summary</code></td><td>string</td><td>概要（短縮版）</td></tr>
+          <tr><td><code>runtime_length_min</code></td><td>integer</td><td>再生時間（分）Audible のみ</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>

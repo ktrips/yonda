@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
 import re
 import socket
+import time
 import uuid
 from pathlib import Path
 
@@ -40,6 +43,11 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB（長い会話履歴
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/api/docs")
+def api_docs():
+    return render_template("api_docs.html")
 
 
 @app.route("/help")
@@ -1292,6 +1300,330 @@ def api_test_login():
         return jsonify({"success": False, "error": str(e)}), 400
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ===========================================================================
+# /api/v1/books — 読書記録アクセス API
+# ===========================================================================
+
+@app.route("/api/v1/books")
+def api_v1_books():
+    """読書記録を条件でフィルタリングして返す
+
+    Query params:
+      status   : read | unread | in_progress | all (default: all)
+      source   : kindle | audible_jp | setagaya | all (default: all)
+      q        : タイトル・著者の部分一致検索
+      sort     : loan_date_desc (default) | completed_date_desc | percent_desc | title_asc
+      limit    : 1–200 (default: 50)
+      offset   : default 0
+    """
+    try:
+        data = library_service.load_saved()
+        books = data.get("books", []) if data else []
+
+        status = request.args.get("status", "all").strip().lower()
+        source = request.args.get("source", "all").strip().lower()
+        q = request.args.get("q", "").strip().lower()
+        sort = request.args.get("sort", "loan_date_desc").strip().lower()
+        try:
+            limit = min(int(request.args.get("limit", 50)), 200)
+            offset = max(int(request.args.get("offset", 0)), 0)
+        except ValueError:
+            return jsonify({"success": False, "error": "limit/offset は整数で指定してください"}), 400
+
+        # ソースフィルタ
+        if source != "all":
+            books = [b for b in books if b.get("source") == source]
+
+        # 状態フィルタ
+        if status == "read":
+            books = [b for b in books if b.get("completed")]
+        elif status == "unread":
+            books = [b for b in books if not b.get("completed") and (b.get("percent_complete") or 0) == 0]
+        elif status == "in_progress":
+            books = [b for b in books if not b.get("completed") and (b.get("percent_complete") or 0) > 0]
+
+        # テキスト検索
+        if q:
+            books = [
+                b for b in books
+                if q in (b.get("title") or "").lower()
+                or q in (b.get("author") or "").lower()
+            ]
+
+        # ソート
+        if sort == "completed_date_desc":
+            books = sorted(books, key=lambda b: b.get("completed_date") or "", reverse=True)
+        elif sort == "percent_desc":
+            books = sorted(books, key=lambda b: b.get("percent_complete") or 0, reverse=True)
+        elif sort == "title_asc":
+            books = sorted(books, key=lambda b: (b.get("title") or "").lower())
+        else:  # loan_date_desc (default)
+            books = sorted(books, key=lambda b: b.get("loan_date") or "", reverse=True)
+
+        total = len(books)
+        page = books[offset: offset + limit]
+
+        return jsonify({
+            "success": True,
+            "total": total,
+            "offset": offset,
+            "limit": limit,
+            "books": page,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/v1/books/stats")
+def api_v1_books_stats():
+    """読書記録の統計情報を返す"""
+    try:
+        import datetime
+        data = library_service.load_saved()
+        books = data.get("books", []) if data else []
+
+        this_year = str(datetime.date.today().year)
+        read = [b for b in books if b.get("completed")]
+        in_progress = [b for b in books if not b.get("completed") and (b.get("percent_complete") or 0) > 0]
+        unread = [b for b in books if not b.get("completed") and (b.get("percent_complete") or 0) == 0]
+        read_this_year = [b for b in read if (b.get("completed_date") or "").startswith(this_year)]
+
+        sources = {}
+        for b in books:
+            src = b.get("source") or "unknown"
+            if src not in sources:
+                sources[src] = {"total": 0, "read": 0, "in_progress": 0, "unread": 0}
+            sources[src]["total"] += 1
+            if b.get("completed"):
+                sources[src]["read"] += 1
+            elif (b.get("percent_complete") or 0) > 0:
+                sources[src]["in_progress"] += 1
+            else:
+                sources[src]["unread"] += 1
+
+        avg_percent = (
+            sum(b.get("percent_complete") or 0 for b in books) / len(books)
+            if books else 0
+        )
+
+        return jsonify({
+            "success": True,
+            "total": len(books),
+            "read": len(read),
+            "in_progress": len(in_progress),
+            "unread": len(unread),
+            "read_this_year": len(read_this_year),
+            "avg_percent_complete": round(avg_percent, 1),
+            "by_source": sources,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/v1/books/<catalog_number>")
+def api_v1_book_detail(catalog_number: str):
+    """ASIN や図書館番号で1冊の詳細を返す"""
+    try:
+        data = library_service.load_saved()
+        books = data.get("books", []) if data else []
+
+        book = next(
+            (b for b in books if b.get("catalog_number") == catalog_number),
+            None,
+        )
+        if book is None:
+            return jsonify({"success": False, "error": "該当する書籍が見つかりません"}), 404
+
+        return jsonify({"success": True, "book": book})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ===========================================================================
+# /slack/command — Slack Slash Command (/yonda)
+# ===========================================================================
+
+def _verify_slack_signature(request_body: bytes, timestamp: str, signature: str) -> bool:
+    """Slack リクエストの署名を検証する"""
+    signing_secret = os.environ.get("SLACK_SIGNING_SECRET", "")
+    if not signing_secret:
+        logger.warning("SLACK_SIGNING_SECRET が未設定です")
+        return False
+    # リプレイ攻撃防止: 5分以上古いリクエストは拒否
+    try:
+        if abs(time.time() - float(timestamp)) > 300:
+            return False
+    except (ValueError, TypeError):
+        return False
+    basestring = f"v0:{timestamp}:{request_body.decode('utf-8')}"
+    expected = "v0=" + hmac.new(
+        signing_secret.encode(), basestring.encode(), hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+def _slack_book_block(book: dict) -> list:
+    """1冊分の Slack Block Kit ブロックを生成"""
+    title = book.get("title") or "不明"
+    author = book.get("author") or ""
+    source = {"kindle": "Kindle", "audible_jp": "Audible", "setagaya": "図書館"}.get(
+        book.get("source", ""), book.get("source", "")
+    )
+    detail_url = book.get("detail_url") or ""
+    title_text = f"<{detail_url}|{title}>" if detail_url else title
+
+    status_parts = []
+    if book.get("completed"):
+        date = book.get("completed_date") or ""
+        status_parts.append(f"✅ 読了{(' ' + date) if date else ''}")
+    elif (book.get("percent_complete") or 0) > 0:
+        pct = round(book["percent_complete"])
+        status_parts.append(f"📖 読中 {pct}%")
+    else:
+        status_parts.append("📚 未読")
+
+    if author:
+        status_parts.append(f"著者: {author}")
+    if book.get("loan_date"):
+        status_parts.append(f"取得: {book['loan_date']}")
+    status_parts.append(f"[{source}]")
+
+    return [
+        {"type": "section", "text": {"type": "mrkdwn", "text": f"*{title_text}*"}},
+        {"type": "context", "elements": [{"type": "mrkdwn", "text": "  ".join(status_parts)}]},
+        {"type": "divider"},
+    ]
+
+
+def _slack_books_response(books: list, header: str, total: int) -> dict:
+    """書籍リストを Slack Block Kit レスポンスに変換（最大5冊表示）"""
+    shown = books[:5]
+    blocks: list = [
+        {"type": "header", "text": {"type": "plain_text", "text": header}},
+    ]
+    if not shown:
+        blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": "該当する本が見つかりませんでした。"}})
+    else:
+        for book in shown:
+            blocks.extend(_slack_book_block(book))
+        if total > 5:
+            blocks.append({
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": f"他 {total - 5} 冊 → <https://yonda.ktrips.net|Yonda で全件表示>"}],
+            })
+    return {"response_type": "in_channel", "blocks": blocks}
+
+
+@app.route("/slack/command", methods=["POST"])
+def slack_command():
+    """Slack Slash Command /yonda のエンドポイント
+
+    使い方:
+      /yonda read       — 直近の読了済み本
+      /yonda reading    — 読んでいる途中の本
+      /yonda unread     — 未読の本
+      /yonda stats      — 統計情報
+      /yonda <キーワード> — タイトル・著者を検索
+      /yonda help       — ヘルプ
+    """
+    # 署名検証
+    body = request.get_data()
+    ts = request.headers.get("X-Slack-Request-Timestamp", "")
+    sig = request.headers.get("X-Slack-Signature", "")
+    if not _verify_slack_signature(body, ts, sig):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    text = (request.form.get("text") or "").strip().lower()
+    sub, _, rest = text.partition(" ")
+    rest = rest.strip()
+
+    try:
+        data = library_service.load_saved()
+        books = data.get("books", []) if data else []
+
+        # --- read ---
+        if sub in ("read", "既読", "読了"):
+            filtered = sorted(
+                [b for b in books if b.get("completed")],
+                key=lambda b: b.get("completed_date") or b.get("loan_date") or "",
+                reverse=True,
+            )
+            return jsonify(_slack_books_response(filtered, f"✅ 読了済み（{len(filtered)} 冊）", len(filtered)))
+
+        # --- reading / in_progress ---
+        elif sub in ("reading", "read_progress", "読中", "途中"):
+            filtered = sorted(
+                [b for b in books if not b.get("completed") and (b.get("percent_complete") or 0) > 0],
+                key=lambda b: b.get("percent_complete") or 0,
+                reverse=True,
+            )
+            return jsonify(_slack_books_response(filtered, f"📖 読んでいる途中（{len(filtered)} 冊）", len(filtered)))
+
+        # --- unread ---
+        elif sub in ("unread", "未読", "積読"):
+            filtered = sorted(
+                [b for b in books if not b.get("completed") and (b.get("percent_complete") or 0) == 0],
+                key=lambda b: b.get("loan_date") or "",
+                reverse=True,
+            )
+            return jsonify(_slack_books_response(filtered, f"📚 未読（{len(filtered)} 冊）", len(filtered)))
+
+        # --- stats ---
+        elif sub in ("stats", "統計"):
+            import datetime
+            this_year = str(datetime.date.today().year)
+            read = [b for b in books if b.get("completed")]
+            in_prog = [b for b in books if not b.get("completed") and (b.get("percent_complete") or 0) > 0]
+            unread = [b for b in books if not b.get("completed") and (b.get("percent_complete") or 0) == 0]
+            read_yr = [b for b in read if (b.get("completed_date") or "").startswith(this_year)]
+            by_src = {}
+            for b in books:
+                s = {"kindle": "Kindle 📱", "audible_jp": "Audible 🎧", "setagaya": "図書館 🏛️"}.get(b.get("source", ""), b.get("source", ""))
+                by_src[s] = by_src.get(s, 0) + 1
+            src_lines = "\n".join(f"  • {s}: {n} 冊" for s, n in sorted(by_src.items(), key=lambda x: -x[1]))
+            text_body = (
+                f"*Yonda 読書統計*\n\n"
+                f"📚 総冊数: *{len(books)}* 冊\n"
+                f"✅ 読了: *{len(read)}* 冊（{this_year}年: *{len(read_yr)}* 冊）\n"
+                f"📖 読中: *{len(in_prog)}* 冊\n"
+                f"🗂️ 未読: *{len(unread)}* 冊\n\n"
+                f"*ソース別*\n{src_lines}"
+            )
+            return jsonify({
+                "response_type": "in_channel",
+                "blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": text_body}}],
+            })
+
+        # --- help ---
+        elif sub in ("help", "ヘルプ", ""):
+            help_text = (
+                "*Yonda Slack コマンド*\n\n"
+                "`/yonda read` — 読了済みの本\n"
+                "`/yonda reading` — 読んでいる途中の本\n"
+                "`/yonda unread` — 未読の本\n"
+                "`/yonda stats` — 統計情報\n"
+                "`/yonda <キーワード>` — タイトル・著者を検索\n\n"
+                f"🔗 <https://yonda.ktrips.net|Yonda を開く>"
+            )
+            return jsonify({"response_type": "ephemeral", "text": help_text})
+
+        # --- search ---
+        else:
+            keyword = text.lower()
+            filtered = [
+                b for b in books
+                if keyword in (b.get("title") or "").lower()
+                or keyword in (b.get("author") or "").lower()
+            ]
+            return jsonify(_slack_books_response(
+                filtered, f"🔍 「{text}」の検索結果（{len(filtered)} 冊）", len(filtered)
+            ))
+
+    except Exception as e:
+        logger.exception("Slack command error: %s", e)
+        return jsonify({"response_type": "ephemeral", "text": f"エラーが発生しました: {e}"}), 500
 
 
 if __name__ == "__main__":
