@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 
 import requests
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_file
 
 import library_service
 from adapters.kindle import KindleAdapter
@@ -1117,6 +1117,31 @@ def _api_fetch_kindle(session_id: str, otp: str):
 def api_libraries():
     """対応図書館一覧"""
     return jsonify({"success": True, "libraries": library_service.get_available_libraries()})
+
+
+_DOWNLOAD_MAP = {
+    "setagaya":   ("library_books.json",  "library_books.json"),
+    "audible_jp": ("audible_books.json",  "audible_books.json"),
+    "kindle":     ("kindle_books.json",   "kindle_books.json"),
+}
+
+@app.route("/api/download/<library_id>")
+def api_download_books(library_id: str):
+    """保存済みの _books.json をダウンロードする（ログイン済みのみ）"""
+    if library_id not in _DOWNLOAD_MAP:
+        return jsonify({"success": False, "error": "不明なソースです"}), 400
+    if not library_service.has_credentials(library_id):
+        return jsonify({"success": False, "error": "認証情報が設定されていません"}), 403
+    data_filename, download_name = _DOWNLOAD_MAP[library_id]
+    data_path = library_service.DATA_DIR / data_filename
+    if not data_path.exists():
+        return jsonify({"success": False, "error": "データファイルがまだ存在しません。先に「読書記録を取込み」を実行してください"}), 404
+    return send_file(
+        data_path,
+        mimetype="application/json",
+        as_attachment=True,
+        download_name=download_name,
+    )
 
 
 @app.route("/api/credentials/<library_id>")

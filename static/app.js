@@ -6,6 +6,7 @@ const API = {
   libraries: '/api/libraries',
   credentials: '/api/credentials',
   credentialsAudibleUpload: '/api/credentials/audible_jp/upload',
+  download: '/api/download',
   testLogin: '/api/test-login',
   kindleLogin: '/api/kindle-login',
   kindleLoginOtp: '/api/kindle-login-otp',
@@ -2504,7 +2505,8 @@ async function loadCredentialForModal() {
   try {
     const res = await fetch(`${API.credentials}/${libraryId}`);
     const data = await res.json();
-    if (data.success && data.configured) {
+    const configured = data.success && data.configured;
+    if (configured) {
       document.getElementById('credUserId').value = data.user_id || '';
       document.getElementById('credPassword').value = '';
       document.getElementById('credPassword').placeholder = '変更する場合のみ入力';
@@ -2513,7 +2515,13 @@ async function loadCredentialForModal() {
       document.getElementById('credPassword').value = '';
       document.getElementById('credPassword').placeholder = 'パスワードを入力';
     }
-  } catch (_) {}
+    // ダウンロードボタンはログイン済みのときだけ表示
+    const downloadRow = document.getElementById('credDownloadRow');
+    if (downloadRow) downloadRow.style.display = configured ? '' : 'none';
+  } catch (_) {
+    const downloadRow = document.getElementById('credDownloadRow');
+    if (downloadRow) downloadRow.style.display = 'none';
+  }
 }
 
 let _kindleOtpSessionId = null;
@@ -2823,6 +2831,34 @@ document.getElementById('credOtp')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') submitKindleOtp();
 });
 document.getElementById('credDeleteBtn')?.addEventListener('click', deleteCredentials);
+document.getElementById('credDownloadBtn')?.addEventListener('click', async function () {
+  const libraryId = document.getElementById('credLibrarySelect').value;
+  const statusEl = document.getElementById('credModalStatus');
+  statusEl.className = 'modal-status loading';
+  statusEl.textContent = 'ダウンロード中…';
+  try {
+    const res = await fetch(`${API.download}/${libraryId}`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const nameMap = { setagaya: 'library_books.json', audible_jp: 'audible_books.json', kindle: 'kindle_books.json' };
+    a.href = url;
+    a.download = nameMap[libraryId] || `${libraryId}_books.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    statusEl.className = 'modal-status success';
+    statusEl.textContent = 'ダウンロードしました。';
+  } catch (err) {
+    statusEl.className = 'modal-status error';
+    statusEl.textContent = err.message || 'ダウンロードに失敗しました。';
+  }
+});
 
 document.getElementById('credAudibleUploadBtn')?.addEventListener('click', async function () {
   const fileInput = document.getElementById('credAudibleFile');
