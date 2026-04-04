@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import re
 import socket
@@ -17,6 +18,8 @@ from adapters.kindle import KindleAdapter
 from adapters.base import LibraryCredentials
 
 from config_paths import get_ai_config_path, ensure_config_dir
+
+logger = logging.getLogger(__name__)
 
 APP_DIR = Path(__file__).resolve().parent
 os.chdir(APP_DIR)
@@ -1052,7 +1055,7 @@ def _api_fetch_kindle(session_id: str, otp: str):
         combined = library_service.save_kindle_records_and_load(records)
         return jsonify({"success": True, **combined})
 
-    # 初回: ログイン試行
+    # 初回: セッション再利用を試してからログイン
     session = requests.Session()
     session.headers.update({
         "User-Agent": (
@@ -1062,6 +1065,23 @@ def _api_fetch_kindle(session_id: str, otp: str):
         "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
     })
     adapter = KindleAdapter()
+
+    # 1. 保存済みセッションを試す
+    session_loaded = adapter.load_session(session)
+    session_valid = False
+    if session_loaded:
+        logger.info("保存済みセッションを検証中...")
+        session_valid = adapter.verify_session(session)
+
+    # 2. セッションが有効ならそのまま使う
+    if session_valid:
+        logger.info("保存済みセッションを使用してデータ取得")
+        records = adapter.fetch_history(session)
+        combined = library_service.save_kindle_records_and_load(records)
+        return jsonify({"success": True, **combined})
+
+    # 3. セッションが無効なら再ログイン
+    logger.info("セッションが無効なため、再ログイン")
     creds_obj = LibraryCredentials(user_id=creds["user_id"], password=creds["password"])
     ok, needs_otp, otp_page_html = adapter._login_amazon(session, creds_obj)
     if ok:
@@ -1275,6 +1295,13 @@ def api_test_login():
 
 
 if __name__ == "__main__":
+    # ログレベルを設定（デバッグモード）
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+
     def find_free_port(start: int, max_attempts: int = 10) -> int:
         for i in range(max_attempts):
             port = start + i

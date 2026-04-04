@@ -266,6 +266,7 @@ class KindleAdapter(LibraryAdapter):
         try:
             session_path = self._get_session_path()
             if not session_path.exists():
+                logger.debug("セッションファイルが存在しません: %s", session_path)
                 return False
 
             with open(session_path, "r", encoding="utf-8") as f:
@@ -274,7 +275,7 @@ class KindleAdapter(LibraryAdapter):
             # 有効期限チェック
             expiry_str = session_data.get("expiry")
             if not expiry_str:
-                logger.debug("セッションに有効期限がありません")
+                logger.warning("セッションに有効期限がありません")
                 return False
 
             expiry_time = datetime.fromisoformat(expiry_str)
@@ -286,28 +287,34 @@ class KindleAdapter(LibraryAdapter):
             # クッキーを復元
             cookies_dict = session_data.get("cookies", {})
             if not cookies_dict:
-                logger.debug("セッションにクッキーがありません")
+                logger.warning("セッションにクッキーがありません")
                 return False
 
+            logger.debug("クッキーを復元中: %d 個", len(cookies_dict))
             session.cookies.update(requests.utils.cookiejar_from_dict(cookies_dict))
             saved_at = session_data.get("saved_at", "不明")
-            logger.info("Kindle セッションを読み込みました（保存日時: %s、有効期限: %s）",
+            logger.info("Kindle セッションを読み込みました（保存日時: %s、有効期限: %s、クッキー数: %d）",
                        saved_at[:19] if len(saved_at) >= 19 else saved_at,
-                       expiry_time.strftime("%Y-%m-%d %H:%M"))
+                       expiry_time.strftime("%Y-%m-%d %H:%M"),
+                       len(cookies_dict))
             return True
         except Exception as e:
-            logger.debug("セッション読み込みに失敗: %s", e)
+            logger.warning("セッション読み込みに失敗: %s", e)
             return False
 
     def verify_session(self, session: requests.Session) -> bool:
         """セッションが有効かチェック（FIONA 管理ページにアクセス）"""
         try:
+            logger.debug("セッション検証開始: クッキー数=%d", len(session.cookies))
             r = session.get(AMAZON_JP + "/gp/digital/fiona/manage", timeout=15, allow_redirects=True)
             r.raise_for_status()
+
+            logger.debug("セッション検証: 最終URL=%s", r.url)
 
             # サインインページにリダイレクトされた場合は無効
             if "signin" in r.url.lower() and "fiona" not in r.url.lower():
                 logger.info("Kindle セッションが無効です（ログインが必要）")
+                self.clear_session()
                 return False
 
             # FIONA ページにアクセスできれば有効
@@ -315,10 +322,12 @@ class KindleAdapter(LibraryAdapter):
                 logger.info("Kindle セッションは有効です")
                 return True
 
-            logger.debug("Kindle セッション検証: 予期しないURL - %s", r.url)
+            logger.warning("Kindle セッション検証: 予期しないURL - %s", r.url)
+            self.clear_session()
             return False
         except requests.RequestException as e:
-            logger.debug("セッション検証に失敗: %s", e)
+            logger.warning("セッション検証に失敗: %s", e)
+            self.clear_session()
             return False
 
     def clear_session(self) -> None:
@@ -483,12 +492,16 @@ class KindleAdapter(LibraryAdapter):
         try:
             r = session.get(AMAZON_JP + "/gp/digital/fiona/manage", timeout=30)
             r.raise_for_status()
+            logger.debug("FIONA 管理ページアクセス成功: %s", r.url)
             if "signin" in r.url.lower() and "fiona" not in r.url.lower():
+                logger.warning("FIONA アクセス時にサインインページにリダイレクトされました")
+                self.clear_session()
                 raise RuntimeError(
-                    "ログインセッションが切れています。もう一度「読書記録を取得」からやり直してください。"
+                    "Amazon ログインセッションが無効になっています。"
+                    "もう一度「読書記録を取得」から OTP を入力してログインしてください。"
                 )
         except requests.RequestException as e:
-            logger.warning("FIONA 管理ページ取得: %s", e)
+            logger.warning("FIONA 管理ページ取得エラー: %s", e)
 
         api_url = AMAZON_JP + "/gp/digital/fiona/manage/features/order-history/ajax/queryOwnership_refactored2.html"
         ajax_headers = {

@@ -193,10 +193,20 @@ def fetch_and_save(library_id: str) -> dict:
             # 2. セッションが無効なら再ログイン
             if not session_valid:
                 logger.info("Amazon に再ログイン中...")
-                if not adapter.login(session, LibraryCredentials(
-                    user_id=creds["user_id"], password=creds["password"]
-                )):
+                ok, needs_otp, _ = adapter._login_amazon(
+                    session,
+                    LibraryCredentials(user_id=creds["user_id"], password=creds["password"])
+                )
+                if needs_otp:
+                    raise RuntimeError(
+                        "Amazon のログインに2段階認証（OTP）が必要です。"
+                        "ブラウザでアプリにアクセスし、手動で「読書記録を取得」を実行して OTP を入力してください。"
+                        "その後、セッションが保存され、次回以降は自動取得が可能になります。"
+                    )
+                if not ok:
                     raise RuntimeError("Amazon へのログインに失敗しました。メールアドレスとパスワードを確認してください。")
+                # ログイン成功時はセッションを保存
+                adapter.save_session(session)
 
             # 3. データ取得（取得成功時にセッションが自動保存される）
             records = adapter.fetch_history(session)

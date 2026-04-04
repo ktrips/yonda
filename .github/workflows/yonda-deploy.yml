@@ -23,7 +23,6 @@ env:
   REPO_NAME: yonda-repo
   BUCKET_NAME_PREFIX: yonda-data
   DOMAIN: yonda.ktrips.net
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   deploy:
@@ -34,7 +33,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install gcloud and authenticate
         env:
