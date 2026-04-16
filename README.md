@@ -142,23 +142,16 @@ Google Cloud Run へのデプロイ方法は 2 通りあります。
 
 | ジョブ名 | 時刻（JST） | 対象 |
 |----------|-------------|------|
-| `yonda-fetch-morning` | 06:00 | 図書館・Audible・Kindle |
-| `yonda-fetch-noon` | 12:00 | 図書館・Audible・Kindle |
-| `yonda-fetch-evening` | 18:00 | 図書館・Audible・Kindle |
+| `yonda-fetch-morning` | 06:00 | 図書館・Audible |
+| `yonda-fetch-noon` | 12:00 | 図書館・Audible |
+| `yonda-fetch-evening` | 18:00 | 図書館・Audible |
 
 取得先エンドポイント: `POST https://yonda.ktrips.net/api/fetch` with `{"library_id": "all"}`
 
-> **Kindle のクラウド取得について**  
-> Cloud Run 環境には Kindle for Mac がないため、以下いずれかの方法で取得可能です。  
-> - **Amazon メール・パスワードを登録**（推奨）: 初回のみ OTP 入力が必要ですが、**セッションが自動保存されるため、次回以降は OTP なしで自動取得できます**（セッション有効期限: 7日間）  
-> - `BookData.sqlite` を GCS バケットに配置し、`YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite` を設定  
-> 
-> **セッション永続化機能**により、OTP 認証後のセッションが `~/.config/yonda/kindle_session.json` に保存され、次回以降は保存済みセッションが再利用されます。セッション管理スクリプトで状態確認が可能です:
-> ```bash
-> python scripts/kindle_session_manager.py status   # セッション状態確認
-> python scripts/kindle_session_manager.py verify   # 有効性検証
-> python scripts/kindle_session_manager.py clear    # セッション削除
-> ```
+> **Kindle について**  
+> Kindle はスケジュール自動取得の対象外です。手動で「読書記録取込み」から取得してください。  
+> - Amazon メール・パスワードを登録し、初回のみ OTP を入力（**セッション永続化により次回以降は OTP 不要**、有効期限: 7日間）  
+> - または `BookData.sqlite` を GCS バケットに配置し、`YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite` を設定
 
 ### GitHub Actions セットアップ（初回のみ）
 

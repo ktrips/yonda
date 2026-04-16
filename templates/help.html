@@ -75,18 +75,12 @@
       <h2>定期自動取得（Cloud Run 環境）</h2>
       <p>Cloud Run にデプロイした場合、Cloud Scheduler により毎日自動でデータが取得・保存されます。</p>
       <ul>
-        <li><strong>朝 06:00 / 昼 12:00 / 夕 18:00（JST）</strong>に図書館・Audible・Kindle を一括取得</li>
+        <li><strong>朝 06:00 / 昼 12:00 / 夕 18:00（JST）</strong>に図書館・Audible を一括取得</li>
         <li>取得結果は GCS バケットに自動保存されます</li>
         <li>一部ソースが失敗しても他ソースの取得は継続されます</li>
         <li>メニューの「読書記録取込み」で、ソースごとの最終取得日時を確認できます</li>
       </ul>
-      <p><strong>Kindle のクラウド自動取得</strong></p>
-      <ul>
-        <li>Amazon メール・パスワードを登録し、初回のみ手動で OTP 入力して取得を実行します</li>
-        <li>認証後セッションが GCS に自動保存され、以降は Cloud Scheduler が <strong>OTP なしで自動取得</strong>します（有効期間: 約7日）</li>
-        <li>セッション期限切れ後は、再度手動で OTP 入力が必要です</li>
-        <li>または <code>BookData.sqlite</code> を GCS バケットに配置し、<code>YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite</code> を設定する方法でも取得可能</li>
-      </ul>
+      <p>Kindle は自動取得の対象外です。「読書記録取込み」メニューから手動で取得してください。</p>
 
       <h2>AI推し・写真検索（APIエラーが出る場合）</h2>
       <p>AI推し（５質問で推し、MBTI診断で推し、強み診断で推し）や写真から本を検索するには、メニュー → アプリ設定 で API キーを登録してください。</p>

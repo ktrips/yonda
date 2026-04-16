@@ -1009,7 +1009,7 @@ def api_fetch():
             return _api_fetch_kindle(session_id, otp)
         if library_id == "all":
             errors = {}
-            for lid in ["setagaya", "audible_jp", "kindle"]:
+            for lid in ["setagaya", "audible_jp"]:
                 try:
                     library_service.fetch_and_save(lid)
                 except Exception as e:
