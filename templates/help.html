@@ -43,11 +43,18 @@
       <p>お気に入り登録済みの本は、貸出履歴取得時に自動で「♥ お気に入り」として表示されます。</p>
 
       <h2>Audible Japan</h2>
+      <p><strong>初回設定</strong></p>
       <ul>
-        <li>メニューから「アカウント設定」を開き、ソースを「Audible Japan」に選択</li>
-        <li><code>audible-cli</code> で認証し、<code>auth_jp.json</code> をアップロードするか、<code>yonda/data/auth_jp.json</code> に配置</li>
-        <li>「接続確認」で認証が成功すれば設定完了</li>
-        <li>認証が期限切れの場合は <code>audible-cli</code> で再認証し、ファイルを再アップロード</li>
+        <li>ターミナルで <code>python3 scripts/audible_auth.py</code> を実行</li>
+        <li>Amazon メールアドレスとパスワードを入力（OTP が必要な場合はコード入力を求められます）</li>
+        <li><code>data/auth_jp.json</code> が生成されたら設定完了</li>
+        <li>メニュー →「アカウント設定」→「接続確認」で動作を確認できます</li>
+      </ul>
+      <p><strong>トークンの期限切れ（約60〜90日ごと）</strong></p>
+      <ul>
+        <li>取得時に「auth_jp.json を確認してください」というエラーが出た場合はトークン期限切れです</li>
+        <li>再度 <code>python3 scripts/audible_auth.py</code> を実行して再認証します</li>
+        <li>Cloud Run（yonda.ktrips.net）を使用している場合は、更新した <code>auth_jp.json</code> の内容を GitHub Secrets の <code>AUTH_JP_JSON</code> に上書きして push します</li>
       </ul>
 
       <h2>Kindle</h2>

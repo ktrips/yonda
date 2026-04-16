@@ -59,7 +59,7 @@ python -m app
 | ソース | 認証方法 |
 |--------|----------|
 | 世田谷区立図書館 | 利用者番号・パスワード（アカウント設定で登録） |
-| Audible Japan | `audible-cli` で認証し `auth_jp.json` を配置 |
+| Audible Japan | `scripts/audible_auth.py` で認証し `data/auth_jp.json` を生成（トークン有効期限: 約60〜90日） |
 | Kindle | Amazon メール・パスワード、またはローカルファイル（BookData.sqlite） |
 
 ## Kindle の取得方法
@@ -75,6 +75,38 @@ python -m app
 - セッションが無効になった場合のみ、再ログイン（OTP 必要）が行われます
 
 詳細は [docs/KINDLE_SETUP.md](docs/KINDLE_SETUP.md) を参照。
+
+## Audible の認証と再認証
+
+Audible のアクセストークンは **約60〜90日**で期限切れになります。期限切れになると取得時にエラーが表示されます。
+
+### 初回認証・再認証手順
+
+```bash
+python3 scripts/audible_auth.py
+```
+
+Amazon メールアドレスとパスワードを入力します。2段階認証（OTP）が設定されている場合はコード入力を求められます。完了すると `data/auth_jp.json` が更新されます。
+
+### Cloud Run（yonda.ktrips.net）への反映
+
+```bash
+# 更新された auth_jp.json の内容を確認
+cat data/auth_jp.json
+```
+
+GitHub リポジトリ → **Settings** → **Secrets and variables** → **Actions** → `AUTH_JP_JSON` を新しい内容で上書き保存後、`main` に push してデプロイします。
+
+## スクリプト一覧（`scripts/`）
+
+| スクリプト | 説明 |
+|-----------|------|
+| `audible_auth.py` | Audible Japan 認証・再認証。`data/auth_jp.json` を生成 |
+| `fetch_audible_full.py` | Audible API から指定タイトルの全データを取得（デバッグ用） |
+| `fetch_kindle_fiona.py` | Amazon FIONA API 経由で Kindle 蔵書を取得 |
+| `kindle_session_manager.py` | Kindle セッションの状態確認・削除（`status` / `verify` / `clear`） |
+| `show_audible_fields.py` | Audible API レスポンスのフィールド確認（デバッグ用） |
+| `migrate_config_to_secure.py` | 旧パスの設定ファイルを `~/.config/yonda/` に移行 |
 
 ## データの保存先
 
@@ -223,10 +255,9 @@ cat ~/sa-key-yonda.json
 **認証ファイルの取得例:**
 
 ```bash
-# Audible 認証（auth_jp.json）
-cat data/auth_jp.json
-# または yonda 直下
-cat auth_jp.json
+# Audible 認証（auth_jp.json）— 再認証後に生成
+python3 scripts/audible_auth.py
+cat data/auth_jp.json   # この内容を AUTH_JP_JSON に登録
 
 # 図書館認証（.credentials.json）
 cat data/.credentials.json
