@@ -33,7 +33,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Install gcloud and authenticate
         env:
@@ -107,21 +107,32 @@ jobs:
       - name: Build and push Docker image
         run: |
           IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:latest"
-          # --async でログストリーミングを回避（Viewer 権限なしでもビルド可能）
-          gcloud builds submit --async --tag "${IMAGE_TAG}" --timeout=600 .
-          BUILD_ID=$(gcloud builds list --limit=1 --format='value(id)')
-          echo "Waiting for build $BUILD_ID..."
+          # ビルドIDをsubmit出力から直接取得（競合回避）
+          SUBMIT_OUT=$(gcloud builds submit --async --tag "${IMAGE_TAG}" --timeout=600 . 2>&1)
+          echo "${SUBMIT_OUT}"
+          BUILD_ID=$(echo "${SUBMIT_OUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+          if [[ -z "${BUILD_ID}" ]]; then
+            echo "WARNING: UUIDが取得できません。最新ビルドIDを使用します"
+            BUILD_ID=$(gcloud builds list --limit=1 --format='value(id)')
+          fi
+          echo "Waiting for build ${BUILD_ID}..."
           for i in $(seq 1 60); do
-            STATUS=$(gcloud builds describe "$BUILD_ID" --format='value(status)' 2>/dev/null || echo "UNKNOWN")
-            echo "  Build status: $STATUS"
+            STATUS=$(gcloud builds describe "${BUILD_ID}" --format='value(status)' 2>/dev/null || echo "UNKNOWN")
+            echo "  [${i}/60] Build status: ${STATUS}"
             case "$STATUS" in
-              SUCCESS) echo "✔ Build completed successfully"; exit 0 ;;
-              FAILURE|CANCELLED|EXPIRED) echo "Build failed with status: $STATUS"; exit 1 ;;
+              SUCCESS) echo "✔ Build completed successfully"; break ;;
+              FAILURE|CANCELLED|EXPIRED)
+                echo "Build failed with status: ${STATUS}"
+                echo "--- Cloud Build ログ ---"
+                gcloud builds log "${BUILD_ID}" 2>/dev/null | tail -50 || true
+                exit 1 ;;
               *) sleep 15 ;;
             esac
           done
-          echo "Build timed out"
-          exit 1
+          if [[ "${STATUS}" != "SUCCESS" ]]; then
+            echo "Build timed out (status: ${STATUS})"
+            exit 1
+          fi
 
       - name: Deploy (image only)
         if: ${{ github.event.inputs.image_only == 'true' }}
