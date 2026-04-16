@@ -89,6 +89,22 @@
       </ul>
       <p>Kindle は自動取得の対象外です。「読書記録取込み」メニューから手動で取得してください。</p>
 
+      <h2>Slack 連携（/yonda コマンド）</h2>
+      <p>Slack の Slash Command <code>/yonda</code> で読書記録を検索・確認できます。</p>
+      <ul>
+        <li><code>/yonda read</code> — 直近の読了済み本</li>
+        <li><code>/yonda reading</code> — 読んでいる途中の本</li>
+        <li><code>/yonda unread</code> — 未読の本</li>
+        <li><code>/yonda stats</code> — 統計情報</li>
+        <li><code>/yonda &lt;キーワード&gt;</code> — タイトル・著者を検索</li>
+      </ul>
+      <p><strong>セットアップ手順</strong></p>
+      <ul>
+        <li><a href="https://api.slack.com/apps" target="_blank" rel="noopener">Slack API</a> でアプリを作成</li>
+        <li>Slash Commands に <code>/yonda</code> を追加し、Request URL を <code>https://yonda.ktrips.net/slack/command</code> に設定</li>
+        <li>Basic Information の <strong>Signing Secret</strong> をコピーし、環境変数 <code>SLACK_SIGNING_SECRET</code> に設定</li>
+      </ul>
+
       <h2>AI推し・写真検索（APIエラーが出る場合）</h2>
       <p>AI推し（５質問で推し、MBTI診断で推し、強み診断で推し）や写真から本を検索するには、メニュー → アプリ設定 で API キーを登録してください。</p>
       <ul>

@@ -41,6 +41,44 @@
 
 - **ISBN 検索**: Open Library API で ISBN から書籍情報を取得（CORS 回避用プロキシ）
 - **アフィリエイトタグ**: Kindle・Audible リンクにタグを付与可能
+- **書籍データダウンロード**: `GET /api/download/<source>` で保存済みの JSON をダウンロード
+- **API ドキュメント**: `GET /api/docs` でブラウザから REST API 仕様を確認可能
+
+### REST API v1
+
+外部連携用の読み取り専用 REST API。
+
+| エンドポイント | 説明 |
+|---|---|
+| `GET /api/v1/books` | 読書記録一覧（フィルタ・検索・ページネーション対応） |
+| `GET /api/v1/books/stats` | 統計情報（読了数・ソース別集計など） |
+| `GET /api/v1/books/<catalog_number>` | ASIN・図書館番号で1冊の詳細を取得 |
+
+**`/api/v1/books` クエリパラメータ:**
+
+| パラメータ | 値 | デフォルト |
+|---|---|---|
+| `status` | `read` / `unread` / `in_progress` / `all` | `all` |
+| `source` | `setagaya` / `audible_jp` / `kindle` / `all` | `all` |
+| `q` | タイトル・著者の部分一致検索 | — |
+| `sort` | `loan_date_desc` / `completed_date_desc` / `percent_desc` / `title_asc` | `loan_date_desc` |
+| `limit` | 1〜200 | `50` |
+| `offset` | 0以上 | `0` |
+
+### Slack 連携
+
+Slack Slash Command `/yonda` で読書記録を検索・確認できます。
+
+| コマンド | 説明 |
+|---|---|
+| `/yonda read` | 直近の読了済み本 |
+| `/yonda reading` | 読んでいる途中の本 |
+| `/yonda unread` | 未読の本 |
+| `/yonda stats` | 統計情報 |
+| `/yonda <キーワード>` | タイトル・著者を検索 |
+| `/yonda help` | ヘルプ |
+
+設定方法は「[Slack 連携セットアップ](#slack-連携セットアップ)」を参照。
 
 ## 起動方法
 
@@ -140,6 +178,7 @@ GitHub リポジトリ → **Settings** → **Secrets and variables** → **Acti
 | `YONDA_KINDLE_SQLITE_PATH` | Kindle BookData.sqlite のパス（任意） |
 | `YONDA_KINDLE_XML_PATH` | KindleSyncMetadataCache.xml のパス（任意） |
 | `YONDA_KINDLE_SESSION_PATH` | Kindle セッションファイルのパス（デフォルト: `~/.config/yonda/kindle_session.json`） |
+| `SLACK_SIGNING_SECRET` | Slack Slash Command の署名シークレット（Slack 連携利用時） |
 
 **ローカル起動時にクラウドのデータを参照する場合:**
 
@@ -184,6 +223,20 @@ Google Cloud Run へのデプロイ方法は 2 通りあります。
 > Kindle はスケジュール自動取得の対象外です。手動で「読書記録取込み」から取得してください。  
 > - Amazon メール・パスワードを登録し、初回のみ OTP を入力（**セッション永続化により次回以降は OTP 不要**、有効期限: 7日間）  
 > - または `BookData.sqlite` を GCS バケットに配置し、`YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite` を設定
+
+### Slack 連携セットアップ
+
+1. [Slack API](https://api.slack.com/apps) でアプリを作成
+2. **Slash Commands** → `/yonda` を追加、Request URL を `https://yonda.ktrips.net/slack/command` に設定
+3. **Basic Information** → **Signing Secret** をコピー
+4. 環境変数 `SLACK_SIGNING_SECRET` に設定（Cloud Run の場合は Secret Manager 経由で設定）
+
+```bash
+# Cloud Run に環境変数を追加（ローカル deploy.sh 経由）
+gcloud run services update yonda \
+  --region=asia-northeast1 \
+  --update-env-vars="SLACK_SIGNING_SECRET=your_signing_secret"
+```
 
 ### GitHub Actions セットアップ（初回のみ）
 
