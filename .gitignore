@@ -11,3 +11,4 @@ Arc/
 # データディレクトリ（個人データ・認証情報はコミットしない）
 data/*
 !data/.gitkeep
+!data/kindle_books.json
