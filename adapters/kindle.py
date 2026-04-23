@@ -839,85 +839,74 @@ class KindleAdapter(LibraryAdapter):
         books: list[BookRecord] = []
         seen_asins: set[str] = set()
 
+        col_names = set(rows[0].keys()) if rows else set()
+        has_direct_cols = "ZDISPLAYTITLE" in col_names and "ZBOOKID" in col_names
+
         for row in rows:
             try:
-                attrs = self._read_plist_attrs(row)
-                if not attrs:
-                    continue
+                # --- 直接カラム読み取り（NSKeyedArchiver plist は解析不要）---
+                if has_direct_cols:
+                    asin, title, author, percent_complete, last_read_date, is_finished = \
+                        self._read_direct_cols(row)
+                else:
+                    attrs = self._read_plist_attrs(row)
+                    if not attrs:
+                        continue
+                    asin = attrs.get("ASIN", "")
+                    title = attrs.get("title", "")
+                    authors_val = attrs.get("authors", {})
+                    if isinstance(authors_val, dict):
+                        author_raw = authors_val.get("author", "")
+                        author = ", ".join(str(a) for a in author_raw) if isinstance(author_raw, list) else str(author_raw)
+                    else:
+                        author = str(authors_val) if authors_val else ""
+                    percent_complete = 0.0
+                    for key in ("reading_percent", "readingPercent", "percent_read", "percentRead",
+                               "furthestReadPercent", "furthest_read_percent"):
+                        val = attrs.get(key)
+                        if isinstance(val, (int, float)) and val > 0:
+                            percent_complete = float(val)
+                            break
+                    lpr = attrs.get("lpr") or attrs.get("furthest_page_read") or 0
+                    total_pages = attrs.get("total_pages") or attrs.get("pages") or 0
+                    if total_pages and isinstance(lpr, (int, float)) and isinstance(total_pages, (int, float)) and float(total_pages) > 0:
+                        calc = (float(lpr) / float(total_pages)) * 100
+                        if calc > percent_complete:
+                            percent_complete = calc
+                    last_read_date = ""
+                    for key in ("last_read_date", "lastReadDate", "last_access_date", "lastAccessDate",
+                               "lastSyncTime", "last_sync_time"):
+                        val = attrs.get(key)
+                        if val and isinstance(val, str):
+                            last_read_date = val.strip()
+                            break
+                    is_finished = False
+                    for status_key in ("reading_status", "readingStatus", "read_status", "readStatus"):
+                        if str(attrs.get(status_key) or "").strip().lower() in ("read", "finished", "completed", "done"):
+                            is_finished = True
+                            break
+                    if attrs.get("is_finished") is True or attrs.get("isFinished") is True:
+                        is_finished = True
+                    purchase_date = (
+                        attrs.get("purchase_date") or attrs.get("publication_date")
+                        or attrs.get("date_added") or attrs.get("last_access_date") or ""
+                    )
+                    if not purchase_date:
+                        continue
 
-                asin = attrs.get("ASIN", "")
-                purchase_date = (
-                    attrs.get("purchase_date")
-                    or attrs.get("publication_date")
-                    or attrs.get("date_added")
-                    or attrs.get("last_access_date")
-                    or ""
-                )
                 if not asin or asin in seen_asins:
-                    continue
-                if not purchase_date:
                     continue
 
                 seen_asins.add(asin)
-                title = attrs.get("title", "")
-                authors = attrs.get("authors", {})
-                if isinstance(authors, dict):
-                    author = authors.get("author", "")
-                    if isinstance(author, list):
-                        author = ", ".join(str(a) for a in author)
-                else:
-                    author = str(authors) if authors else ""
-
-                # SQLite 属性から読書進捗を抽出
-                percent_complete = 0.0
-                for key in ("reading_percent", "readingPercent", "percent_read", "percentRead",
-                           "furthestReadPercent", "furthest_read_percent"):
-                    val = attrs.get(key)
-                    if isinstance(val, (int, float)) and val > 0:
-                        percent_complete = float(val)
-                        break
-
-                last_read_date = ""
-                for key in ("last_read_date", "lastReadDate", "last_access_date", "lastAccessDate",
-                           "lastSyncTime", "last_sync_time"):
-                    val = attrs.get(key)
-                    if val and isinstance(val, str):
-                        last_read_date = val.strip()
-                        if last_read_date:
-                            break
-
-                # LPR（Last Page Read）から読書進捗を推定（Kindle 独自フィールド）
-                lpr = attrs.get("lpr") or attrs.get("furthest_page_read") or 0
-                total_pages = attrs.get("total_pages") or attrs.get("pages") or 0
-                if total_pages and isinstance(lpr, (int, float)) and isinstance(total_pages, (int, float)):
-                    if total_pages > 0:
-                        calculated_percent = (float(lpr) / float(total_pages)) * 100
-                        if calculated_percent > percent_complete:
-                            percent_complete = calculated_percent
-
-                # 完了判定（read_status や reading_status から）
-                is_finished = False
-                for status_key in ("reading_status", "readingStatus", "read_status", "readStatus"):
-                    status = str(attrs.get(status_key) or "").strip().lower()
-                    if status in ("read", "finished", "completed", "done"):
-                        is_finished = True
-                        break
-                if attrs.get("is_finished") is True or attrs.get("isFinished") is True:
-                    is_finished = True
-
                 completed = self._determine_completion(percent_complete, is_finished, "")
-
-                completed_date = ""
-                if completed and last_read_date:
-                    completed_date = self._format_date(last_read_date)
-
-                # カバー画像 URL を生成
+                completed_date = self._format_date(last_read_date) if completed and last_read_date else ""
                 cover_url = self._generate_cover_url(asin) if asin else ""
+                loan_date = last_read_date[:10] if last_read_date else ""
 
                 book = BookRecord(
                     title=(title or "不明なタイトル").strip(),
                     author=(author or "").strip(),
-                    loan_date=self._format_date(purchase_date),
+                    loan_date=loan_date,
                     loan_location="Kindle",
                     rating=0,
                     comment="",
@@ -930,7 +919,7 @@ class KindleAdapter(LibraryAdapter):
                     summary="",
                     full_summary="",
                     completed_date=completed_date,
-                    percent_complete=percent_complete,
+                    percent_complete=round(percent_complete, 1),
                     favorite=False,
                     review_headline="",
                     catalog_rating=0.0,
@@ -941,6 +930,44 @@ class KindleAdapter(LibraryAdapter):
 
         logger.info("Kindle SQLite: %d 冊取得", len(books))
         return books
+
+    def _read_direct_cols(self, row: sqlite3.Row) -> tuple[str, str, str, float, str, bool]:
+        """ZBOOK テーブルの直接カラムから (asin, title, author, percent, last_date, is_finished) を返す"""
+        from datetime import datetime as _dt
+
+        book_id = str(row["ZBOOKID"] or "")
+        asin = book_id[2:].split("-")[0] if book_id.startswith("A:") else ""
+        title = str(row["ZDISPLAYTITLE"] or "")
+
+        # 辞書本はスキップ
+        col_names = row.keys()
+        if "ZRAWISDICTIONARY" in col_names and row["ZRAWISDICTIONARY"] == 1:
+            return "", title, "", 0.0, "", False
+
+        # 著者（ZDISPLAYAUTHOR は暗号化バイト列の場合があるため空扱い）
+        author = ""
+
+        # 進捗: ZRAWCURRENTPOSITION / ZRAWMAXPOSITION
+        percent_complete = 0.0
+        cur_pos = row["ZRAWCURRENTPOSITION"] if "ZRAWCURRENTPOSITION" in col_names else None
+        max_pos = row["ZRAWMAXPOSITION"] if "ZRAWMAXPOSITION" in col_names else None
+        if cur_pos and max_pos and float(max_pos) > 0:
+            percent_complete = min((float(cur_pos) / float(max_pos)) * 100, 100.0)
+
+        # 最終アクセス日（Unix タイムスタンプ）
+        last_read_date = ""
+        ts_raw = row["ZRAWLASTACCESSTIME"] if "ZRAWLASTACCESSTIME" in col_names else None
+        if ts_raw:
+            try:
+                last_read_date = _dt.fromtimestamp(float(ts_raw)).strftime("%Y-%m-%d")
+            except (OSError, ValueError, OverflowError):
+                pass
+
+        # 完了判定: ZRAWREADSTATE=1 または percent>=95
+        read_state = row["ZRAWREADSTATE"] if "ZRAWREADSTATE" in col_names else 0
+        is_finished = (read_state == 1)
+
+        return asin, title, author, percent_complete, last_read_date, is_finished
 
     def _read_plist_attrs(self, row: sqlite3.Row) -> Optional[dict]:
         """ZSYNCMETADATAATTRIBUTES から plist を読み取り attributes を返す"""

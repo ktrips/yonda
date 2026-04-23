@@ -60,10 +60,10 @@ function displayRating(book) {
   return book.rating || 0;
 }
 
-/** 途中: Audibleで再生したが読了していない / 図書館で借りているが評価を付けていない */
+/** 途中: Audible/Kindleで進捗があるが読了していない / 図書館で借りているが評価を付けていない */
 function isInProgress(book) {
   if (book.completed) return false;
-  if (book.source === 'audible_jp' && (book.percent_complete || 0) > 0) return true;
+  if ((book.source === 'audible_jp' || book.source === 'kindle') && (book.percent_complete || 0) > 0) return true;
   const isLibrary = book.source && book.source !== 'audible_jp' && book.source !== 'kindle';
   if (isLibrary && (book.loan_date || '').trim()) return true;
   return false;
