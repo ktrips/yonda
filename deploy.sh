@@ -114,6 +114,13 @@ create_or_update_secret() {
       --replication-policy="automatic"
   fi
   gcloud secrets versions add "${name}" --data-file="${file}" --quiet
+  # 最新バージョン以外を削除してアクティブバージョン数を1に保つ（無料枠維持）
+  gcloud secrets versions list "${name}" \
+    --filter="state=ENABLED" \
+    --format="value(name)" \
+    --sort-by="~createTime" \
+    | tail -n +2 \
+    | xargs -r -I{} gcloud secrets versions destroy "${name}" --version="{}" --quiet
   echo "    ✔ ${name}"
 }
 

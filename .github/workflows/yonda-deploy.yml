@@ -165,11 +165,23 @@ jobs:
       - name: Create or update secrets
         if: ${{ github.event.inputs.image_only != 'true' }}
         run: |
+          # 最新バージョン以外を削除してアクティブバージョン数を1に保つヘルパー
+          prune_old_versions() {
+            local secret_name="$1"
+            gcloud secrets versions list "${secret_name}" \
+              --filter="state=ENABLED" \
+              --format="value(name)" \
+              --sort-by="~createTime" \
+              | tail -n +2 \
+              | xargs -r -I{} gcloud secrets versions destroy "${secret_name}" --version="{}" --quiet
+          }
+
           if [[ -f "auth_jp.json" ]]; then
             if ! gcloud secrets describe yonda-auth-jp --format='value(name)' 2>/dev/null; then
               gcloud secrets create yonda-auth-jp --replication-policy="automatic"
             fi
             gcloud secrets versions add yonda-auth-jp --data-file=auth_jp.json --quiet
+            prune_old_versions yonda-auth-jp
             echo "  ✔ yonda-auth-jp"
           else
             echo "  ⚠ auth_jp.json がありません（AUTH_JP_JSON を GitHub Secrets に登録してください）"
@@ -179,6 +191,7 @@ jobs:
               gcloud secrets create yonda-credentials --replication-policy="automatic"
             fi
             gcloud secrets versions add yonda-credentials --data-file=data/.credentials.json --quiet
+            prune_old_versions yonda-credentials
             echo "  ✔ yonda-credentials"
           fi
 
