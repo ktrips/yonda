@@ -35,6 +35,8 @@ _JSON_MAP: dict[str, Path] = {
     "kindle": DATA_DIR / "kindle_books.json",
 }
 
+AMAZON_LIST_PATH = DATA_DIR / "amazon_list.json"
+
 _ENV_MAP = {
     "setagaya": ("SETAGAYA_USER_ID", "SETAGAYA_PASSWORD"),
 }
@@ -357,6 +359,66 @@ def save_kindle_records_and_load(records: list[BookRecord]) -> dict:
     _save_json("kindle", payload)
     _save_markdown(adapter, records)
     return load_saved() or {"sources": [], "total": 0, "books": []}
+
+
+def try_auto_fetch_kindle() -> bool:
+    """自動取得用: 保存済みセッションが有効な場合のみ Kindle データを取得・保存。
+    OTP は要求せず、セッション無効時はスキップして False を返す。
+    ローカルファイル（SQLite/XML）がある場合はそちらから取得する。"""
+    import requests as _requests
+    from adapters.kindle import KindleAdapter
+
+    adapter = KindleAdapter()
+    creds = get_kindle_credentials()
+
+    if creds and creds.get("user_id") and creds.get("password"):
+        session = _requests.Session()
+        session.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+        })
+        if adapter.load_session(session) and adapter.verify_session(session):
+            records = adapter.fetch_history(session)
+            save_kindle_records_and_load(records)
+            logger.info("Kindle 自動取得成功: %d 冊", len(records))
+            return True
+        logger.info("Kindle: セッション無効のためスキップ（手動ログインが必要）")
+        return False
+
+    # Amazon 認証なし → ローカルファイルから取得（ローカル環境向け）
+    if adapter.login(None, None):
+        records = adapter.fetch_history(None)
+        save_kindle_records_and_load(records)
+        logger.info("Kindle ローカルファイル取得成功: %d 冊", len(records))
+        return True
+
+    logger.info("Kindle: データソースなし、スキップ")
+    return False
+
+
+# ------------------------------------------------------------------
+# Amazon ほしいものリスト（ローカル管理）
+# ------------------------------------------------------------------
+
+def load_amazon_list() -> dict:
+    """Amazon ほしいものリストを読み込む。ファイルがなければ空リストを返す。"""
+    if not AMAZON_LIST_PATH.exists():
+        return {"books": []}
+    try:
+        with open(AMAZON_LIST_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"books": []}
+
+
+def save_amazon_list(books: list) -> None:
+    """Amazon ほしいものリストを保存する。"""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with open(AMAZON_LIST_PATH, "w", encoding="utf-8") as f:
+        json.dump({"books": books}, f, ensure_ascii=False, indent=2)
 
 
 # ------------------------------------------------------------------

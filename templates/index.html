@@ -204,6 +204,29 @@
           <div id="bookSearchPhotoStatus" class="book-search-photo-status"></div>
           <div id="bookSearchResults" class="book-search-results"></div>
         </div>
+        <!-- Amazon ほしいものリスト -->
+        <div class="amazon-list-section" id="amazonListSection">
+          <div class="amazon-list-header">
+            <span class="amazon-list-title">Amazonほしいものリスト</span>
+            <span class="amazon-list-count" id="amazonListCount"></span>
+          </div>
+          <!-- 登録済み表示（名前あり） -->
+          <div class="amazon-list-registered" id="amazonListRegistered" style="display:none;">
+            <a id="amazonListRegisteredLink" href="#" target="_blank" rel="noopener" class="amazon-list-registered-name"></a>
+            <button type="button" id="amazonListUrlEditBtn" class="btn-amazon-url-edit">編集</button>
+          </div>
+          <!-- URL・名前入力欄 -->
+          <div class="amazon-list-url-form" id="amazonListUrlForm">
+            <div class="amazon-list-url-row">
+              <input type="text" id="amazonListName" class="amazon-list-name-input" placeholder="リスト名（例: 読みたい本）">
+            </div>
+            <div class="amazon-list-url-row">
+              <input type="url" id="amazonListUrl" class="amazon-list-url-input" placeholder="AmazonほしいものリストのURL…">
+              <button type="button" id="amazonListUrlSaveBtn" class="btn-amazon-url-save">保存</button>
+            </div>
+          </div>
+          <div id="amazonListItems" class="amazon-list-items"></div>
+        </div>
       </div>
 
       <!-- Oshi: AI推し -->

@@ -14,6 +14,7 @@ const API = {
   yondaRecommend: '/api/yonda-recommend',
   bookCover: '/api/book-cover',
   bookInfo: '/api/book-info',
+  amazonList: '/api/amazon-list',
 };
 
 let allBooks = [];
@@ -1160,6 +1161,7 @@ function renderBookSearchResults() {
   const urls = getBookSearchUrls(query, { libraryQuery: query });
 
   if (matches.length === 0) {
+    const bookData = JSON.stringify({ title: query, author: '', asin: '', cover_url: '' });
     resultsEl.innerHTML = `
       <div class="book-search-result-item book-search-links-only">
         <p class="book-search-query">「${escapeHtml(query)}」で検索</p>
@@ -1169,6 +1171,7 @@ function renderBookSearchResults() {
           <a href="${urls.mercari}" target="_blank" rel="noopener" class="book-search-link book-search-link-mercari">メルカリ</a>
           <a href="${urls.bookoff}" target="_blank" rel="noopener" class="book-search-link book-search-link-bookoff">ブックオフ</a>
           <a href="${urls.setagaya}" target="_blank" rel="noopener" class="book-search-link book-search-link-setagaya book-search-link-library">図書館</a>
+          <button class="book-search-link btn-amazon-list-add" data-book='${escapeHtml(bookData)}'>+ Amazonリスト</button>
         </div>
       </div>
     `;
@@ -1176,6 +1179,8 @@ function renderBookSearchResults() {
     const items = matches.slice(0, 20).map(book => {
       const searchText = `${book.title || ''} ${book.author || ''}`.trim() || query;
       const u = getBookSearchUrls(searchText, { libraryQuery: searchText });
+      const asin = (book.source === 'kindle' || book.source === 'audible_jp') ? (book.catalog_number || '') : '';
+      const bookData = JSON.stringify({ title: book.title || '', author: book.author || '', asin, cover_url: book.cover_url || '' });
       return `
         <div class="book-search-result-item">
           <div class="book-search-result-meta">
@@ -1188,6 +1193,7 @@ function renderBookSearchResults() {
             <a href="${u.mercari}" target="_blank" rel="noopener" class="book-search-link book-search-link-mercari">メルカリ</a>
             <a href="${u.bookoff}" target="_blank" rel="noopener" class="book-search-link book-search-link-bookoff">ブックオフ</a>
             <a href="${u.setagaya}" target="_blank" rel="noopener" class="book-search-link book-search-link-setagaya book-search-link-library">図書館</a>
+            <button class="book-search-link btn-amazon-list-add" data-book='${escapeHtml(bookData)}'>+ Amazonリスト</button>
           </div>
         </div>
       `;
@@ -1196,6 +1202,185 @@ function renderBookSearchResults() {
   }
   resultsEl.style.display = 'block';
 }
+
+/* --- Amazon ほしいものリスト --- */
+
+function getAmazonWishlistUrl(asin, title, author) {
+  if (asin) return `https://www.amazon.co.jp/wishlist/add-item?ASIN.1=${encodeURIComponent(asin)}`;
+  const q = encodeURIComponent(`${title} ${author}`.trim());
+  return `https://www.amazon.co.jp/s?k=${q}`;
+}
+
+async function loadAmazonList() {
+  try {
+    const res = await fetch(API.amazonList);
+    const data = await res.json();
+    renderAmazonList(data.books || []);
+  } catch (e) {
+    console.error('loadAmazonList error:', e);
+  }
+}
+
+function renderAmazonList(books) {
+  const section = document.getElementById('amazonListSection');
+  const itemsEl = document.getElementById('amazonListItems');
+  const countEl = document.getElementById('amazonListCount');
+  if (!section || !itemsEl) return;
+
+  section.style.display = 'block';
+  if (countEl) countEl.textContent = books.length > 0 ? `${books.length}冊` : '';
+
+  if (books.length === 0) {
+    itemsEl.innerHTML = '<p class="amazon-list-empty">検索結果の「+ Amazonリスト」から本を追加できます</p>';
+    return;
+  }
+
+  itemsEl.innerHTML = books.map(book => {
+    const wishUrl = getAmazonWishlistUrl(book.asin, book.title, book.author);
+    const cover = book.cover_url
+      ? `<img class="amazon-list-cover" src="${escapeHtml(book.cover_url)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+      : '';
+    return `
+      <div class="amazon-list-card" data-id="${escapeHtml(book.id)}">
+        ${cover}
+        <div class="amazon-list-card-meta">
+          <span class="amazon-list-card-title">${escapeHtml(book.title || '—')}</span>
+          <span class="amazon-list-card-author">${escapeHtml(book.author || '')}</span>
+          <span class="amazon-list-card-date">${escapeHtml(book.added_date || '')}</span>
+        </div>
+        <div class="amazon-list-card-actions">
+          <a href="${wishUrl}" target="_blank" rel="noopener" class="btn-amazon-open">Amazonで開く</a>
+          <button class="btn-amazon-list-remove" data-id="${escapeHtml(book.id)}">削除</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function addToAmazonList(bookData) {
+  try {
+    const res = await fetch(API.amazonList, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bookData),
+    });
+    const data = await res.json();
+    if (data.success) await loadAmazonList();
+    return data;
+  } catch (e) {
+    console.error('addToAmazonList error:', e);
+    return { success: false };
+  }
+}
+
+async function removeFromAmazonList(id) {
+  try {
+    await fetch(`${API.amazonList}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await loadAmazonList();
+  } catch (e) {
+    console.error('removeFromAmazonList error:', e);
+  }
+}
+
+/* Amazon Wishlist URL の保存・読み込み */
+
+const AMAZON_LIST_URL_KEY = 'yonda_amazonListUrl';
+const AMAZON_LIST_NAME_KEY = 'yonda_amazonListName';
+
+function loadAmazonListUrl() {
+  const url = localStorage.getItem(AMAZON_LIST_URL_KEY) || '';
+  const name = localStorage.getItem(AMAZON_LIST_NAME_KEY) || '';
+  const urlInput = document.getElementById('amazonListUrl');
+  const nameInput = document.getElementById('amazonListName');
+  if (urlInput) urlInput.value = url;
+  if (nameInput) nameInput.value = name;
+  _updateAmazonListRegisteredView(url, name);
+}
+
+function _updateAmazonListRegisteredView(url, name) {
+  const registered = document.getElementById('amazonListRegistered');
+  const form = document.getElementById('amazonListUrlForm');
+  const link = document.getElementById('amazonListRegisteredLink');
+  if (!registered || !form) return;
+
+  if (url) {
+    registered.style.display = 'flex';
+    form.style.display = 'none';
+    if (link) {
+      link.href = url;
+      link.textContent = name || url;
+    }
+  } else {
+    registered.style.display = 'none';
+    form.style.display = 'block';
+  }
+}
+
+function saveAmazonListUrl() {
+  const urlInput = document.getElementById('amazonListUrl');
+  const nameInput = document.getElementById('amazonListName');
+  if (!urlInput) return;
+  const url = (urlInput.value || '').trim();
+  const name = (nameInput ? nameInput.value : '').trim();
+  if (url) {
+    localStorage.setItem(AMAZON_LIST_URL_KEY, url);
+    if (name) localStorage.setItem(AMAZON_LIST_NAME_KEY, name);
+    else localStorage.removeItem(AMAZON_LIST_NAME_KEY);
+    _updateAmazonListRegisteredView(url, name);
+    showToast('AmazonほしいものリストのURLを保存しました');
+  } else {
+    localStorage.removeItem(AMAZON_LIST_URL_KEY);
+    localStorage.removeItem(AMAZON_LIST_NAME_KEY);
+    _updateAmazonListRegisteredView('', '');
+    showToast('URLをクリアしました');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  const saveBtn = document.getElementById('amazonListUrlSaveBtn');
+  if (saveBtn) saveBtn.addEventListener('click', saveAmazonListUrl);
+
+  const urlInput = document.getElementById('amazonListUrl');
+  if (urlInput) urlInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') saveAmazonListUrl();
+  });
+
+  const editBtn = document.getElementById('amazonListUrlEditBtn');
+  if (editBtn) editBtn.addEventListener('click', function() {
+    const registered = document.getElementById('amazonListRegistered');
+    const form = document.getElementById('amazonListUrlForm');
+    if (registered) registered.style.display = 'none';
+    if (form) form.style.display = 'block';
+    if (urlInput) urlInput.focus();
+  });
+
+  loadAmazonListUrl();
+});
+
+// イベントデリゲーション: 検索結果の「+ Amazonリスト」ボタン
+document.addEventListener('click', async function(e) {
+  const addBtn = e.target.closest('.btn-amazon-list-add');
+  if (addBtn) {
+    e.preventDefault();
+    let bookData;
+    try { bookData = JSON.parse(addBtn.dataset.book); } catch (_) { return; }
+    addBtn.disabled = true;
+    addBtn.textContent = '追加中…';
+    const result = await addToAmazonList(bookData);
+    if (result.success) {
+      addBtn.textContent = result.already_exists ? '追加済み' : '追加しました';
+    } else {
+      addBtn.textContent = 'エラー';
+      addBtn.disabled = false;
+    }
+  }
+
+  const removeBtn = e.target.closest('.btn-amazon-list-remove');
+  if (removeBtn) {
+    const id = removeBtn.dataset.id;
+    if (id) await removeFromAmazonList(id);
+  }
+});
 
 /* --- AI推し（選書チャット） --- */
 
@@ -3074,6 +3259,7 @@ async function init() {
     }
   }
   updateMainTabVisibility();
+  loadAmazonList();
 }
 
 if (document.readyState === 'loading') {

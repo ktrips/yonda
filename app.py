@@ -1014,6 +1014,11 @@ def api_fetch():
                     library_service.fetch_and_save(lid)
                 except Exception as e:
                     errors[lid] = str(e)
+            try:
+                library_service.try_auto_fetch_kindle()
+            except Exception as e:
+                errors["kindle"] = str(e)
+                logger.warning("Kindle 自動取得エラー: %s", e)
             combined = library_service.load_saved()
             result = {"success": True, **(combined or {})}
             if errors:
@@ -1117,6 +1122,59 @@ def _api_fetch_kindle(session_id: str, otp: str):
 def api_libraries():
     """対応図書館一覧"""
     return jsonify({"success": True, "libraries": library_service.get_available_libraries()})
+
+
+# ------------------------------------------------------------------
+# Amazon ほしいものリスト
+# ------------------------------------------------------------------
+
+@app.route("/api/amazon-list", methods=["GET"])
+def api_amazon_list_get():
+    """Amazon ほしいものリストを返す"""
+    return jsonify(library_service.load_amazon_list())
+
+
+@app.route("/api/amazon-list", methods=["POST"])
+def api_amazon_list_add():
+    """Amazon ほしいものリストに本を追加する"""
+    body = request.get_json(silent=True) or {}
+    title = (body.get("title") or "").strip()
+    if not title:
+        return jsonify({"success": False, "error": "title は必須です"}), 400
+
+    author = (body.get("author") or "").strip()
+    asin = (body.get("asin") or "").strip()
+    cover_url = (body.get("cover_url") or "").strip()
+
+    import hashlib
+    entry_id = asin if asin else hashlib.md5(f"{title}__{author}".encode()).hexdigest()[:12]
+
+    data = library_service.load_amazon_list()
+    books = data.get("books", [])
+
+    if any(b.get("id") == entry_id for b in books):
+        return jsonify({"success": True, "already_exists": True, "id": entry_id})
+
+    from datetime import date
+    books.append({
+        "id": entry_id,
+        "title": title,
+        "author": author,
+        "asin": asin,
+        "cover_url": cover_url,
+        "added_date": date.today().isoformat(),
+    })
+    library_service.save_amazon_list(books)
+    return jsonify({"success": True, "id": entry_id})
+
+
+@app.route("/api/amazon-list/<entry_id>", methods=["DELETE"])
+def api_amazon_list_delete(entry_id: str):
+    """Amazon ほしいものリストから本を削除する"""
+    data = library_service.load_amazon_list()
+    books = [b for b in data.get("books", []) if b.get("id") != entry_id]
+    library_service.save_amazon_list(books)
+    return jsonify({"success": True})
 
 
 _DOWNLOAD_MAP = {

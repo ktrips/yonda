@@ -82,12 +82,12 @@
       <h2>定期自動取得（Cloud Run 環境）</h2>
       <p>Cloud Run にデプロイした場合、Cloud Scheduler により毎日自動でデータが取得・保存されます。</p>
       <ul>
-        <li><strong>朝 06:00 / 昼 12:00 / 夕 18:00（JST）</strong>に図書館・Audible を一括取得</li>
+        <li><strong>朝 06:00 / 昼 12:00 / 夕 18:00（JST）</strong>に図書館・Audible・Kindle を一括取得</li>
         <li>取得結果は GCS バケットに自動保存されます</li>
         <li>一部ソースが失敗しても他ソースの取得は継続されます</li>
         <li>メニューの「読書記録取込み」で、ソースごとの最終取得日時を確認できます</li>
       </ul>
-      <p>Kindle は自動取得の対象外です。「読書記録取込み」メニューから手動で取得してください。</p>
+      <p><strong>Kindle の自動取得</strong>：保存済みセッションが有効な場合、またはローカルファイル（<code>BookData.sqlite</code>）が利用可能な場合に自動取得されます。OTP は要求されず、どちらも利用できない場合はスキップされます。初回のみ手動ログイン（OTP 入力）が必要です。</p>
 
       <h2>Slack 連携（/yonda コマンド）</h2>
       <p>Slack の Slash Command <code>/yonda</code> で読書記録を検索・確認できます。</p>

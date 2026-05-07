@@ -213,16 +213,17 @@ Google Cloud Run へのデプロイ方法は 2 通りあります。
 
 | ジョブ名 | 時刻（JST） | 対象 |
 |----------|-------------|------|
-| `yonda-fetch-morning` | 06:00 | 図書館・Audible |
-| `yonda-fetch-noon` | 12:00 | 図書館・Audible |
-| `yonda-fetch-evening` | 18:00 | 図書館・Audible |
+| `yonda-fetch-morning` | 06:00 | 図書館・Audible・Kindle（自動） |
+| `yonda-fetch-noon` | 12:00 | 図書館・Audible・Kindle（自動） |
+| `yonda-fetch-evening` | 18:00 | 図書館・Audible・Kindle（自動） |
 
 取得先エンドポイント: `POST https://yonda.ktrips.net/api/fetch` with `{"library_id": "all"}`
 
-> **Kindle について**  
-> Kindle はスケジュール自動取得の対象外です。手動で「読書記録取込み」から取得してください。  
-> - Amazon メール・パスワードを登録し、初回のみ OTP を入力（**セッション永続化により次回以降は OTP 不要**、有効期限: 7日間）  
-> - または `BookData.sqlite` を GCS バケットに配置し、`YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite` を設定
+> **Kindle の自動取得について**  
+> セッションが有効な場合、またはローカルファイル（`BookData.sqlite` / `KindleSyncMetadataCache.xml`）が利用可能な場合に自動取得されます。OTP は要求されません。  
+> - 初回のみ手動ログイン（OTP 入力）が必要。以降はセッションが自動再利用されます（有効期限: 7日間）  
+> - セッションが無効でローカルファイルもない場合はスキップされ、他ソースの取得は継続されます  
+> - GCS に `BookData.sqlite` を配置する場合は `YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite` を設定
 
 ### Slack 連携セットアップ
 
