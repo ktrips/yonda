@@ -139,7 +139,7 @@ def main() -> None:
         payload = {
             "library_id": "kindle",
             "library_name": "Kindle",
-            "fetch_date": __import__("datetime").datetime.now().isoformat()[:19],
+            "fetch_date": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(timespec="seconds"),
             "books": [r.to_dict() for r in records],
         }
         Path(args.output).write_text(

@@ -195,14 +195,16 @@ function sourceLabel(source) { return SOURCE_LABELS[source] || source || ''; }
 function formatSyncDate(isoStr) {
   if (!isoStr) return '未取得';
   try {
-    const d = new Date(isoStr);
-    // 日本時間（JST）に変換
-    const jst = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
-    const M = jst.getMonth() + 1;
-    const D = jst.getDate();
-    const h = String(jst.getHours()).padStart(2, '0');
-    const m = String(jst.getMinutes()).padStart(2, '0');
-    return `${M}/${D} ${h}:${m}`;
+    // タイムゾーン情報がない文字列はUTCとして扱う（Cloud RunはUTCで動作するため）
+    const normalized = /[Z+\-]\d{2}:?\d{2}$/.test(isoStr) ? isoStr : isoStr + 'Z';
+    const d = new Date(normalized);
+    return d.toLocaleString('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   } catch { return '不明'; }
 }
 

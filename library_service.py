@@ -6,7 +6,7 @@ import logging
 import os
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 import requests
@@ -542,7 +542,7 @@ def _build_payload(adapter, records: list[BookRecord]) -> dict:
     return {
         "library_id": adapter.library_id,
         "library_name": adapter.library_name,
-        "fetch_date": datetime.now().isoformat(timespec="seconds"),
+        "fetch_date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "total": len(records),
         "books": [r.to_dict() for r in records],
     }
