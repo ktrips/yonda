@@ -173,7 +173,7 @@ jobs:
               --format="value(name)" \
               --sort-by="~createTime" \
               | tail -n +2 \
-              | xargs -r -I{} gcloud secrets versions destroy "${secret_name}" --version="{}" --quiet
+              | xargs -r -I{} gcloud secrets versions destroy "{}" --quiet
           }
 
           if [[ -f "auth_jp.json" ]]; then

@@ -120,7 +120,7 @@ create_or_update_secret() {
     --format="value(name)" \
     --sort-by="~createTime" \
     | tail -n +2 \
-    | xargs -r -I{} gcloud secrets versions destroy "${name}" --version="{}" --quiet
+    | xargs -r -I{} gcloud secrets versions destroy "{}" --quiet
   echo "    ✔ ${name}"
 }
 
