@@ -1211,6 +1211,12 @@ function getAmazonWishlistUrl(asin, title, author) {
   return `https://www.amazon.co.jp/s?k=${q}`;
 }
 
+function getAmazonProductUrl(asin, title, author) {
+  if (asin) return `https://www.amazon.co.jp/dp/${encodeURIComponent(asin)}`;
+  const q = encodeURIComponent(`${title} ${author}`.trim());
+  return `https://www.amazon.co.jp/s?k=${q}`;
+}
+
 async function loadAmazonList() {
   try {
     const res = await fetch(API.amazonList);
@@ -1237,6 +1243,7 @@ function renderAmazonList(books) {
 
   itemsEl.innerHTML = books.map(book => {
     const wishUrl = getAmazonWishlistUrl(book.asin, book.title, book.author);
+    const productUrl = getAmazonProductUrl(book.asin, book.title, book.author);
     const cover = book.cover_url
       ? `<img class="amazon-list-cover" src="${escapeHtml(book.cover_url)}" alt="" loading="lazy" onerror="this.style.display='none'">`
       : '';
@@ -1244,7 +1251,7 @@ function renderAmazonList(books) {
       <div class="amazon-list-card" data-id="${escapeHtml(book.id)}">
         ${cover}
         <div class="amazon-list-card-meta">
-          <span class="amazon-list-card-title">${escapeHtml(book.title || '—')}</span>
+          <a href="${productUrl}" target="_blank" rel="noopener" class="amazon-list-card-title">${escapeHtml(book.title || '—')}</a>
           <span class="amazon-list-card-author">${escapeHtml(book.author || '')}</span>
           <span class="amazon-list-card-date">${escapeHtml(book.added_date || '')}</span>
         </div>
