@@ -1918,7 +1918,7 @@ function renderMonthlyChart() {
       barPercentage: 0.7,
     }]),
     {
-      label: useRuntime ? '読了（試聴時間）' : 'Audible',
+      label: useRuntime ? '読了（視聴時間）' : 'Audible',
       data: audData,
       backgroundColor: 'rgba(192,94,32,0.55)',
       borderRadius: 2,
@@ -1961,7 +1961,7 @@ function renderMonthlyChart() {
             label: (item) => {
               const v = item.raw;
               const lbl = item.dataset.label || '';
-              if (useRuntime && lbl.includes('試聴時間')) {
+              if (useRuntime && lbl.includes('視聴時間')) {
                 const h = Math.round(v * 10) / 10;
                 return `${lbl}: ${h}時間`;
               }
@@ -2360,14 +2360,10 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
         <div class="book-card-body">
           <div class="book-card-title">${completedBadge}${favoriteBadge}${srcBadge}${escapeHtml(book.title)}</div>
           ${supplementHtml ? `<div class="book-card-title-supplement">${supplementHtml}</div>` : ''}
-          <div class="book-card-author">${escapeHtml(book.author || '')}</div>
+          <div class="book-card-author">${escapeHtml(book.author || '')}${(book.runtime_length_min || 0) > 0 ? ` · ${formatRuntime(book.runtime_length_min)}` : ''}${book.completed && book.completed_date ? ` · 読了: ${formatDateOnly(book.completed_date)}` : ''}</div>
           ${genreHtml}
           ${progressBarHtml}
-          <div class="book-card-meta">
-            ${(book.runtime_length_min || 0) > 0 ? `<span class="book-card-runtime">${formatRuntime(book.runtime_length_min)} · </span>` : ''}
-            ${book.completed && book.completed_date ? `<span>読了: ${formatDateOnly(book.completed_date)}</span>` : (formatProgress(book) ? `<span>進捗: ${formatProgress(book)}</span>` : `<span>${formatDate(book.loan_date)}</span>`)}
-            ${(t => t != null ? ` · 積読: ${t}日` : '')(getTsundokuDays(book))}
-          </div>
+          ${!book.completed ? `<div class="book-card-meta">${formatProgress(book) ? `<span>進捗: ${formatProgress(book)}</span>` : `<span>${formatDate(book.loan_date)}</span>`}</div>` : ''}
           ${summaryHtml}
         </div>
       </div>
