@@ -2297,7 +2297,8 @@ function findBookInsight(book) {
 function renderTableInsightCell(book) {
   const insight = findBookInsight(book);
   if (!insight || !Array.isArray(insight.points) || insight.points.length === 0) {
-    return '<span class="book-table-insight-empty">—</span>';
+    const idx = allBooks.indexOf(book);
+    return `<button type="button" class="btn-table-ai-insight" data-book-index="${idx}">AI書評</button>`;
   }
   return `
     <ol class="book-table-insights">
@@ -2330,14 +2331,21 @@ async function loadBookInsight(book) {
   }
 }
 
-async function generateBookInsight() {
-  if (!currentDetailBook) return;
-  const requestedBook = currentDetailBook;
+async function generateBookInsight(bookOverride = null, options = {}) {
+  const requestedBook = bookOverride || currentDetailBook;
+  if (!requestedBook) return;
+  const { tableButton = null } = options;
   const btn = document.getElementById('bookInsightGenerateBtn');
   const listEl = document.getElementById('bookDetailInsights');
-  if (btn) btn.disabled = true;
-  if (listEl) listEl.innerHTML = '';
-  setBookInsightStatus('インターネットから情報を集めてAIで要約しています…（1分ほどかかることがあります）', 'loading');
+  if (tableButton) {
+    tableButton.disabled = true;
+    tableButton.textContent = '生成中…';
+  }
+  if (!bookOverride) {
+    if (btn) btn.disabled = true;
+    if (listEl) listEl.innerHTML = '';
+    setBookInsightStatus('インターネットから情報を集めてAIで要約しています…（1分ほどかかることがあります）', 'loading');
+  }
   try {
     const res = await fetch(API.bookInsights + '/generate', {
       method: 'POST',
@@ -2348,16 +2356,23 @@ async function generateBookInsight() {
     if (!res.ok || !data.success) {
       throw new Error(data.error || '生成に失敗しました');
     }
-    if (currentDetailBook !== requestedBook) return;
     if (data.insight?.id) bookInsightsCache[data.insight.id] = data.insight;
-    renderBookInsight(data.insight);
+    if (!bookOverride && currentDetailBook === requestedBook) {
+      renderBookInsight(data.insight);
+    }
     if (document.getElementById('viewTable')?.classList.contains('active')) {
       renderBooks();
     }
   } catch (e) {
     console.error('generateBookInsight error:', e);
-    setBookInsightStatus(e.message || '生成に失敗しました。', 'error');
-    if (btn) btn.disabled = false;
+    if (tableButton) {
+      tableButton.disabled = false;
+      tableButton.textContent = 'AI書評';
+      tableButton.title = e.message || '生成に失敗しました。';
+    } else {
+      setBookInsightStatus(e.message || '生成に失敗しました。', 'error');
+      if (btn) btn.disabled = false;
+    }
   }
 }
 
@@ -3271,6 +3286,17 @@ document.getElementById('bookDetailModal')?.addEventListener('click', (e) => {
 document.getElementById('bookInsightGenerateBtn')?.addEventListener('click', generateBookInsight);
 
 document.getElementById('bookList')?.addEventListener('click', (e) => {
+  const aiBtn = e.target.closest('.btn-table-ai-insight');
+  if (aiBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const idx = parseInt(aiBtn.getAttribute('data-book-index'), 10);
+    if (!isNaN(idx) && allBooks[idx]) {
+      generateBookInsight(allBooks[idx], { tableButton: aiBtn });
+    }
+    return;
+  }
+
   const th = e.target.closest('.th-sortable');
   if (th) {
     e.preventDefault();
