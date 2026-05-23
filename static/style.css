@@ -1603,6 +1603,34 @@ header {
 .book-table .col-asin { font-size: 0.7rem; font-family: monospace; color: var(--text-muted); }
 .book-table .col-runtime { min-width: 5em; font-size: 0.8rem; color: var(--text-secondary); }
 .book-table .col-tsundoku { min-width: 4em; font-size: 0.85rem; color: var(--text-secondary); }
+.book-table .col-ai-insight {
+  min-width: 260px;
+  max-width: 420px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  vertical-align: top;
+}
+.book-table-insights {
+  margin: 0;
+  padding-left: 1.15rem;
+  max-height: 7.2em;
+  overflow: hidden;
+}
+.book-table-insights li {
+  margin-bottom: 0.25rem;
+}
+.book-table-insight-heading {
+  font-weight: 600;
+  color: var(--text);
+  margin-right: 0.25rem;
+}
+.book-table-insight-text {
+  color: var(--text-secondary);
+}
+.book-table-insight-empty {
+  color: var(--text-muted);
+}
 .rating-cell .rating-comment {
   font-size: 0.7rem; color: var(--text-secondary);
   margin-top: 0.15rem; line-height: 1.3;
@@ -1807,6 +1835,63 @@ header {
   font-size: 0.85rem; line-height: 1.7; color: var(--text);
   white-space: pre-wrap; max-height: 200px; overflow-y: auto;
 }
+.book-detail-insights-wrap {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.book-detail-insights-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.book-detail-insights-header h3 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 0;
+}
+.book-detail-insights-header .btn {
+  width: auto;
+  flex: 0 0 auto;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+}
+.book-detail-insights-status {
+  min-height: 1.2rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+.book-detail-insights-status.error { color: #8b3030; }
+.book-detail-insights {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.book-detail-insight-item {
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+.book-detail-insight-heading {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 0.15rem;
+}
+.book-detail-insight-text {
+  color: var(--text-secondary);
+}
+.book-detail-insight-source {
+  margin-top: 0.15rem;
+  font-size: 0.76rem;
+}
+.book-detail-insight-source a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.book-detail-insight-source a:hover { text-decoration: underline; }
 
 /* === Responsive === */
 @media (max-width: 768px) {

@@ -36,6 +36,7 @@ _JSON_MAP: dict[str, Path] = {
 }
 
 AMAZON_LIST_PATH = DATA_DIR / "amazon_list.json"
+BOOK_INSIGHTS_PATH = DATA_DIR / "book_insights.json"
 
 _ENV_MAP = {
     "setagaya": ("SETAGAYA_USER_ID", "SETAGAYA_PASSWORD"),
@@ -419,6 +420,52 @@ def save_amazon_list(books: list) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with open(AMAZON_LIST_PATH, "w", encoding="utf-8") as f:
         json.dump({"books": books}, f, ensure_ascii=False, indent=2)
+
+
+def book_insight_key(book: dict) -> str:
+    """本ごとのAI書評ポイント保存キーを作る。ASIN等があれば優先する。"""
+    source = (book.get("source") or "").strip()
+    catalog_number = (book.get("catalog_number") or book.get("asin") or "").strip()
+    if catalog_number:
+        return f"{source or 'book'}:{catalog_number}"
+    title = (book.get("title") or "").strip()
+    author = (book.get("author") or "").strip()
+    raw = f"{source}::{title}::{author}".lower()
+    import hashlib
+    return "book:" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def load_book_insights() -> dict:
+    """AI書評ポイントを読み込む。"""
+    if not BOOK_INSIGHTS_PATH.exists():
+        return {"items": {}}
+    try:
+        with open(BOOK_INSIGHTS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and isinstance(data.get("items"), dict):
+            return data
+    except Exception:
+        logger.warning("AI書評ポイントの読込に失敗", exc_info=True)
+    return {"items": {}}
+
+
+def get_book_insight(book: dict) -> dict | None:
+    """指定本のAI書評ポイントを返す。"""
+    key = book_insight_key(book)
+    return load_book_insights().get("items", {}).get(key)
+
+
+def save_book_insight(book: dict, insight: dict) -> dict:
+    """指定本のAI書評ポイントを保存して返す。"""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    data = load_book_insights()
+    key = book_insight_key(book)
+    insight = dict(insight)
+    insight["id"] = key
+    data.setdefault("items", {})[key] = insight
+    with open(BOOK_INSIGHTS_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return insight
 
 
 # ------------------------------------------------------------------

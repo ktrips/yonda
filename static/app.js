@@ -15,6 +15,7 @@ const API = {
   bookCover: '/api/book-cover',
   bookInfo: '/api/book-info',
   amazonList: '/api/amazon-list',
+  bookInsights: '/api/book-insights',
 };
 
 let allBooks = [];
@@ -24,6 +25,8 @@ let activeMainTab = 'yonda'; // 'yonda' | 'yomu' | 'oshi'
 let activeBookTab = 'read'; // 'read' = 読んだ/途中, 'ranking' = ランキング, 'recommend' = オススメ (Yonda内)
 let monthlyChart = null;
 let genreChart = null;
+let currentDetailBook = null;
+let bookInsightsCache = {};
 let chartMode = 'count';  // 'count' | 'runtime'
 let relationChartMode = 'genre_rating';  // 'genre_rating' | 'author_genre'
 const PAGE_SIZE = 100;
@@ -456,6 +459,17 @@ function groupBySubGenreForDisplay(books, selectedGenre) {
 
 /* --- Data loading --- */
 
+async function loadBookInsightsCache() {
+  try {
+    const res = await fetch(API.bookInsights);
+    const data = await res.json();
+    bookInsightsCache = data.success && data.items ? data.items : {};
+  } catch (e) {
+    console.error('loadBookInsightsCache error:', e);
+    bookInsightsCache = {};
+  }
+}
+
 async function loadFromFile() {
   const loading = document.getElementById('loading');
   const error = document.getElementById('error');
@@ -469,6 +483,7 @@ async function loadFromFile() {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'データなし');
     allBooks = data.books || [];
+    await loadBookInsightsCache();
     const sources = data.sources || [];
     updateStats();
     populateSourceFilter(sources);
@@ -534,6 +549,7 @@ async function fetchFromLibrary(opts = {}) {
       throw new Error(data.error || '取得に失敗しました');
     } else {
       allBooks = data.books || [];
+      await loadBookInsightsCache();
       const sources = data.sources || [];
       updateStats();
       populateSourceFilter(sources);
@@ -2226,7 +2242,127 @@ function renderBooks() {
   renderPagination(start);
 }
 
+function setBookInsightStatus(message, className = '') {
+  const statusEl = document.getElementById('bookDetailInsightStatus');
+  if (!statusEl) return;
+  statusEl.textContent = message || '';
+  statusEl.className = `book-detail-insights-status ${className}`.trim();
+}
+
+function renderBookInsight(insight) {
+  const listEl = document.getElementById('bookDetailInsights');
+  const btn = document.getElementById('bookInsightGenerateBtn');
+  if (!listEl || !btn) return;
+  if (!insight || !Array.isArray(insight.points) || insight.points.length === 0) {
+    listEl.innerHTML = '';
+    btn.textContent = 'ポイントを生成';
+    btn.disabled = false;
+    setBookInsightStatus('未生成です。ボタンを押すと、この本についてインターネットから情報を集めて5点に要約します。');
+    return;
+  }
+  listEl.innerHTML = insight.points.map((point) => {
+    const source = point.source_url
+      ? `<a href="${escapeHtml(point.source_url)}" target="_blank" rel="noopener">出典</a>`
+      : '';
+    return `
+      <li class="book-detail-insight-item">
+        <div class="book-detail-insight-heading">${escapeHtml(point.heading || 'ポイント')}</div>
+        <div class="book-detail-insight-text">${escapeHtml(point.text || '')}</div>
+        ${source ? `<div class="book-detail-insight-source">${source}</div>` : ''}
+      </li>
+    `;
+  }).join('');
+  btn.textContent = '再生成';
+  btn.disabled = false;
+  const generatedAt = insight.generated_at ? `生成: ${formatSyncDate(insight.generated_at)}` : '';
+  const model = insight.model ? ` / ${escapeHtml(insight.model)}` : '';
+  setBookInsightStatus(`${generatedAt}${model}`);
+}
+
+function findBookInsight(book) {
+  if (!book || !bookInsightsCache) return null;
+  const source = (book.source || '').trim();
+  const catalog = (book.catalog_number || book.asin || '').trim();
+  if (catalog) {
+    const byCatalog = bookInsightsCache[`${source || 'book'}:${catalog}`];
+    if (byCatalog) return byCatalog;
+  }
+  const title = (book.title || '').trim();
+  const author = (book.author || '').trim();
+  return Object.values(bookInsightsCache).find((item) =>
+    (item.title || '').trim() === title && (item.author || '').trim() === author
+  ) || null;
+}
+
+function renderTableInsightCell(book) {
+  const insight = findBookInsight(book);
+  if (!insight || !Array.isArray(insight.points) || insight.points.length === 0) {
+    return '<span class="book-table-insight-empty">—</span>';
+  }
+  return `
+    <ol class="book-table-insights">
+      ${insight.points.slice(0, 5).map((point) => `
+        <li>
+          <span class="book-table-insight-heading">${escapeHtml(point.heading || 'ポイント')}</span>
+          <span class="book-table-insight-text">${escapeHtml(point.text || '')}</span>
+        </li>
+      `).join('')}
+    </ol>
+  `;
+}
+
+async function loadBookInsight(book) {
+  renderBookInsight(null);
+  try {
+    const res = await fetch(API.bookInsights, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ book }),
+    });
+    const data = await res.json();
+    if (currentDetailBook !== book) return;
+    if (data.success && data.insight) {
+      renderBookInsight(data.insight);
+    }
+  } catch (e) {
+    console.error('loadBookInsight error:', e);
+    setBookInsightStatus('保存済みポイントを読み込めませんでした。', 'error');
+  }
+}
+
+async function generateBookInsight() {
+  if (!currentDetailBook) return;
+  const requestedBook = currentDetailBook;
+  const btn = document.getElementById('bookInsightGenerateBtn');
+  const listEl = document.getElementById('bookDetailInsights');
+  if (btn) btn.disabled = true;
+  if (listEl) listEl.innerHTML = '';
+  setBookInsightStatus('インターネットから情報を集めてAIで要約しています…（1分ほどかかることがあります）', 'loading');
+  try {
+    const res = await fetch(API.bookInsights + '/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ book: requestedBook }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || '生成に失敗しました');
+    }
+    if (currentDetailBook !== requestedBook) return;
+    if (data.insight?.id) bookInsightsCache[data.insight.id] = data.insight;
+    renderBookInsight(data.insight);
+    if (document.getElementById('viewTable')?.classList.contains('active')) {
+      renderBooks();
+    }
+  } catch (e) {
+    console.error('generateBookInsight error:', e);
+    setBookInsightStatus(e.message || '生成に失敗しました。', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
 function openBookDetail(book) {
+  currentDetailBook = book;
   const modal = document.getElementById('bookDetailModal');
   const NO_COVER = 'data:image/svg+xml,' + encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="90" viewBox="0 0 64 90">' +
@@ -2293,10 +2429,12 @@ function openBookDetail(book) {
   }
   const summaryText = book.full_summary || book.summary || '';
   document.getElementById('bookDetailSummary').textContent = summaryText || '（概要なし）';
+  loadBookInsight(book);
   modal.classList.add('open');
 }
 
 function closeBookDetail() {
+  currentDetailBook = null;
   document.getElementById('bookDetailModal').classList.remove('open');
 }
 
@@ -2382,7 +2520,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
       if (sg !== lastSubGenre) {
         lastSubGenre = sg;
         const cnt = subGenreCounts[sg] || 0;
-        headerRow = `<tr class="rating-group-row"><td colspan="10" class="rating-group-header">${escapeHtml(sg)}（${cnt}冊）</td></tr>`;
+        headerRow = `<tr class="rating-group-row"><td colspan="11" class="rating-group-header">${escapeHtml(sg)}（${cnt}冊）</td></tr>`;
       }
     }
     const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span>` : '';
@@ -2410,6 +2548,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
         <td>${book.completed ? formatDateOnly(book.completed_date) : (formatProgress(book) || '—')}</td>
         <td class="col-tsundoku">${tsundokuStr}</td>
         <td>${srcBadge}</td>
+        <td class="col-ai-insight">${renderTableInsightCell(book)}</td>
       </tr>
     `;
   }).join('');
@@ -2428,6 +2567,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
           <th class="th-sortable" data-sort-asc="completed_date_asc" data-sort-desc="completed_date_desc" title="クリックでソート">読了日</th>
           <th class="th-sortable" data-sort-asc="tsundoku_desc" data-sort-desc="tsundoku_desc" title="クリックでソート">積読</th>
           <th>ソース</th>
+          <th class="col-ai-insight">AI書評</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -3128,6 +3268,7 @@ document.getElementById('bookDetailClose')?.addEventListener('click', closeBookD
 document.getElementById('bookDetailModal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeBookDetail();
 });
+document.getElementById('bookInsightGenerateBtn')?.addEventListener('click', generateBookInsight);
 
 document.getElementById('bookList')?.addEventListener('click', (e) => {
   const th = e.target.closest('.th-sortable');

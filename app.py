@@ -1118,6 +1118,321 @@ def _api_fetch_kindle(session_id: str, otp: str):
     return jsonify({"success": False, "error": "Amazon へのログインに失敗しました。メールアドレスとパスワードを確認してください。"}), 502
 
 
+def _trim_text(text: str, limit: int = 900) -> str:
+    text = re.sub(r"\s+", " ", (text or "")).strip()
+    return text[:limit]
+
+
+def _extract_json_object(text: str) -> dict:
+    """AI応答からJSONオブジェクト部分を取り出す。"""
+    text = (text or "").strip()
+    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE | re.MULTILINE).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            return json.loads(text[start:end + 1])
+        raise
+
+
+def _fetch_book_context_from_internet(book: dict) -> list[dict]:
+    """公開APIと検索結果スニペットから要約材料を集める。本文の丸ごとは保存しない。"""
+    title = (book.get("title") or "").strip()
+    author = (book.get("author") or "").strip()
+    query = " ".join(x for x in [title, author] if x)
+    if not query:
+        return []
+
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (compatible; YondaBot/1.0; +https://github.com/ktrips/yonda)",
+        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+    })
+    sources: list[dict] = []
+
+    # Google Books: 概要・カテゴリ等が取れる場合がある
+    try:
+        r = session.get(
+            "https://www.googleapis.com/books/v1/volumes",
+            params={"q": query, "maxResults": 5, "langRestrict": "ja"},
+            timeout=12,
+        )
+        r.raise_for_status()
+        items = r.json().get("items") or []
+        if not items:
+            r = session.get(
+                "https://www.googleapis.com/books/v1/volumes",
+                params={"q": query, "maxResults": 5},
+                timeout=12,
+            )
+            r.raise_for_status()
+            items = r.json().get("items") or []
+        for item in items[:5]:
+            info = item.get("volumeInfo") or {}
+            parts = []
+            if info.get("description"):
+                parts.append(info["description"])
+            if info.get("subtitle"):
+                parts.append("副題: " + str(info["subtitle"]))
+            if info.get("categories"):
+                parts.append("カテゴリ: " + "、".join(info["categories"][:5]))
+            if info.get("publisher"):
+                parts.append("出版社: " + str(info["publisher"]))
+            text = _trim_text("。".join(parts), 800)
+            if not text:
+                continue
+            sources.append({
+                "title": info.get("title") or "Google Books",
+                "url": info.get("infoLink") or "",
+                "text": text,
+            })
+    except Exception:
+        logger.debug("Google Books からの書籍情報取得に失敗", exc_info=True)
+
+    # Open Library: 英語圏の書籍では説明や主題が取れることがある
+    try:
+        r = session.get(
+            "https://openlibrary.org/search.json",
+            params={"title": title, "author": author, "limit": 3},
+            timeout=12,
+        )
+        r.raise_for_status()
+        for doc in (r.json().get("docs") or [])[:3]:
+            parts = []
+            if doc.get("first_sentence"):
+                parts.append(str(doc["first_sentence"]))
+            if doc.get("subject"):
+                parts.append("主題: " + "、".join(doc["subject"][:8]))
+            text = _trim_text("。".join(parts), 600)
+            if not text:
+                continue
+            key = doc.get("key") or ""
+            sources.append({
+                "title": doc.get("title") or "Open Library",
+                "url": f"https://openlibrary.org{key}" if key else "https://openlibrary.org",
+                "text": text,
+            })
+    except Exception:
+        logger.debug("Open Library からの書籍情報取得に失敗", exc_info=True)
+
+    # DuckDuckGo HTML検索: 書評・感想ページのタイトルとスニペットだけ利用する
+    try:
+        from bs4 import BeautifulSoup
+
+        r = session.get(
+            "https://duckduckgo.com/html/",
+            params={"q": f"{query} 書評 感想 要約 ポイント"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "lxml")
+        for result in soup.select(".result")[:6]:
+            a = result.select_one(".result__a")
+            snippet = result.select_one(".result__snippet")
+            if not a or not snippet:
+                continue
+            text = _trim_text(snippet.get_text(" ", strip=True), 450)
+            if not text:
+                continue
+            sources.append({
+                "title": a.get_text(" ", strip=True),
+                "url": a.get("href") or "",
+                "text": text,
+            })
+    except Exception:
+        logger.debug("検索スニペットの取得に失敗", exc_info=True)
+
+    seen = set()
+    unique = []
+    for src in sources:
+        key = (src.get("url") or src.get("title") or "").strip()
+        if key and key not in seen:
+            seen.add(key)
+            unique.append(src)
+    return unique[:10]
+
+
+def _call_text_ai(prompt: str, max_tokens: int = 2200, temperature: float = 0.2) -> tuple[str, str, str]:
+    """既存AI設定を使ってテキスト生成する。戻り値: (text, provider, model)。"""
+    cfg = _load_ai_config()
+    api_key = (cfg.get("api_key") or "").strip()
+    provider = (cfg.get("provider") or "gemini").lower()
+    if not api_key:
+        raise ValueError("AI設定が未設定です。設定メニューからAPIキーを登録してください")
+
+    if provider == "openai":
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        r = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=90,
+        )
+        r.raise_for_status()
+        text = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
+        return text, provider, "gpt-4o-mini"
+
+    models_to_try = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-2.5-flash"]
+    last_err = None
+    safety_settings = [
+        {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+        {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+    ]
+    for model in models_to_try:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"maxOutputTokens": max_tokens, "temperature": temperature},
+                "safetySettings": safety_settings,
+            }
+            r = requests.post(url, json=payload, timeout=90)
+            r.raise_for_status()
+            candidates = r.json().get("candidates", [])
+            parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
+            text = (parts[0].get("text", "") if parts else "").strip()
+            if text:
+                return text, provider, model
+        except requests.RequestException as e:
+            last_err = e
+            continue
+    if last_err:
+        raise last_err
+    raise RuntimeError("AIが応答を生成できませんでした")
+
+
+def _generate_book_insight(book: dict) -> dict:
+    title = (book.get("title") or "").strip()
+    author = (book.get("author") or "").strip()
+    if not title:
+        raise ValueError("本のタイトルが必要です")
+
+    sources = _fetch_book_context_from_internet(book)
+    if sources:
+        source_text = "\n\n".join(
+            f"[{i + 1}] {src.get('title', '')}\nURL: {src.get('url', '')}\n内容: {src.get('text', '')}"
+            for i, src in enumerate(sources)
+        )
+        source_instruction = "参考情報を優先し、そこから読み取れる範囲で要約してください。"
+    else:
+        source_text = "外部API・検索スニペットから十分な参考情報を取得できませんでした。"
+        source_instruction = (
+            "参考情報が不足しているため、タイトル・著者から分かる一般的な書誌知識に基づいて生成してください。"
+            "不確かな固有情報は断定せず、source_url は空文字にしてください。"
+        )
+    prompt = f"""次の本について、インターネット上の参考情報をもとに、有益なポイントを5点に要約してください。
+
+本:
+タイトル: {title}
+著者: {author or "不明"}
+
+参考情報:
+{source_text}
+
+要件:
+- 日本語で出力する
+- 重要な情報を必ず5点
+- 各ポイントの本文は180〜200字程度、最大200字
+- 書評・感想・実用ポイント・役立つ場面をバランスよく含める
+- {source_instruction}
+- 参考情報の丸写しは禁止。自分の言葉で要約する
+- 本文・レビューの長い引用は禁止
+- 不明な情報は断定しない
+- 出力はJSONのみ。前置きやMarkdownは禁止
+
+JSON形式:
+{{
+  "points": [
+    {{
+      "heading": "20字以内の見出し",
+      "text": "180〜200字程度の要約",
+      "source_url": "最も関連する参考URL"
+    }}
+  ]
+}}"""
+    text, provider, model = _call_text_ai(prompt)
+    data = _extract_json_object(text)
+    points = data.get("points") if isinstance(data, dict) else None
+    if not isinstance(points, list):
+        raise RuntimeError("AI応答の形式が正しくありません")
+
+    cleaned = []
+    for point in points[:5]:
+        if not isinstance(point, dict):
+            continue
+        heading = _trim_text(point.get("heading") or "ポイント", 40)
+        body = _trim_text(point.get("text") or "", 220)
+        if len(body) > 200:
+            body = body[:200]
+        if body:
+            cleaned.append({
+                "heading": heading,
+                "text": body,
+                "source_url": (point.get("source_url") or "").strip(),
+            })
+    if len(cleaned) < 5:
+        raise RuntimeError("AIが5点のポイントを生成できませんでした")
+
+    from datetime import datetime, timezone
+    return {
+        "title": title,
+        "author": author,
+        "points": cleaned[:5],
+        "sources": [
+            {"title": s.get("title", ""), "url": s.get("url", "")}
+            for s in sources
+            if s.get("url")
+        ][:8],
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "provider": provider,
+        "model": model,
+    }
+
+
+@app.route("/api/book-insights", methods=["GET", "POST"])
+def api_book_insight_get():
+    """保存済みのAI書評ポイントを返す。"""
+    if request.method == "GET":
+        return jsonify({"success": True, **library_service.load_book_insights()})
+    body = request.get_json(silent=True) or {}
+    book = body.get("book") or body
+    insight = library_service.get_book_insight(book)
+    return jsonify({"success": True, "insight": insight})
+
+
+@app.route("/api/book-insights/generate", methods=["POST"])
+def api_book_insight_generate():
+    """指定本のAI書評ポイントを手動生成して保存する。"""
+    body = request.get_json(silent=True) or {}
+    book = body.get("book") or {}
+    try:
+        insight = _generate_book_insight(book)
+        insight = library_service.save_book_insight(book, insight)
+        return jsonify({"success": True, "insight": insight})
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except requests.RequestException as e:
+        err = str(e)
+        if getattr(e, "response", None) is not None:
+            try:
+                err = e.response.json().get("error", {}).get("message", err)
+            except Exception:
+                pass
+        return jsonify({"success": False, "error": err}), 502
+    except Exception as e:
+        logger.warning("AI書評ポイント生成に失敗: %s", e, exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/libraries")
 def api_libraries():
     """対応図書館一覧"""
