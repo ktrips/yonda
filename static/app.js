@@ -2332,6 +2332,7 @@ async function loadBookInsight(book) {
 }
 
 async function generateBookInsight(bookOverride = null, options = {}) {
+  if (bookOverride instanceof Event) bookOverride = null;
   const requestedBook = bookOverride || currentDetailBook;
   if (!requestedBook) return;
   const { tableButton = null } = options;
@@ -3283,7 +3284,7 @@ document.getElementById('bookDetailClose')?.addEventListener('click', closeBookD
 document.getElementById('bookDetailModal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeBookDetail();
 });
-document.getElementById('bookInsightGenerateBtn')?.addEventListener('click', generateBookInsight);
+document.getElementById('bookInsightGenerateBtn')?.addEventListener('click', () => generateBookInsight());
 
 document.getElementById('bookList')?.addEventListener('click', (e) => {
   const aiBtn = e.target.closest('.btn-table-ai-insight');
