@@ -995,6 +995,133 @@ def api_books():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+def _book_identity(book: dict) -> str:
+    catalog = (book.get("catalog_number") or book.get("asin") or "").strip()
+    if catalog:
+        return catalog
+    title = (book.get("title") or "").strip().lower()
+    author = (book.get("author") or "").strip().lower()
+    return f"{title}::{author}"
+
+
+def _audible_review_url(book: dict) -> str:
+    asin = (book.get("catalog_number") or "").strip()
+    if asin:
+        return f"https://www.audible.co.jp/write-review?asin={asin}"
+    return book.get("detail_url") or "https://www.audible.co.jp/library/titles"
+
+
+def _message_text_for_audible_books(books: list[dict]) -> str:
+    lines = ["Audibleで新しく読了になった本があります。"]
+    for i, item in enumerate(books, 1):
+        book = item["book"]
+        lines.append("")
+        lines.append(f"{i}. {book.get('title') or '不明なタイトル'}")
+        if book.get("author"):
+            lines.append(f"著者: {book['author']}")
+        if book.get("review_url"):
+            lines.append(f"レビュー: {book['review_url']}")
+        points = item.get("insight", {}).get("points") or []
+        if points:
+            lines.append("書評ポイント:")
+            for p in points[:5]:
+                lines.append(f"- {(p.get('heading') or 'ポイント')}: {p.get('text') or ''}")
+    return "\n".join(lines)
+
+
+def _send_ios_message_webhook(message: dict) -> bool:
+    """iOS/SMS連携へ送る。未設定なら何もしない。"""
+    sid = os.environ.get("TWILIO_ACCOUNT_SID", "")
+    token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    from_number = os.environ.get("TWILIO_FROM", "")
+    to_number = os.environ.get("IOS_MESSAGE_TO", "")
+    if sid and token and from_number and to_number:
+        try:
+            r = requests.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+                data={
+                    "From": from_number,
+                    "To": to_number,
+                    "Body": (message.get("body") or "")[:1500],
+                },
+                auth=(sid, token),
+                timeout=15,
+            )
+            r.raise_for_status()
+            return True
+        except Exception:
+            logger.warning("Twilio SMS送信に失敗", exc_info=True)
+
+    url = (
+        os.environ.get("YONDA_IOS_MESSAGE_WEBHOOK_URL")
+        or os.environ.get("IOS_MESSAGE_WEBHOOK_URL")
+    )
+    if not url:
+        return False
+    try:
+        r = requests.post(url, json={
+            "title": message.get("title"),
+            "message": message.get("body"),
+            "books": message.get("books", []),
+            "created_at": message.get("created_at"),
+        }, timeout=15)
+        r.raise_for_status()
+        return True
+    except Exception:
+        logger.warning("iOSメッセージWebhook送信に失敗", exc_info=True)
+        return False
+
+
+def _create_audible_completed_message(previous_payload: dict | None, current_payload: dict | None) -> dict | None:
+    """Audible更新後、新しく読了になった本があればメッセージを作る。"""
+    prev_books = (previous_payload or {}).get("books") or []
+    curr_books = (current_payload or {}).get("books") or []
+    if not prev_books or not curr_books:
+        return None
+
+    prev_completed = {
+        _book_identity(b)
+        for b in prev_books
+        if b.get("completed")
+    }
+    newly_completed = [
+        b for b in curr_books
+        if b.get("completed") and _book_identity(b) not in prev_completed
+    ]
+    if not newly_completed:
+        return None
+
+    message_books = []
+    for book in newly_completed:
+        insight = library_service.get_book_insight(book)
+        if not insight:
+            try:
+                insight = library_service.save_book_insight(book, _generate_book_insight(book))
+            except Exception as e:
+                logger.warning("書評ポイント生成に失敗: %s", e, exc_info=True)
+                insight = {"points": [], "error": str(e)}
+        review_url = _audible_review_url(book)
+        msg_book = dict(book)
+        msg_book["review_url"] = review_url
+        message_books.append({
+            "book": msg_book,
+            "insight": insight,
+        })
+
+    from datetime import datetime, timezone
+    created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    message = {
+        "id": str(uuid.uuid4()),
+        "type": "audible_completed",
+        "title": f"Audible読了 {len(message_books)}冊",
+        "created_at": created_at,
+        "books": message_books,
+    }
+    message["body"] = _message_text_for_audible_books(message_books)
+    message["ios_sent"] = _send_ios_message_webhook(message)
+    return library_service.save_yonda_message(message)
+
+
 @app.route("/api/fetch", methods=["POST"])
 def api_fetch():
     """指定ソースから読書記録を取得・保存し、全ソース統合データを返す。
@@ -1004,14 +1131,19 @@ def api_fetch():
         library_id = body.get("library_id", "setagaya")
         session_id = body.get("session_id", "")
         otp = (body.get("otp") or "").strip()
+        notify_completed = bool(body.get("notify_completed"))
 
         if library_id == "kindle":
             return _api_fetch_kindle(session_id, otp)
         if library_id == "all":
             errors = {}
+            previous_audible = library_service.load_saved_for("audible_jp") if notify_completed else None
+            audible_payload = None
             for lid in ["setagaya", "audible_jp"]:
                 try:
-                    library_service.fetch_and_save(lid)
+                    payload = library_service.fetch_and_save(lid)
+                    if lid == "audible_jp":
+                        audible_payload = payload
                 except Exception as e:
                     errors[lid] = str(e)
             try:
@@ -1021,12 +1153,26 @@ def api_fetch():
                 logger.warning("Kindle 自動取得エラー: %s", e)
             combined = library_service.load_saved()
             result = {"success": True, **(combined or {})}
+            if notify_completed and audible_payload:
+                message = _create_audible_completed_message(previous_audible, audible_payload)
+                if message:
+                    result["message"] = message
             if errors:
                 result["errors"] = errors
             return jsonify(result)
-        library_service.fetch_and_save(library_id)
+        previous_audible = (
+            library_service.load_saved_for("audible_jp")
+            if notify_completed and library_id == "audible_jp"
+            else None
+        )
+        payload = library_service.fetch_and_save(library_id)
         combined = library_service.load_saved()
-        return jsonify({"success": True, **(combined or {})})
+        result = {"success": True, **(combined or {})}
+        if notify_completed and library_id == "audible_jp":
+            message = _create_audible_completed_message(previous_audible, payload)
+            if message:
+                result["message"] = message
+        return jsonify(result)
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 400
     except RuntimeError as e:
@@ -1138,7 +1284,7 @@ def _extract_json_object(text: str) -> dict:
 
 
 def _fetch_book_context_from_internet(book: dict) -> list[dict]:
-    """公開APIと検索結果スニペットから要約材料を集める。本文の丸ごとは保存しない。"""
+    """書評・レビュー・評判系の検索結果スニペットから要約材料を集める。本文の丸ごとは保存しない。"""
     title = (book.get("title") or "").strip()
     author = (book.get("author") or "").strip()
     query = " ".join(x for x in [title, author] if x)
@@ -1152,97 +1298,41 @@ def _fetch_book_context_from_internet(book: dict) -> list[dict]:
     })
     sources: list[dict] = []
 
-    # Google Books: 概要・カテゴリ等が取れる場合がある
-    try:
-        r = session.get(
-            "https://www.googleapis.com/books/v1/volumes",
-            params={"q": query, "maxResults": 5, "langRestrict": "ja"},
-            timeout=12,
-        )
-        r.raise_for_status()
-        items = r.json().get("items") or []
-        if not items:
-            r = session.get(
-                "https://www.googleapis.com/books/v1/volumes",
-                params={"q": query, "maxResults": 5},
-                timeout=12,
-            )
-            r.raise_for_status()
-            items = r.json().get("items") or []
-        for item in items[:5]:
-            info = item.get("volumeInfo") or {}
-            parts = []
-            if info.get("description"):
-                parts.append(info["description"])
-            if info.get("subtitle"):
-                parts.append("副題: " + str(info["subtitle"]))
-            if info.get("categories"):
-                parts.append("カテゴリ: " + "、".join(info["categories"][:5]))
-            if info.get("publisher"):
-                parts.append("出版社: " + str(info["publisher"]))
-            text = _trim_text("。".join(parts), 800)
-            if not text:
-                continue
-            sources.append({
-                "title": info.get("title") or "Google Books",
-                "url": info.get("infoLink") or "",
-                "text": text,
-            })
-    except Exception:
-        logger.debug("Google Books からの書籍情報取得に失敗", exc_info=True)
-
-    # Open Library: 英語圏の書籍では説明や主題が取れることがある
-    try:
-        r = session.get(
-            "https://openlibrary.org/search.json",
-            params={"title": title, "author": author, "limit": 3},
-            timeout=12,
-        )
-        r.raise_for_status()
-        for doc in (r.json().get("docs") or [])[:3]:
-            parts = []
-            if doc.get("first_sentence"):
-                parts.append(str(doc["first_sentence"]))
-            if doc.get("subject"):
-                parts.append("主題: " + "、".join(doc["subject"][:8]))
-            text = _trim_text("。".join(parts), 600)
-            if not text:
-                continue
-            key = doc.get("key") or ""
-            sources.append({
-                "title": doc.get("title") or "Open Library",
-                "url": f"https://openlibrary.org{key}" if key else "https://openlibrary.org",
-                "text": text,
-            })
-    except Exception:
-        logger.debug("Open Library からの書籍情報取得に失敗", exc_info=True)
-
-    # DuckDuckGo HTML検索: 書評・感想ページのタイトルとスニペットだけ利用する
+    # DuckDuckGo HTML検索: 第三者の書評・評判・感想ページのタイトルとスニペットだけ利用する
     try:
         from bs4 import BeautifulSoup
 
-        r = session.get(
-            "https://duckduckgo.com/html/",
-            params={"q": f"{query} 書評 感想 要約 ポイント"},
-            timeout=15,
-        )
-        r.raise_for_status()
-        soup = BeautifulSoup(r.text, "lxml")
-        for result in soup.select(".result")[:6]:
-            a = result.select_one(".result__a")
-            snippet = result.select_one(".result__snippet")
-            if not a or not snippet:
-                continue
-            text = _trim_text(snippet.get_text(" ", strip=True), 450)
-            if not text:
-                continue
-            sources.append({
-                "title": a.get_text(" ", strip=True),
-                "url": a.get("href") or "",
-                "text": text,
-            })
+        search_queries = [
+            f'"{title}" "{author}" 書評 レビュー 評判 感想' if author else f'"{title}" 書評 レビュー 評判 感想',
+            f'"{title}" 読後感 口コミ おすすめ 評価',
+            f'"{title}" book review impression reputation',
+        ]
+        review_keywords = ("書評", "レビュー", "評判", "感想", "口コミ", "評価", "読後", "おすすめ", "review", "impression")
+        for search_query in search_queries:
+            r = session.get(
+                "https://duckduckgo.com/html/",
+                params={"q": search_query},
+                timeout=15,
+            )
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "lxml")
+            for result in soup.select(".result")[:8]:
+                a = result.select_one(".result__a")
+                snippet = result.select_one(".result__snippet")
+                if not a or not snippet:
+                    continue
+                result_title = a.get_text(" ", strip=True)
+                text = _trim_text(snippet.get_text(" ", strip=True), 550)
+                combined = f"{result_title} {text}".lower()
+                if not text or not any(k.lower() in combined for k in review_keywords):
+                    continue
+                sources.append({
+                    "title": result_title,
+                    "url": a.get("href") or "",
+                    "text": text,
+                })
     except Exception:
-        logger.debug("検索スニペットの取得に失敗", exc_info=True)
+        logger.debug("書評・評判スニペットの取得に失敗", exc_info=True)
 
     seen = set()
     unique = []
@@ -1317,19 +1407,14 @@ def _generate_book_insight(book: dict) -> dict:
         raise ValueError("本のタイトルが必要です")
 
     sources = _fetch_book_context_from_internet(book)
-    if sources:
-        source_text = "\n\n".join(
-            f"[{i + 1}] {src.get('title', '')}\nURL: {src.get('url', '')}\n内容: {src.get('text', '')}"
-            for i, src in enumerate(sources)
-        )
-        source_instruction = "参考情報を優先し、そこから読み取れる範囲で要約してください。"
-    else:
-        source_text = "外部API・検索スニペットから十分な参考情報を取得できませんでした。"
-        source_instruction = (
-            "参考情報が不足しているため、タイトル・著者から分かる一般的な書誌知識に基づいて生成してください。"
-            "不確かな固有情報は断定せず、source_url は空文字にしてください。"
-        )
-    prompt = f"""次の本について、インターネット上の参考情報をもとに、有益なポイントを5点に要約してください。
+    if not sources:
+        raise RuntimeError("インターネット上の書評・評判情報を取得できませんでした")
+
+    source_text = "\n\n".join(
+        f"[{i + 1}] {src.get('title', '')}\nURL: {src.get('url', '')}\n内容: {src.get('text', '')}"
+        for i, src in enumerate(sources)
+    )
+    prompt = f"""次の本について、インターネット上の第三者による書評・レビュー・評判・感想だけをもとに、書評ポイントを5点に要約してください。
 
 本:
 タイトル: {title}
@@ -1343,8 +1428,9 @@ def _generate_book_insight(book: dict) -> dict:
 - 重要な情報を必ず5点
 - 各ポイントの本文は必ず200字以内に要約する
 - 1ポイントには1つの重要な観点だけを書く
-- 書評・感想・実用ポイント・役立つ場面をバランスよく含める
-- {source_instruction}
+- 第三者の視点で評価されている点、評判、読後感、実用性、賛否をバランスよく含める
+- 参考情報にない一般的な知識や推測で補完しない
+- 公式のあらすじ・出版社紹介・書誌情報ではなく、読者や評者の反応として読み取れる内容を優先する
 - 参考情報の丸写しは禁止。自分の言葉で要約する
 - 本文・レビューの長い引用は禁止
 - 不明な情報は断定しない
@@ -1475,6 +1561,12 @@ def api_book_insight_save():
         "model": "manual",
     })
     return jsonify({"success": True, "insight": insight})
+
+
+@app.route("/api/messages", methods=["GET"])
+def api_messages():
+    """Yonda内メッセージ一覧を返す。"""
+    return jsonify({"success": True, **library_service.load_yonda_messages()})
 
 
 @app.route("/api/libraries")

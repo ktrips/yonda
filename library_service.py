@@ -37,6 +37,7 @@ _JSON_MAP: dict[str, Path] = {
 
 AMAZON_LIST_PATH = DATA_DIR / "amazon_list.json"
 BOOK_INSIGHTS_PATH = DATA_DIR / "book_insights.json"
+YONDA_MESSAGES_PATH = DATA_DIR / "yonda_messages.json"
 
 _ENV_MAP = {
     "setagaya": ("SETAGAYA_USER_ID", "SETAGAYA_PASSWORD"),
@@ -466,6 +467,32 @@ def save_book_insight(book: dict, insight: dict) -> dict:
     with open(BOOK_INSIGHTS_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     return insight
+
+
+def load_yonda_messages() -> dict:
+    """Yonda内メッセージ一覧を読み込む。"""
+    if not YONDA_MESSAGES_PATH.exists():
+        return {"messages": []}
+    try:
+        with open(YONDA_MESSAGES_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and isinstance(data.get("messages"), list):
+            return data
+    except Exception:
+        logger.warning("Yondaメッセージの読込に失敗", exc_info=True)
+    return {"messages": []}
+
+
+def save_yonda_message(message: dict) -> dict:
+    """Yonda内メッセージを先頭に追加して保存する。"""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    data = load_yonda_messages()
+    messages = data.setdefault("messages", [])
+    messages.insert(0, message)
+    del messages[100:]
+    with open(YONDA_MESSAGES_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return message
 
 
 # ------------------------------------------------------------------

@@ -16,6 +16,7 @@ const API = {
   bookInfo: '/api/book-info',
   amazonList: '/api/amazon-list',
   bookInsights: '/api/book-insights',
+  messages: '/api/messages',
 };
 
 let allBooks = [];
@@ -27,6 +28,7 @@ let monthlyChart = null;
 let genreChart = null;
 let currentDetailBook = null;
 let bookInsightsCache = {};
+let yondaMessages = [];
 let chartMode = 'count';  // 'count' | 'runtime'
 let relationChartMode = 'genre_rating';  // 'genre_rating' | 'author_genre'
 const PAGE_SIZE = 100;
@@ -253,7 +255,8 @@ async function manualFetchSource(sourceId) {
     if (data.success) {
       showToast(`${sourceId}の取得が完了しました`, 'success');
       // データを再読み込み
-      await loadBooks();
+      if (typeof loadBooks === 'function') await loadBooks();
+      await loadMessages();
     } else if (data.needs_otp) {
       // Kindle OTP が必要な場合
       const otp = prompt('Kindle の2段階認証コード（OTP）を入力してください:');
@@ -270,7 +273,8 @@ async function manualFetchSource(sourceId) {
         const otpData = await otpResponse.json();
         if (otpData.success) {
           showToast('Kindleの取得が完了しました', 'success');
-          await loadBooks();
+          if (typeof loadBooks === 'function') await loadBooks();
+          await loadMessages();
         } else {
           showToast(`エラー: ${otpData.error || '取得に失敗しました'}`, 'error');
         }
@@ -474,6 +478,33 @@ async function loadBookInsightsCache() {
   }
 }
 
+async function loadMessages() {
+  try {
+    const res = await fetch(API.messages);
+    const data = await res.json();
+    yondaMessages = data.success && Array.isArray(data.messages) ? data.messages : [];
+    updateBookTabLabels();
+    if (activeBookTab === 'messages') renderMessages();
+  } catch (e) {
+    console.error('loadMessages error:', e);
+    yondaMessages = [];
+  }
+}
+
+function refreshSupplementalData() {
+  Promise.all([loadBookInsightsCache(), loadMessages()])
+    .then(() => {
+      updateBookTabLabels();
+      if (document.getElementById('viewTable')?.classList.contains('active')) {
+        renderBooks();
+      }
+      if (activeBookTab === 'messages') {
+        renderMessages();
+      }
+    })
+    .catch((e) => console.error('refreshSupplementalData error:', e));
+}
+
 async function loadFromFile() {
   const loading = document.getElementById('loading');
   const error = document.getElementById('error');
@@ -487,7 +518,6 @@ async function loadFromFile() {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'データなし');
     allBooks = data.books || [];
-    await loadBookInsightsCache();
     const sources = data.sources || [];
     updateStats();
     populateSourceFilter(sources);
@@ -495,7 +525,7 @@ async function loadFromFile() {
     populateGenreFilter();
     showFilters();
     applyFilters();
-    renderCharts();
+    refreshSupplementalData();
   } catch (err) {
     if (error) {
       error.textContent = err.message + '。メニューから「読書記録を取込み」を実行してください。';
@@ -553,7 +583,6 @@ async function fetchFromLibrary(opts = {}) {
       throw new Error(data.error || '取得に失敗しました');
     } else {
       allBooks = data.books || [];
-      await loadBookInsightsCache();
       const sources = data.sources || [];
       updateStats();
       populateSourceFilter(sources);
@@ -561,7 +590,7 @@ async function fetchFromLibrary(opts = {}) {
       populateGenreFilter();
       showFilters();
       applyFilters();
-      renderCharts();
+      refreshSupplementalData();
     }
   } catch (err) {
     error.textContent = err.message;
@@ -637,6 +666,7 @@ function updateBookTabLabels() {
   const tabRead = document.getElementById('tabRead');
   const tabRanking = document.getElementById('tabRanking');
   const tabRecommend = document.getElementById('tabRecommend');
+  const tabMessages = document.getElementById('tabMessages');
   if (tabRead) {
     let label;
     if (rating === 'completed') label = `読んだ（${readCount}）`;
@@ -657,6 +687,7 @@ function updateBookTabLabels() {
   }
   if (tabRanking) tabRanking.textContent = 'ランキング';
   if (tabRecommend) tabRecommend.textContent = 'オススメ';
+  if (tabMessages) tabMessages.textContent = `メッセージ${yondaMessages.length ? `（${yondaMessages.length}）` : ''}`;
 }
 
 /* --- Filters --- */
@@ -699,10 +730,12 @@ function updateTabContentVisibility() {
   const pagination = document.getElementById('pagination');
   const rankingSection = document.getElementById('rankingSection');
   const recommendSection = document.getElementById('recommendSection');
+  const messagesSection = document.getElementById('messagesSection');
   if (activeBookTab === 'ranking') {
     if (bookList) bookList.style.display = 'none';
     if (pagination) pagination.style.display = 'none';
     if (recommendSection) recommendSection.style.display = 'none';
+    if (messagesSection) messagesSection.style.display = 'none';
     if (rankingSection) {
       rankingSection.style.display = 'block';
       renderRanking();
@@ -711,13 +744,24 @@ function updateTabContentVisibility() {
     if (bookList) bookList.style.display = 'none';
     if (pagination) pagination.style.display = 'none';
     if (rankingSection) rankingSection.style.display = 'none';
+    if (messagesSection) messagesSection.style.display = 'none';
     if (recommendSection) {
       recommendSection.style.display = 'block';
       showRecommendInitialState();
     }
+  } else if (activeBookTab === 'messages') {
+    if (bookList) bookList.style.display = 'none';
+    if (pagination) pagination.style.display = 'none';
+    if (rankingSection) rankingSection.style.display = 'none';
+    if (recommendSection) recommendSection.style.display = 'none';
+    if (messagesSection) {
+      messagesSection.style.display = 'block';
+      renderMessages();
+    }
   } else {
     if (rankingSection) rankingSection.style.display = 'none';
     if (recommendSection) recommendSection.style.display = 'none';
+    if (messagesSection) messagesSection.style.display = 'none';
     // bookList / pagination は renderBooks で表示制御
   }
 }
@@ -995,7 +1039,7 @@ async function renderYondaRecommend() {
 }
 
 function applyFilters() {
-  if (activeBookTab === 'ranking') {
+  if (activeBookTab === 'ranking' || activeBookTab === 'messages') {
     updateTabContentVisibility();
     return;
   }
@@ -1049,7 +1093,7 @@ function applyFilters() {
   currentPage = 0;
   updateTabContentVisibility();
   renderBooks();
-  renderCharts();
+  scheduleRenderCharts();
 }
 
 /* --- 本検索（外部リンク表示） --- */
@@ -1066,6 +1110,21 @@ function fileToBase64(file) {
     reader.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
     reader.readAsDataURL(file);
   });
+}
+
+let _tesseractLoadPromise = null;
+function loadTesseract() {
+  if (typeof Tesseract !== 'undefined') return Promise.resolve();
+  if (_tesseractLoadPromise) return _tesseractLoadPromise;
+  _tesseractLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('OCRライブラリの読み込みに失敗しました'));
+    document.head.appendChild(script);
+  });
+  return _tesseractLoadPromise;
 }
 
 /** 写真から本情報を取得して検索 */
@@ -1134,7 +1193,12 @@ async function processBookPhoto(file) {
           }
         } catch (_) {}
       }
+      if (!searchText) {
+        setStatus('OCRライブラリを読み込み中…');
+        await loadTesseract();
+      }
       if (!searchText && typeof Tesseract !== 'undefined') {
+        setStatus('OCRで画像を解析中…');
         const { data: { text } } = await Tesseract.recognize(img, 'jpn+eng', { logger: () => {} });
         searchText = (text || '').replace(/\s+/g, ' ').trim();
         if (searchText.length > 100) searchText = searchText.substring(0, 100);
@@ -1862,16 +1926,49 @@ const GENRE_COLORS = [
   'rgba(140,130,90,0.7)', 'rgba(120,60,90,0.7)',  'rgba(70,110,120,0.7)',
 ];
 
+let _chartJsLoadPromise = null;
+function loadChartJs() {
+  if (typeof Chart !== 'undefined') return Promise.resolve();
+  if (_chartJsLoadPromise) return _chartJsLoadPromise;
+  _chartJsLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js';
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('グラフライブラリの読み込みに失敗しました'));
+    document.head.appendChild(script);
+  });
+  return _chartJsLoadPromise;
+}
+
 function renderCharts() {
   const section = document.getElementById('chartSection');
   if (allBooks.length === 0) {
     section.style.display = 'none';
     return;
   }
+  if (typeof Chart === 'undefined') {
+    loadChartJs().then(renderCharts).catch((e) => console.error(e));
+    return;
+  }
   section.style.display = 'block';
   renderMonthlyChart();
   renderGenreChart();
   renderRelationChart();
+}
+
+let _chartRenderTimer = null;
+function scheduleRenderCharts() {
+  if (_chartRenderTimer) clearTimeout(_chartRenderTimer);
+  const run = () => {
+    _chartRenderTimer = null;
+    renderCharts();
+  };
+  if ('requestIdleCallback' in window) {
+    _chartRenderTimer = window.setTimeout(() => window.requestIdleCallback(run, { timeout: 1200 }), 0);
+  } else {
+    _chartRenderTimer = window.setTimeout(run, 150);
+  }
 }
 
 function renderMonthlyChart() {
@@ -2258,6 +2355,7 @@ function renderBookInsight(insight) {
   const btn = document.getElementById('bookInsightGenerateBtn');
   const formEl = document.getElementById('bookDetailInsightForm');
   if (!listEl || !btn) return;
+  document.getElementById('bookInsightCopyBtn')?.remove();
   if (formEl) formEl.style.display = 'none';
   if (!insight || !Array.isArray(insight.points) || insight.points.length === 0) {
     listEl.innerHTML = '';
@@ -2278,6 +2376,14 @@ function renderBookInsight(insight) {
       </li>
     `;
   }).join('');
+  listEl.insertAdjacentHTML(
+    'beforebegin',
+    '<button type="button" class="btn-copy-insight btn-copy-insight-detail" id="bookInsightCopyBtn" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉ コピー</button>'
+  );
+  document.getElementById('bookInsightCopyBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    copyBookInsightText(insight, e.currentTarget);
+  });
   btn.textContent = 'AIで再生成';
   btn.disabled = false;
   const generatedAt = insight.generated_at ? `生成: ${formatSyncDate(insight.generated_at)}` : '';
@@ -2301,26 +2407,132 @@ function findBookInsight(book) {
   ) || null;
 }
 
+function bookInsightCopyText(insight) {
+  if (!insight || !Array.isArray(insight.points)) return '';
+  return insight.points
+    .slice(0, 5)
+    .map((point, i) => {
+      const heading = (point.heading || `ポイント${i + 1}`).trim();
+      const text = (point.text || '').trim();
+      return text ? `${i + 1}. ${heading}\n${text}` : '';
+    })
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+async function copyBookInsightText(insight, button = null) {
+  const text = bookInsightCopyText(insight);
+  if (!text) return;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    if (button) {
+      const original = button.textContent;
+      button.textContent = '✓';
+      button.classList.add('copied');
+      setTimeout(() => {
+        button.textContent = original;
+        button.classList.remove('copied');
+      }, 1200);
+    }
+    if (currentDetailBook && insight === findBookInsight(currentDetailBook)) {
+      setBookInsightStatus('書評ポイントをコピーしました。', 'success');
+    }
+  } catch (e) {
+    console.error('copyBookInsightText error:', e);
+    if (currentDetailBook && insight === findBookInsight(currentDetailBook)) {
+      setBookInsightStatus('コピーに失敗しました。ブラウザの権限を確認してください。', 'error');
+    }
+  }
+}
+
 function renderTableInsightCell(book) {
   const insight = findBookInsight(book);
   if (!insight || !Array.isArray(insight.points) || insight.points.length === 0) {
     const idx = allBooks.indexOf(book);
     return `<button type="button" class="btn-table-ai-insight" data-book-index="${idx}">AI生成</button>`;
   }
+  const idx = allBooks.indexOf(book);
   return `
-    <ol class="book-table-insights">
-      ${insight.points.slice(0, 5).map((point) => `
+    <div class="book-table-insight-wrap">
+      <button type="button" class="btn-copy-insight btn-copy-insight-table" data-book-index="${idx}" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉</button>
+      <ol class="book-table-insights">
+        ${insight.points.slice(0, 5).map((point) => `
+          <li>
+            <span class="book-table-insight-heading">${escapeHtml(point.heading || 'ポイント')}</span>
+            <span class="book-table-insight-text">${escapeHtml(point.text || '')}</span>
+          </li>
+        `).join('')}
+      </ol>
+    </div>
+  `;
+}
+
+function renderMessageInsight(insight) {
+  const points = Array.isArray(insight?.points) ? insight.points : [];
+  if (!points.length) return '<p class="message-insight-empty">書評ポイントは生成できませんでした。</p>';
+  return `
+    <ol class="message-insight-points">
+      ${points.slice(0, 5).map(point => `
         <li>
-          <span class="book-table-insight-heading">${escapeHtml(point.heading || 'ポイント')}</span>
-          <span class="book-table-insight-text">${escapeHtml(point.text || '')}</span>
+          <strong>${escapeHtml(point.heading || 'ポイント')}</strong>
+          <span>${escapeHtml(point.text || '')}</span>
         </li>
       `).join('')}
     </ol>
   `;
 }
 
+function renderMessages() {
+  const listEl = document.getElementById('messagesList');
+  if (!listEl) return;
+  if (!yondaMessages.length) {
+    listEl.innerHTML = '<p class="messages-empty">まだメッセージはありません。</p>';
+    return;
+  }
+  listEl.innerHTML = yondaMessages.map(message => `
+    <article class="message-card">
+      <div class="message-card-header">
+        <div>
+          <div class="message-card-title">${escapeHtml(message.title || 'メッセージ')}</div>
+          <div class="message-card-date">${message.created_at ? formatSyncDate(message.created_at) : ''}${message.ios_sent ? ' / iOS送信済み' : ''}</div>
+        </div>
+      </div>
+      <div class="message-books">
+        ${(message.books || []).map(item => {
+          const book = item.book || {};
+          const insight = item.insight || {};
+          return `
+            <section class="message-book">
+              <div class="message-book-title">${escapeHtml(book.title || '不明なタイトル')}</div>
+              <div class="message-book-meta">${escapeHtml(book.author || '')}${book.completed_date ? ` / 読了: ${escapeHtml(formatDateOnly(book.completed_date))}` : ''}</div>
+              <div class="message-book-links">
+                ${book.detail_url ? `<a href="${escapeHtml(book.detail_url)}" target="_blank" rel="noopener">詳細</a>` : ''}
+                ${book.review_url ? `<a href="${escapeHtml(book.review_url)}" target="_blank" rel="noopener">レビューを書く</a>` : ''}
+              </div>
+              ${renderMessageInsight(insight)}
+            </section>
+          `;
+        }).join('')}
+      </div>
+    </article>
+  `).join('');
+}
+
 function showBookInsightForm() {
   if (!currentDetailBook) return;
+  document.getElementById('bookInsightCopyBtn')?.remove();
   const formEl = document.getElementById('bookDetailInsightForm');
   const listEl = document.getElementById('bookDetailInsights');
   if (!formEl) return;
@@ -2393,6 +2605,7 @@ async function loadBookInsight(book) {
     const data = await res.json();
     if (currentDetailBook !== book) return;
     if (data.success && data.insight) {
+      if (data.insight.id) bookInsightsCache[data.insight.id] = data.insight;
       renderBookInsight(data.insight);
     }
   } catch (e) {
@@ -2697,7 +2910,7 @@ document.querySelectorAll('.chart-mode-btn').forEach(btn => {
     document.querySelectorAll('.chart-mode-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     chartMode = btn.dataset.mode || 'count';
-    renderCharts();
+    scheduleRenderCharts();
   });
 });
 
@@ -2729,7 +2942,7 @@ document.querySelectorAll('.book-tab').forEach(tab => {
     activeBookTab = tabVal;
     document.querySelectorAll('.book-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
-    if (tabVal === 'ranking' || tabVal === 'recommend') {
+    if (tabVal === 'ranking' || tabVal === 'recommend' || tabVal === 'messages') {
       updateTabContentVisibility();
     } else {
       const sortSel = document.getElementById('sortSelect');
@@ -2753,6 +2966,7 @@ document.getElementById('recommendGenerateBtn')?.addEventListener('click', () =>
 document.getElementById('recommendRefreshBtn')?.addEventListener('click', () => {
   if (activeBookTab === 'recommend') renderYondaRecommend();
 });
+document.getElementById('messagesRefreshBtn')?.addEventListener('click', loadMessages);
 
 /* --- Credential management --- */
 
@@ -3354,10 +3568,27 @@ document.getElementById('bookDetailClose')?.addEventListener('click', closeBookD
 document.getElementById('bookDetailModal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeBookDetail();
 });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('bookDetailModal')?.classList.contains('open')) {
+    closeBookDetail();
+  }
+});
 document.getElementById('bookInsightGenerateBtn')?.addEventListener('click', () => generateBookInsight());
 document.getElementById('bookInsightEditBtn')?.addEventListener('click', showBookInsightForm);
 
 document.getElementById('bookList')?.addEventListener('click', (e) => {
+  const copyBtn = e.target.closest('.btn-copy-insight-table');
+  if (copyBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const idx = parseInt(copyBtn.getAttribute('data-book-index'), 10);
+    if (!isNaN(idx) && allBooks[idx]) {
+      const insight = findBookInsight(allBooks[idx]);
+      copyBookInsightText(insight, copyBtn);
+    }
+    return;
+  }
+
   const aiBtn = e.target.closest('.btn-table-ai-insight');
   if (aiBtn) {
     e.preventDefault();

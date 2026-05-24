@@ -259,7 +259,7 @@ jobs:
         if: ${{ github.event.inputs.image_only != 'true' }}
         run: |
           FETCH_URL="https://${{ env.DOMAIN }}/api/fetch"
-          FETCH_BODY='{"library_id":"all"}'
+          FETCH_BODY='{"library_id":"all","notify_completed":true}'
           setup_job() {
             local name="$1" schedule="$2"
             if gcloud scheduler jobs describe "${name}" \

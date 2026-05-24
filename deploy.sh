@@ -218,7 +218,7 @@ echo ""
 echo ">>> Cloud Scheduler ジョブを設定（6時/12時/18時 JST）..."
 
 FETCH_URL="https://${DOMAIN}/api/fetch"
-FETCH_BODY='{"library_id":"all"}'
+FETCH_BODY='{"library_id":"all","notify_completed":true}'
 SCHEDULER_REGION="asia-northeast1"
 
 setup_scheduler_job() {

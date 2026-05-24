@@ -164,6 +164,7 @@
           <button type="button" class="book-tab active" id="tabRead" data-tab="read">読んだ</button>
           <button type="button" class="book-tab" id="tabRanking" data-tab="ranking">ランキング</button>
           <button type="button" class="book-tab" id="tabRecommend" data-tab="recommend">オススメ</button>
+          <button type="button" class="book-tab" id="tabMessages" data-tab="messages">メッセージ</button>
         </div>
         <div id="recommendSection" class="recommend-section" style="display:none;">
           <div id="recommendInitial" class="recommend-initial">
@@ -184,6 +185,13 @@
             </div>
           </div>
           <div id="rankingList" class="ranking-list"></div>
+        </div>
+        <div id="messagesSection" class="messages-section" style="display:none;">
+          <div class="messages-header">
+            <span class="messages-title">メッセージ一覧</span>
+            <button type="button" class="btn btn-secondary" id="messagesRefreshBtn">更新</button>
+          </div>
+          <div id="messagesList" class="messages-list"></div>
         </div>
         <div id="bookList" style="display:none;"></div>
         <div id="pagination" class="pagination" style="display:none;"></div>
@@ -497,8 +505,6 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
