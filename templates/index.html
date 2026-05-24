@@ -483,11 +483,15 @@
         </div>
         <div class="book-detail-insights-wrap">
           <div class="book-detail-insights-header">
-            <h3>AI書評ポイント</h3>
-            <button type="button" class="btn btn-secondary" id="bookInsightGenerateBtn">ポイントを生成</button>
+            <h3>書評ポイント</h3>
+            <div class="book-detail-insights-actions">
+              <button type="button" class="btn btn-secondary" id="bookInsightEditBtn">手入力</button>
+              <button type="button" class="btn btn-secondary" id="bookInsightGenerateBtn">AIで生成</button>
+            </div>
           </div>
           <div class="book-detail-insights-status" id="bookDetailInsightStatus"></div>
           <ol class="book-detail-insights" id="bookDetailInsights"></ol>
+          <div class="book-detail-insight-form" id="bookDetailInsightForm" style="display:none;"></div>
         </div>
       </div>
     </div>

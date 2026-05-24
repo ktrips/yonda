@@ -423,7 +423,7 @@ def save_amazon_list(books: list) -> None:
 
 
 def book_insight_key(book: dict) -> str:
-    """本ごとのAI書評ポイント保存キーを作る。ASIN等があれば優先する。"""
+    """本ごとの書評ポイント保存キーを作る。ASIN等があれば優先する。"""
     source = (book.get("source") or "").strip()
     catalog_number = (book.get("catalog_number") or book.get("asin") or "").strip()
     if catalog_number:
@@ -436,7 +436,7 @@ def book_insight_key(book: dict) -> str:
 
 
 def load_book_insights() -> dict:
-    """AI書評ポイントを読み込む。"""
+    """書評ポイントを読み込む。"""
     if not BOOK_INSIGHTS_PATH.exists():
         return {"items": {}}
     try:
@@ -445,18 +445,18 @@ def load_book_insights() -> dict:
         if isinstance(data, dict) and isinstance(data.get("items"), dict):
             return data
     except Exception:
-        logger.warning("AI書評ポイントの読込に失敗", exc_info=True)
+        logger.warning("書評ポイントの読込に失敗", exc_info=True)
     return {"items": {}}
 
 
 def get_book_insight(book: dict) -> dict | None:
-    """指定本のAI書評ポイントを返す。"""
+    """指定本の書評ポイントを返す。"""
     key = book_insight_key(book)
     return load_book_insights().get("items", {}).get(key)
 
 
 def save_book_insight(book: dict, insight: dict) -> dict:
-    """指定本のAI書評ポイントを保存して返す。"""
+    """指定本の書評ポイントを保存して返す。"""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     data = load_book_insights()
     key = book_insight_key(book)

@@ -1818,7 +1818,20 @@ header {
 .modal-section-title { font-size: 0.9rem; font-weight: 600; color: var(--accent); margin-bottom: 0.75rem; }
 
 /* === Book Detail Modal === */
-.modal-book-detail { max-width: 560px; }
+.modal-book-detail {
+  max-width: 560px;
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+}
+.modal-book-detail .modal-header {
+  flex-shrink: 0;
+}
+.modal-book-detail .modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .book-detail-layout {
   display: flex; gap: 1.25rem; margin-bottom: 1.25rem;
 }
@@ -1867,6 +1880,12 @@ header {
   gap: 0.75rem;
   margin-bottom: 0.5rem;
 }
+.book-detail-insights-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 .book-detail-insights-header h3 {
   font-size: 0.85rem;
   font-weight: 600;
@@ -1912,6 +1931,45 @@ header {
   text-decoration: none;
 }
 .book-detail-insight-source a:hover { text-decoration: underline; }
+.book-detail-insight-form {
+  margin-top: 0.5rem;
+}
+.book-detail-insight-form-row {
+  margin-bottom: 0.75rem;
+}
+.book-detail-insight-heading-input,
+.book-detail-insight-text-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-body);
+  background: #fff;
+}
+.book-detail-insight-heading-input {
+  padding: 0.4rem 0.55rem;
+  font-size: 0.8rem;
+  margin-bottom: 0.35rem;
+}
+.book-detail-insight-text-input {
+  padding: 0.5rem 0.6rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+.book-detail-insight-heading-input:focus,
+.book-detail-insight-text-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(107,66,38,0.1);
+}
+.book-detail-insight-form-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+.book-detail-insight-form-actions .btn {
+  flex: 1;
+}
 
 /* === Responsive === */
 @media (max-width: 768px) {

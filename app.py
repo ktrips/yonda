@@ -1341,7 +1341,8 @@ def _generate_book_insight(book: dict) -> dict:
 要件:
 - 日本語で出力する
 - 重要な情報を必ず5点
-- 各ポイントの本文は180〜200字程度、最大200字
+- 各ポイントの本文は必ず200字以内に要約する
+- 1ポイントには1つの重要な観点だけを書く
 - 書評・感想・実用ポイント・役立つ場面をバランスよく含める
 - {source_instruction}
 - 参考情報の丸写しは禁止。自分の言葉で要約する
@@ -1354,7 +1355,7 @@ JSON形式:
   "points": [
     {{
       "heading": "20字以内の見出し",
-      "text": "180〜200字程度の要約",
+      "text": "200字以内の要約",
       "source_url": "最も関連する参考URL"
     }}
   ]
@@ -1400,7 +1401,7 @@ JSON形式:
 
 @app.route("/api/book-insights", methods=["GET", "POST"])
 def api_book_insight_get():
-    """保存済みのAI書評ポイントを返す。"""
+    """保存済みの書評ポイントを返す。"""
     if request.method == "GET":
         return jsonify({"success": True, **library_service.load_book_insights()})
     body = request.get_json(silent=True) or {}
@@ -1411,7 +1412,7 @@ def api_book_insight_get():
 
 @app.route("/api/book-insights/generate", methods=["POST"])
 def api_book_insight_generate():
-    """指定本のAI書評ポイントを手動生成して保存する。"""
+    """指定本の書評ポイントをAI生成して保存する。"""
     body = request.get_json(silent=True) or {}
     book = body.get("book") or {}
     try:
@@ -1429,8 +1430,51 @@ def api_book_insight_generate():
                 pass
         return jsonify({"success": False, "error": err}), 502
     except Exception as e:
-        logger.warning("AI書評ポイント生成に失敗: %s", e, exc_info=True)
+        logger.warning("書評ポイント生成に失敗: %s", e, exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/book-insights/save", methods=["POST"])
+def api_book_insight_save():
+    """書評ポイントを手入力で保存する。"""
+    body = request.get_json(silent=True) or {}
+    book = body.get("book") or {}
+    points = body.get("points") or []
+    title = (book.get("title") or "").strip()
+    author = (book.get("author") or "").strip()
+    if not title:
+        return jsonify({"success": False, "error": "本のタイトルが必要です"}), 400
+    if not isinstance(points, list):
+        return jsonify({"success": False, "error": "points は配列で指定してください"}), 400
+
+    cleaned = []
+    for point in points[:5]:
+        if not isinstance(point, dict):
+            continue
+        heading = _trim_text(point.get("heading") or "ポイント", 40)
+        text = _trim_text(point.get("text") or "", 220)
+        if len(text) > 200:
+            text = text[:200]
+        if text:
+            cleaned.append({
+                "heading": heading,
+                "text": text,
+                "source_url": "",
+            })
+    if not cleaned:
+        return jsonify({"success": False, "error": "書評ポイントを1件以上入力してください"}), 400
+
+    from datetime import datetime, timezone
+    insight = library_service.save_book_insight(book, {
+        "title": title,
+        "author": author,
+        "points": cleaned,
+        "sources": [],
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "provider": "manual",
+        "model": "manual",
+    })
+    return jsonify({"success": True, "insight": insight})
 
 
 @app.route("/api/libraries")

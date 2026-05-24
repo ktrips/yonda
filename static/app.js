@@ -44,6 +44,10 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function escapeAttr(text) {
+  return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function starsHtml(rating, options = {}) {
   const { asLink = false, source, detailUrl } = options;
   const starCount = rating != null ? Math.round(Number(rating)) : 0;
@@ -2252,12 +2256,14 @@ function setBookInsightStatus(message, className = '') {
 function renderBookInsight(insight) {
   const listEl = document.getElementById('bookDetailInsights');
   const btn = document.getElementById('bookInsightGenerateBtn');
+  const formEl = document.getElementById('bookDetailInsightForm');
   if (!listEl || !btn) return;
+  if (formEl) formEl.style.display = 'none';
   if (!insight || !Array.isArray(insight.points) || insight.points.length === 0) {
     listEl.innerHTML = '';
-    btn.textContent = 'ポイントを生成';
+    btn.textContent = 'AIで生成';
     btn.disabled = false;
-    setBookInsightStatus('未生成です。ボタンを押すと、この本についてインターネットから情報を集めて5点に要約します。');
+    setBookInsightStatus('未入力です。手入力するか、AIで生成できます。');
     return;
   }
   listEl.innerHTML = insight.points.map((point) => {
@@ -2272,11 +2278,12 @@ function renderBookInsight(insight) {
       </li>
     `;
   }).join('');
-  btn.textContent = '再生成';
+  btn.textContent = 'AIで再生成';
   btn.disabled = false;
   const generatedAt = insight.generated_at ? `生成: ${formatSyncDate(insight.generated_at)}` : '';
-  const model = insight.model ? ` / ${escapeHtml(insight.model)}` : '';
-  setBookInsightStatus(`${generatedAt}${model}`);
+  const model = insight.model && insight.model !== 'manual' ? ` / ${escapeHtml(insight.model)}` : '';
+  const source = insight.provider === 'manual' ? '手入力' : 'AI生成';
+  setBookInsightStatus(`${source}${generatedAt ? ` / ${generatedAt}` : ''}${model}`);
 }
 
 function findBookInsight(book) {
@@ -2298,7 +2305,7 @@ function renderTableInsightCell(book) {
   const insight = findBookInsight(book);
   if (!insight || !Array.isArray(insight.points) || insight.points.length === 0) {
     const idx = allBooks.indexOf(book);
-    return `<button type="button" class="btn-table-ai-insight" data-book-index="${idx}">AI書評</button>`;
+    return `<button type="button" class="btn-table-ai-insight" data-book-index="${idx}">AI生成</button>`;
   }
   return `
     <ol class="book-table-insights">
@@ -2310,6 +2317,69 @@ function renderTableInsightCell(book) {
       `).join('')}
     </ol>
   `;
+}
+
+function showBookInsightForm() {
+  if (!currentDetailBook) return;
+  const formEl = document.getElementById('bookDetailInsightForm');
+  const listEl = document.getElementById('bookDetailInsights');
+  if (!formEl) return;
+  const insight = findBookInsight(currentDetailBook);
+  const points = Array.isArray(insight?.points) ? insight.points : [];
+  const rows = Array.from({ length: 5 }, (_, i) => {
+    const point = points[i] || {};
+    return `
+      <div class="book-detail-insight-form-row">
+        <input type="text" class="book-detail-insight-heading-input" data-point-heading="${i}" maxlength="40" placeholder="見出し ${i + 1}" value="${escapeAttr(point.heading || '')}">
+        <textarea class="book-detail-insight-text-input" data-point-text="${i}" maxlength="200" rows="3" placeholder="ポイント ${i + 1}（200字以内）">${escapeHtml(point.text || '')}</textarea>
+      </div>
+    `;
+  }).join('');
+  formEl.innerHTML = `
+    ${rows}
+    <div class="book-detail-insight-form-actions">
+      <button type="button" class="btn btn-secondary" id="bookInsightCancelBtn">キャンセル</button>
+      <button type="button" class="btn btn-primary" id="bookInsightSaveBtn">保存</button>
+    </div>
+  `;
+  formEl.style.display = 'block';
+  if (listEl) listEl.innerHTML = '';
+  setBookInsightStatus('書評ポイントを手入力できます。空欄の行は保存されません。');
+  document.getElementById('bookInsightCancelBtn')?.addEventListener('click', () => {
+    formEl.style.display = 'none';
+    renderBookInsight(findBookInsight(currentDetailBook));
+  });
+  document.getElementById('bookInsightSaveBtn')?.addEventListener('click', saveManualBookInsight);
+}
+
+async function saveManualBookInsight() {
+  if (!currentDetailBook) return;
+  const saveBtn = document.getElementById('bookInsightSaveBtn');
+  if (saveBtn) saveBtn.disabled = true;
+  const points = Array.from({ length: 5 }, (_, i) => ({
+    heading: document.querySelector(`[data-point-heading="${i}"]`)?.value.trim() || `ポイント${i + 1}`,
+    text: document.querySelector(`[data-point-text="${i}"]`)?.value.trim() || '',
+  })).filter(point => point.text);
+  setBookInsightStatus('保存中…', 'loading');
+  try {
+    const res = await fetch(API.bookInsights + '/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ book: currentDetailBook, points }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || '保存に失敗しました');
+    }
+    if (data.insight?.id) bookInsightsCache[data.insight.id] = data.insight;
+    renderBookInsight(data.insight);
+    if (document.getElementById('viewTable')?.classList.contains('active')) {
+      renderBooks();
+    }
+  } catch (e) {
+    setBookInsightStatus(e.message || '保存に失敗しました。', 'error');
+    if (saveBtn) saveBtn.disabled = false;
+  }
 }
 
 async function loadBookInsight(book) {
@@ -2368,7 +2438,7 @@ async function generateBookInsight(bookOverride = null, options = {}) {
     console.error('generateBookInsight error:', e);
     if (tableButton) {
       tableButton.disabled = false;
-      tableButton.textContent = 'AI書評';
+      tableButton.textContent = 'AI生成';
       tableButton.title = e.message || '生成に失敗しました。';
     } else {
       setBookInsightStatus(e.message || '生成に失敗しました。', 'error');
@@ -2583,7 +2653,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
           <th class="th-sortable" data-sort-asc="completed_date_asc" data-sort-desc="completed_date_desc" title="クリックでソート">読了日</th>
           <th class="th-sortable" data-sort-asc="tsundoku_desc" data-sort-desc="tsundoku_desc" title="クリックでソート">積読</th>
           <th>ソース</th>
-          <th class="col-ai-insight">AI書評</th>
+          <th class="col-ai-insight">書評ポイント</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -3285,6 +3355,7 @@ document.getElementById('bookDetailModal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeBookDetail();
 });
 document.getElementById('bookInsightGenerateBtn')?.addEventListener('click', () => generateBookInsight());
+document.getElementById('bookInsightEditBtn')?.addEventListener('click', showBookInsightForm);
 
 document.getElementById('bookList')?.addEventListener('click', (e) => {
   const aiBtn = e.target.closest('.btn-table-ai-insight');
