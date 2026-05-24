@@ -1284,7 +1284,7 @@ def _extract_json_object(text: str) -> dict:
 
 
 def _fetch_book_context_from_internet(book: dict) -> list[dict]:
-    """書評・レビュー・評判系の検索結果スニペットから要約材料を集める。本文の丸ごとは保存しない。"""
+    """書評・レビューを優先し、足りない場合は信頼できる概要情報も要約材料にする。"""
     title = (book.get("title") or "").strip()
     author = (book.get("author") or "").strip()
     query = " ".join(x for x in [title, author] if x)
@@ -1330,9 +1330,163 @@ def _fetch_book_context_from_internet(book: dict) -> list[dict]:
                     "title": result_title,
                     "url": a.get("href") or "",
                     "text": text,
+                    "source_type": "review",
                 })
     except Exception:
         logger.debug("書評・評判スニペットの取得に失敗", exc_info=True)
+
+    # Wikipedia: 書評が見つからない本でも、作品背景や主題を補助情報として使う
+    try:
+        search_terms = [f"{title} {author}".strip(), title]
+        page_id = None
+        for search_term in search_terms:
+            r = session.get(
+                "https://ja.wikipedia.org/w/api.php",
+                params={
+                    "action": "query",
+                    "list": "search",
+                    "srsearch": search_term,
+                    "format": "json",
+                    "utf8": 1,
+                    "srlimit": 3,
+                },
+                timeout=12,
+            )
+            r.raise_for_status()
+            for item in r.json().get("query", {}).get("search", []):
+                page_title = item.get("title") or ""
+                if title and title.replace(" ", "") not in page_title.replace(" ", ""):
+                    continue
+                page_id = item.get("pageid")
+                break
+            if page_id:
+                break
+        if page_id:
+            r = session.get(
+                "https://ja.wikipedia.org/w/api.php",
+                params={
+                    "action": "query",
+                    "prop": "extracts|info",
+                    "pageids": page_id,
+                    "exintro": 1,
+                    "explaintext": 1,
+                    "inprop": "url",
+                    "format": "json",
+                    "utf8": 1,
+                },
+                timeout=12,
+            )
+            r.raise_for_status()
+            page = next(iter(r.json().get("query", {}).get("pages", {}).values()), {})
+            extract = _trim_text(page.get("extract") or "", 900)
+            if extract:
+                sources.append({
+                    "title": f"Wikipedia: {page.get('title') or title}",
+                    "url": page.get("fullurl") or "",
+                    "text": extract,
+                    "source_type": "reference",
+                })
+    except Exception:
+        logger.debug("Wikipedia情報の取得に失敗", exc_info=True)
+
+    # 出版社・公式ページ: レビューではないため、内容・特徴の補助情報として扱う
+    try:
+        from bs4 import BeautifulSoup
+
+        official_queries = [
+            f'"{title}" "{author}" 出版社 公式' if author else f'"{title}" 出版社 公式',
+            f'"{title}" 書籍 公式 内容 著者',
+        ]
+        official_keywords = ("出版社", "公式", "書籍", "著者", "内容", "紹介", "版元", "publisher", "book")
+        for search_query in official_queries:
+            r = session.get(
+                "https://duckduckgo.com/html/",
+                params={"q": search_query},
+                timeout=15,
+            )
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "lxml")
+            for result in soup.select(".result")[:5]:
+                a = result.select_one(".result__a")
+                snippet = result.select_one(".result__snippet")
+                if not a or not snippet:
+                    continue
+                result_title = a.get_text(" ", strip=True)
+                text = _trim_text(snippet.get_text(" ", strip=True), 550)
+                combined = f"{result_title} {text}".lower()
+                if not text or not any(k.lower() in combined for k in official_keywords):
+                    continue
+                sources.append({
+                    "title": result_title,
+                    "url": a.get("href") or "",
+                    "text": text,
+                    "source_type": "official",
+                })
+    except Exception:
+        logger.debug("出版社・公式ページ情報の取得に失敗", exc_info=True)
+
+    # Google Books: 出版社概要やカテゴリを補助情報として使う
+    try:
+        r = session.get(
+            "https://www.googleapis.com/books/v1/volumes",
+            params={
+                "q": f"intitle:{title} inauthor:{author}" if author else f"intitle:{title}",
+                "maxResults": 5,
+                "langRestrict": "ja",
+            },
+            timeout=12,
+        )
+        r.raise_for_status()
+        for item in r.json().get("items", [])[:3]:
+            info = item.get("volumeInfo", {})
+            desc = info.get("description") or ""
+            parts = [
+                desc,
+                f"出版社: {info.get('publisher')}" if info.get("publisher") else "",
+                f"カテゴリ: {', '.join(info.get('categories') or [])}" if info.get("categories") else "",
+            ]
+            text = _trim_text(" ".join(p for p in parts if p), 900)
+            if text:
+                sources.append({
+                    "title": f"Google Books: {info.get('title') or title}",
+                    "url": info.get("infoLink") or "",
+                    "text": text,
+                    "source_type": "bibliographic",
+                })
+                break
+    except Exception:
+        logger.debug("Google Books情報の取得に失敗", exc_info=True)
+
+    # Open Library: 英語圏情報しかない本の補助
+    try:
+        r = session.get(
+            "https://openlibrary.org/search.json",
+            params={"title": title, "author": author, "limit": 3},
+            timeout=12,
+        )
+        r.raise_for_status()
+        for doc in r.json().get("docs", [])[:3]:
+            work_key = (doc.get("key") or "").strip()
+            if not work_key:
+                continue
+            r2 = session.get(f"https://openlibrary.org{work_key}.json", timeout=12)
+            r2.raise_for_status()
+            work = r2.json()
+            desc = work.get("description") or ""
+            if isinstance(desc, dict):
+                desc = desc.get("value") or ""
+            subjects = ", ".join((work.get("subjects") or [])[:8])
+            text = _trim_text(" ".join(x for x in [desc, f"Subjects: {subjects}" if subjects else ""] if x), 900)
+            if text:
+                sources.append({
+                    "title": f"Open Library: {work.get('title') or doc.get('title') or title}",
+                    "url": f"https://openlibrary.org{work_key}",
+                    "text": text,
+                    "source_type": "bibliographic",
+                })
+                break
+    except Exception:
+        logger.debug("Open Library情報の取得に失敗", exc_info=True)
 
     seen = set()
     unique = []
@@ -1408,13 +1562,14 @@ def _generate_book_insight(book: dict) -> dict:
 
     sources = _fetch_book_context_from_internet(book)
     if not sources:
-        raise RuntimeError("インターネット上の書評・評判情報を取得できませんでした")
+        raise RuntimeError("インターネット上の参考情報を取得できませんでした")
 
     source_text = "\n\n".join(
-        f"[{i + 1}] {src.get('title', '')}\nURL: {src.get('url', '')}\n内容: {src.get('text', '')}"
+        f"[{i + 1}] 種類: {src.get('source_type', 'reference')}\n"
+        f"タイトル: {src.get('title', '')}\nURL: {src.get('url', '')}\n内容: {src.get('text', '')}"
         for i, src in enumerate(sources)
     )
-    prompt = f"""次の本について、インターネット上の第三者による書評・レビュー・評判・感想だけをもとに、書評ポイントを5点に要約してください。
+    prompt = f"""次の本について、インターネット上の参考情報をもとに、書評ポイントを5点に要約してください。
 
 本:
 タイトル: {title}
@@ -1428,9 +1583,12 @@ def _generate_book_insight(book: dict) -> dict:
 - 重要な情報を必ず5点
 - 各ポイントの本文は必ず200字以内に要約する
 - 1ポイントには1つの重要な観点だけを書く
-- 第三者の視点で評価されている点、評判、読後感、実用性、賛否をバランスよく含める
+- review の参考情報がある場合は、第三者の視点で評価されている点、評判、読後感、実用性、賛否を優先する
+- reference / official / bibliographic の参考情報は、作品背景・主題・内容の特徴・読む前に役立つ観点として扱う
+- 出版社や公式ページの内容を「評判」「読者評価」として断定しない
+- Wikipedia等の概要情報だけの場合は、評価ではなく客観的な理解ポイントとして書く
 - 参考情報にない一般的な知識や推測で補完しない
-- 公式のあらすじ・出版社紹介・書誌情報ではなく、読者や評者の反応として読み取れる内容を優先する
+- 公式のあらすじ・出版社紹介・書誌情報の丸写しは禁止。要点を自分の言葉で要約する
 - 参考情報の丸写しは禁止。自分の言葉で要約する
 - 本文・レビューの長い引用は禁止
 - 不明な情報は断定しない
@@ -1475,7 +1633,7 @@ JSON形式:
         "author": author,
         "points": cleaned[:5],
         "sources": [
-            {"title": s.get("title", ""), "url": s.get("url", "")}
+            {"title": s.get("title", ""), "url": s.get("url", ""), "source_type": s.get("source_type", "reference")}
             for s in sources
             if s.get("url")
         ][:8],
