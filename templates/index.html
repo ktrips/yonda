@@ -43,6 +43,8 @@
         <span></span><span></span><span></span>
       </button>
       <div class="hamburger-menu" id="hamburgerMenu">
+        <button type="button" class="menu-item" id="menuMessages">メッセージ</button>
+        <hr class="menu-separator">
         <button type="button" class="menu-link menu-link-btn" data-help-url="{{ url_for('help_usage_page') }}" data-help-title="Yondaの使い方">Yondaの使い方</button>
         <hr class="menu-separator">
         <button type="button" class="menu-item menu-item-fetch" id="menuFetchDirect">読書記録取込み</button>
@@ -164,7 +166,6 @@
           <button type="button" class="book-tab active" id="tabRead" data-tab="read">読んだ</button>
           <button type="button" class="book-tab" id="tabRanking" data-tab="ranking">ランキング</button>
           <button type="button" class="book-tab" id="tabRecommend" data-tab="recommend">オススメ</button>
-          <button type="button" class="book-tab" id="tabMessages" data-tab="messages">メッセージ</button>
         </div>
         <div id="recommendSection" class="recommend-section" style="display:none;">
           <div id="recommendInitial" class="recommend-initial">

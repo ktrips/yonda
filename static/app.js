@@ -23,7 +23,7 @@ let allBooks = [];
 let filteredBooks = [];
 let currentPage = 0;
 let activeMainTab = 'yonda'; // 'yonda' | 'yomu' | 'oshi'
-let activeBookTab = 'read'; // 'read' = 読んだ/途中, 'ranking' = ランキング, 'recommend' = オススメ (Yonda内)
+let activeBookTab = 'read'; // 'read' = 読んだ/途中, 'ranking' = ランキング, 'recommend' = オススメ, 'messages' = メッセージ
 let monthlyChart = null;
 let genreChart = null;
 let currentDetailBook = null;
@@ -666,7 +666,7 @@ function updateBookTabLabels() {
   const tabRead = document.getElementById('tabRead');
   const tabRanking = document.getElementById('tabRanking');
   const tabRecommend = document.getElementById('tabRecommend');
-  const tabMessages = document.getElementById('tabMessages');
+  const menuMessages = document.getElementById('menuMessages');
   if (tabRead) {
     let label;
     if (rating === 'completed') label = `読んだ（${readCount}）`;
@@ -687,7 +687,7 @@ function updateBookTabLabels() {
   }
   if (tabRanking) tabRanking.textContent = 'ランキング';
   if (tabRecommend) tabRecommend.textContent = 'オススメ';
-  if (tabMessages) tabMessages.textContent = `メッセージ${yondaMessages.length ? `（${yondaMessages.length}）` : ''}`;
+  if (menuMessages) menuMessages.textContent = `メッセージ${yondaMessages.length ? `（${yondaMessages.length}）` : ''}`;
 }
 
 /* --- Filters --- */
@@ -2968,6 +2968,19 @@ document.getElementById('recommendRefreshBtn')?.addEventListener('click', () => 
 });
 document.getElementById('messagesRefreshBtn')?.addEventListener('click', loadMessages);
 
+function openMessagesFromMenu() {
+  activeMainTab = 'yonda';
+  activeBookTab = 'messages';
+  document.getElementById('hamburgerMenu')?.classList.remove('open');
+  document.getElementById('filterMenuPanel')?.classList.remove('open');
+  document.querySelectorAll('.book-tab').forEach(t => t.classList.remove('active'));
+  updateMainTabVisibility();
+  showFilters();
+  updateTabContentVisibility();
+  loadMessages();
+  window.scrollTo(0, 0);
+}
+
 /* --- Credential management --- */
 
 function updateMenuSourceLink() {
@@ -3402,6 +3415,7 @@ document.getElementById('menuAmazonAi')?.addEventListener('click', () => {
   document.getElementById('hamburgerMenu')?.classList.remove('open');
   openSettingsModal();
 });
+document.getElementById('menuMessages')?.addEventListener('click', openMessagesFromMenu);
 document.querySelectorAll('[data-help-url]').forEach((el) => {
   el.addEventListener('click', () => {
     const url = el.getAttribute('data-help-url');
