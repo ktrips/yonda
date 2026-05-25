@@ -80,10 +80,11 @@ if ! gsutil ls -b "gs://${BUCKET_NAME}" 2>/dev/null; then
   gsutil mb -l "${REGION}" "gs://${BUCKET_NAME}"
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LOCAL_DATA_DIR="${SCRIPT_DIR}/data"
+
 # ローカルデータのアップロードはスキップ（環境変数 UPLOAD_LOCAL_DATA=1 で有効化）
-if [[ "${UPLOAD_LOCAL_DATA}" == "1" ]]; then
-  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  LOCAL_DATA_DIR="${SCRIPT_DIR}/data"
+if [[ "${UPLOAD_LOCAL_DATA:-0}" == "1" ]]; then
   if [[ -d "${LOCAL_DATA_DIR}" ]]; then
     echo ">>> 既存データファイルを GCS にアップロード..."
     for f in library_books.json audible_books.json kindle_books.json; do

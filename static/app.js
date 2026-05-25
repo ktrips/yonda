@@ -817,10 +817,14 @@ function populateRankingFilters() {
   if ([...yearSel.options].some(o => o.value === yearCurrent)) yearSel.value = yearCurrent;
 }
 
-/** ランキング得点: 自分の評価＋お気に入りが最高位 */
+/** ランキング得点: Audibleのカタログ評価を最優先し、お気に入りを加点 */
 function rankingScore(book) {
+  const favoriteBonus = book.favorite ? 10 : 0;
+  if (book.source === 'audible_jp' && (book.catalog_rating || 0) > 0) {
+    return 1000 + (book.catalog_rating * 10) + favoriteBonus;
+  }
   const stars = displayRating(book) || 0;
-  return stars * 10 + (book.favorite ? 5 : 0);
+  return stars * 10 + favoriteBonus;
 }
 
 function getRankingByGenre() {
@@ -844,7 +848,7 @@ function getRankingByGenre() {
 function renderRankingItem(book, rank) {
   const cover = book.cover_url || NO_COVER;
   const stars = book.source === 'audible_jp'
-    ? starsHtml(book.catalog_rating, { asLink: true, source: book.source, detailUrl: getAudibleRatingUrl(book) })
+    ? starsHtml(displayRating(book), { asLink: true, source: book.source, detailUrl: getAudibleRatingUrl(book) })
     : book.source === 'setagaya'
       ? starsHtml(book.rating, { asLink: true, source: book.source, detailUrl: getSetagayaRatingUrl(book) })
       : starsHtml(book.rating);

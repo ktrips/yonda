@@ -1004,21 +1004,68 @@ def _book_identity(book: dict) -> str:
     return f"{title}::{author}"
 
 
-def _audible_review_url(book: dict) -> str:
+def _parse_book_datetime(value: str):
+    """Audible等のISO日時をUTC aware datetimeとして読む。読めない場合はNone。"""
+    if not value:
+        return None
+    from datetime import datetime, timezone
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _message_book_identity(book: dict) -> str:
+    source = (book.get("source") or "book").strip()
+    return f"{source}:{_book_identity(book)}"
+
+
+def _completed_messaged_book_ids() -> set[str]:
+    """既にメッセージ化した読了本の識別子。重複通知を防ぐ。"""
+    messages = library_service.load_yonda_messages().get("messages") or []
+    ids: set[str] = set()
+    for message in messages:
+        if message.get("type") not in ("audible_completed", "completed_books"):
+            continue
+        for item in message.get("books") or []:
+            book = item.get("book") if isinstance(item, dict) else None
+            if isinstance(book, dict):
+                ids.add(_message_book_identity(book))
+    return ids
+
+
+def _review_url_for_book(book: dict) -> str:
+    source = book.get("source") or ""
     asin = (book.get("catalog_number") or "").strip()
-    if asin:
+    if source == "audible_jp" and asin:
         return f"https://www.audible.co.jp/write-review?asin={asin}"
-    return book.get("detail_url") or "https://www.audible.co.jp/library/titles"
+    if book.get("detail_url"):
+        return book["detail_url"]
+    if source == "audible_jp":
+        return "https://www.audible.co.jp/library/titles"
+    if source == "kindle" and asin:
+        return f"https://www.amazon.co.jp/dp/{asin}"
+    return ""
 
 
-def _message_text_for_audible_books(books: list[dict]) -> str:
-    lines = ["Audibleで新しく読了になった本があります。"]
+def _message_text_for_completed_books(books: list[dict]) -> str:
+    lines = ["新しく読了になった本があります。"]
     for i, item in enumerate(books, 1):
         book = item["book"]
         lines.append("")
         lines.append(f"{i}. {book.get('title') or '不明なタイトル'}")
         if book.get("author"):
             lines.append(f"著者: {book['author']}")
+        if book.get("source"):
+            lines.append(f"ソース: {book['source']}")
         if book.get("review_url"):
             lines.append(f"レビュー: {book['review_url']}")
         points = item.get("insight", {}).get("points") or []
@@ -1072,22 +1119,42 @@ def _send_ios_message_webhook(message: dict) -> bool:
         return False
 
 
-def _create_audible_completed_message(previous_payload: dict | None, current_payload: dict | None) -> dict | None:
-    """Audible更新後、新しく読了になった本があればメッセージを作る。"""
-    prev_books = (previous_payload or {}).get("books") or []
-    curr_books = (current_payload or {}).get("books") or []
-    if not prev_books or not curr_books:
+def _create_completed_books_message(previous_payloads: dict[str, dict | None], current_payloads: dict[str, dict | None]) -> dict | None:
+    """定期同期後、新しく読了になった本があれば書評ポイント付きメッセージを作る。"""
+    if not current_payloads:
         return None
 
-    prev_completed = {
-        _book_identity(b)
-        for b in prev_books
-        if b.get("completed")
-    }
-    newly_completed = [
-        b for b in curr_books
-        if b.get("completed") and _book_identity(b) not in prev_completed
-    ]
+    notified_ids = _completed_messaged_book_ids()
+    from datetime import datetime, timezone, timedelta
+    recent_threshold = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    newly_completed = []
+    seen_ids = set()
+    for library_id, current_payload in current_payloads.items():
+        prev_payload = previous_payloads.get(library_id) or {}
+        prev_books = prev_payload.get("books") or []
+        curr_books = (current_payload or {}).get("books") or []
+        prev_completed = {
+            _message_book_identity(b)
+            for b in prev_books
+            if b.get("completed")
+        }
+        prev_fetch_at = _parse_book_datetime(prev_payload.get("fetch_date") or "")
+        for book in curr_books:
+            if not book.get("completed"):
+                continue
+            msg_book = dict(book)
+            msg_book.setdefault("source", library_id)
+            identity = _message_book_identity(msg_book)
+            if identity in notified_ids or identity in seen_ids:
+                continue
+            completed_at = _parse_book_datetime(msg_book.get("completed_date") or "")
+            changed_to_completed = bool(prev_books) and identity not in prev_completed
+            completed_after_last_fetch = bool(completed_at and prev_fetch_at and completed_at > prev_fetch_at)
+            completed_recently = bool(completed_at and completed_at >= recent_threshold)
+            if changed_to_completed or completed_after_last_fetch or completed_recently:
+                newly_completed.append(msg_book)
+                seen_ids.add(identity)
     if not newly_completed:
         return None
 
@@ -1100,7 +1167,7 @@ def _create_audible_completed_message(previous_payload: dict | None, current_pay
             except Exception as e:
                 logger.warning("書評ポイント生成に失敗: %s", e, exc_info=True)
                 insight = {"points": [], "error": str(e)}
-        review_url = _audible_review_url(book)
+        review_url = _review_url_for_book(book)
         msg_book = dict(book)
         msg_book["review_url"] = review_url
         message_books.append({
@@ -1108,18 +1175,25 @@ def _create_audible_completed_message(previous_payload: dict | None, current_pay
             "insight": insight,
         })
 
-    from datetime import datetime, timezone
     created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     message = {
         "id": str(uuid.uuid4()),
-        "type": "audible_completed",
-        "title": f"Audible読了 {len(message_books)}冊",
+        "type": "completed_books",
+        "title": f"読了 {len(message_books)}冊",
         "created_at": created_at,
         "books": message_books,
     }
-    message["body"] = _message_text_for_audible_books(message_books)
+    message["body"] = _message_text_for_completed_books(message_books)
     message["ios_sent"] = _send_ios_message_webhook(message)
     return library_service.save_yonda_message(message)
+
+
+def _create_audible_completed_message(previous_payload: dict | None, current_payload: dict | None) -> dict | None:
+    """互換用: Audible単体更新でも同じメッセージ生成を使う。"""
+    return _create_completed_books_message(
+        {"audible_jp": previous_payload},
+        {"audible_jp": current_payload},
+    )
 
 
 @app.route("/api/fetch", methods=["POST"])
@@ -1137,39 +1211,43 @@ def api_fetch():
             return _api_fetch_kindle(session_id, otp)
         if library_id == "all":
             errors = {}
-            previous_audible = library_service.load_saved_for("audible_jp") if notify_completed else None
-            audible_payload = None
+            synced_libraries = ["setagaya", "audible_jp", "kindle"]
+            previous_payloads = {
+                lid: library_service.load_saved_for(lid)
+                for lid in synced_libraries
+            } if notify_completed else {}
+            current_payloads = {}
             for lid in ["setagaya", "audible_jp"]:
                 try:
                     payload = library_service.fetch_and_save(lid)
-                    if lid == "audible_jp":
-                        audible_payload = payload
+                    current_payloads[lid] = payload
                 except Exception as e:
                     errors[lid] = str(e)
             try:
-                library_service.try_auto_fetch_kindle()
+                if library_service.try_auto_fetch_kindle():
+                    current_payloads["kindle"] = library_service.load_saved_for("kindle")
             except Exception as e:
                 errors["kindle"] = str(e)
                 logger.warning("Kindle 自動取得エラー: %s", e)
             combined = library_service.load_saved()
             result = {"success": True, **(combined or {})}
-            if notify_completed and audible_payload:
-                message = _create_audible_completed_message(previous_audible, audible_payload)
+            if notify_completed and current_payloads:
+                message = _create_completed_books_message(previous_payloads, current_payloads)
                 if message:
                     result["message"] = message
             if errors:
                 result["errors"] = errors
             return jsonify(result)
         previous_audible = (
-            library_service.load_saved_for("audible_jp")
-            if notify_completed and library_id == "audible_jp"
+            library_service.load_saved_for(library_id)
+            if notify_completed
             else None
         )
         payload = library_service.fetch_and_save(library_id)
         combined = library_service.load_saved()
         result = {"success": True, **(combined or {})}
-        if notify_completed and library_id == "audible_jp":
-            message = _create_audible_completed_message(previous_audible, payload)
+        if notify_completed:
+            message = _create_completed_books_message({library_id: previous_audible}, {library_id: payload})
             if message:
                 result["message"] = message
         return jsonify(result)
@@ -1488,6 +1566,25 @@ def _fetch_book_context_from_internet(book: dict) -> list[dict]:
     except Exception:
         logger.debug("Open Library情報の取得に失敗", exc_info=True)
 
+    # 最終フォールバック: 外部取得が全滅しても、Yonda内の本データから生成を継続する
+    metadata_parts = [
+        f"タイトル: {title}" if title else "",
+        f"著者: {author}" if author else "",
+        f"ジャンル: {book.get('genre')}" if book.get("genre") else "",
+        f"概要: {book.get('full_summary') or book.get('summary')}" if (book.get("full_summary") or book.get("summary")) else "",
+        f"コメント: {book.get('comment')}" if book.get("comment") else "",
+        f"詳細URL: {book.get('detail_url')}" if book.get("detail_url") else "",
+        f"識別子: {book.get('catalog_number') or book.get('asin')}" if (book.get("catalog_number") or book.get("asin")) else "",
+    ]
+    metadata_text = _trim_text(" ".join(p for p in metadata_parts if p), 900)
+    if metadata_text:
+        sources.append({
+            "title": "Yonda内の本データ",
+            "url": book.get("detail_url") or "",
+            "text": metadata_text,
+            "source_type": "book_metadata",
+        })
+
     seen = set()
     unique = []
     for src in sources:
@@ -1585,8 +1682,10 @@ def _generate_book_insight(book: dict) -> dict:
 - 1ポイントには1つの重要な観点だけを書く
 - review の参考情報がある場合は、第三者の視点で評価されている点、評判、読後感、実用性、賛否を優先する
 - reference / official / bibliographic の参考情報は、作品背景・主題・内容の特徴・読む前に役立つ観点として扱う
+- book_metadata しかない場合は、外部書評が見つからなかった前提で、タイトル・著者・ジャンル等から読みどころや確認観点を控えめに整理する
 - 出版社や公式ページの内容を「評判」「読者評価」として断定しない
 - Wikipedia等の概要情報だけの場合は、評価ではなく客観的な理解ポイントとして書く
+- Yonda内の本データだけから読者評価や世評を断定しない
 - 参考情報にない一般的な知識や推測で補完しない
 - 公式のあらすじ・出版社紹介・書誌情報の丸写しは禁止。要点を自分の言葉で要約する
 - 参考情報の丸写しは禁止。自分の言葉で要約する
