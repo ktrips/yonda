@@ -18,7 +18,8 @@ from config_paths import get_credentials_path, ensure_config_dir
 
 logger = logging.getLogger(__name__)
 
-# 図書館の本の表紙取得: Open Library API（多くの表紙は Amazon 等と共通）
+# 図書館の本の表紙・書誌補完: Google Books / Open Library API
+GOOGLE_BOOKS_VOLUMES = "https://www.googleapis.com/books/v1/volumes"
 OPENLIBRARY_SEARCH = "https://openlibrary.org/search.json"
 OPENLIBRARY_BOOKS = "https://openlibrary.org/api/books"
 
@@ -517,10 +518,91 @@ def update_yonda_message(message: dict) -> dict:
 
 
 # ------------------------------------------------------------------
-# 図書館の本: 表紙は book.png、概要・ジャンルは Open Library から取得（Amazon 等と共通の書誌データが多い）
+# 図書館/Kindleの本: 概要・ジャンルは Google Books 優先で取得
 # ------------------------------------------------------------------
 
 LIBRARY_COVER_URL = "/static/book.png"
+
+
+def _clean_book_text(text: str) -> str:
+    text = re.sub(r"<[^>]+>", " ", text or "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _normalize_book_key(text: str) -> str:
+    return re.sub(r"[\s　:：・,，.。『』「」\[\]（）()\-ー]+", "", (text or "").lower())
+
+
+def _book_title_author_match(
+    want_title: str,
+    want_author: str,
+    result_title: str,
+    result_authors: list[str],
+) -> bool:
+    want_title_norm = _normalize_book_key(want_title)
+    result_title_norm = _normalize_book_key(result_title)
+    if want_title_norm and result_title_norm:
+        if want_title_norm not in result_title_norm and result_title_norm not in want_title_norm:
+            return False
+    want_author_norm = _normalize_book_key(want_author)
+    if want_author_norm and result_authors:
+        authors_norm = _normalize_book_key(" ".join(result_authors))
+        # 著者名は表記ゆれがあるため、タイトル一致より緩く見る。
+        if want_author_norm not in authors_norm and authors_norm not in want_author_norm:
+            return False
+    return True
+
+
+def _fetch_summary_and_genre_from_google_books(
+    title: str, author: str
+) -> tuple[Optional[str], Optional[str]]:
+    """Google Books API で概要とジャンルを取得。戻り値は (summary, genre)。"""
+    if not title:
+        return None, None
+    queries = []
+    if author:
+        queries.append(f"intitle:{title} inauthor:{author}")
+    queries.append(title if not author else f"{title} {author}")
+    queries.append(f"intitle:{title}")
+
+    try:
+        for q in queries:
+            params = {
+                "q": q[:120],
+                "maxResults": 5,
+                "langRestrict": "ja",
+                "printType": "books",
+            }
+            api_key = os.environ.get("GOOGLE_BOOKS_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+            if api_key:
+                params["key"] = api_key
+            r = requests.get(
+                GOOGLE_BOOKS_VOLUMES,
+                params=params,
+                timeout=8,
+            )
+            r.raise_for_status()
+            fallback: tuple[Optional[str], Optional[str]] = (None, None)
+            for item in r.json().get("items", []) or []:
+                info = item.get("volumeInfo", {}) or {}
+                result_title = info.get("title") or ""
+                result_authors = info.get("authors") or []
+                summary = _clean_book_text(info.get("description") or "")
+                categories = info.get("categories") or []
+                genre = categories[0] if categories else None
+                if (summary or genre) and not fallback[0] and not fallback[1]:
+                    fallback = (summary or None, genre)
+                if not _book_title_author_match(title, author, result_title, result_authors):
+                    continue
+                if summary or genre:
+                    return summary or None, genre
+            if fallback[0] or fallback[1]:
+                return fallback
+    except requests.RequestException as e:
+        logger.debug("Google Books 取得失敗: %s", e)
+    except Exception as e:
+        logger.debug("Google Books 取得エラー: %s", e)
+    return None, None
 
 
 def _fetch_summary_and_genre_from_open_library(
@@ -552,9 +634,9 @@ def _fetch_summary_and_genre_from_open_library(
                     if isinstance(details, dict):
                         desc = details.get("description")
                         if isinstance(desc, str):
-                            summary = re.sub(r"<[^>]+>", "", desc).strip()
+                            summary = _clean_book_text(desc)
                         elif isinstance(desc, dict) and "value" in desc:
-                            summary = re.sub(r"<[^>]+>", "", str(desc.get("value", ""))).strip()
+                            summary = _clean_book_text(str(desc.get("value", "")))
                     genre = None
                     subjects = details.get("subjects", []) if isinstance(details, dict) else []
                     if subjects and isinstance(subjects[0], str):
@@ -594,8 +676,8 @@ def _fetch_summary_and_genre_from_open_library(
 
 
 def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
-    """図書館の本について、表紙は book.png、概要・ジャンルは Open Library から取得。"""
-    if library_id != "setagaya":
+    """図書館/Kindleの本について、概要・ジャンルは Google Books / Open Library から取得。"""
+    if library_id not in ("setagaya", "kindle"):
         return
     base = "https://libweb.city.setagaya.tokyo.jp"
     summary_count = genre_count = 0
@@ -604,14 +686,20 @@ def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
             continue
         has_cover = book.cover_url and book.cover_url.strip()
         is_library_cover = has_cover and base in (book.cover_url or "")
-        if not has_cover or is_library_cover:
+        if library_id == "setagaya" and (not has_cover or is_library_cover):
             book.cover_url = LIBRARY_COVER_URL
         needs_summary = not (book.full_summary or book.summary or "").strip()
         needs_genre = not (book.genre or "").strip()
         if needs_summary or needs_genre:
-            summary, genre = _fetch_summary_and_genre_from_open_library(
+            summary, genre = _fetch_summary_and_genre_from_google_books(
                 book.title, book.author or ""
             )
+            if (needs_summary and not summary) or (needs_genre and not genre):
+                ol_summary, ol_genre = _fetch_summary_and_genre_from_open_library(
+                    book.title, book.author or ""
+                )
+                summary = summary or ol_summary
+                genre = genre or ol_genre
             if summary and needs_summary:
                 book.full_summary = summary
                 book.summary = summary[:100] + "…" if len(summary) > 100 else summary
@@ -623,7 +711,8 @@ def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
             time.sleep(0.3)
     if summary_count or genre_count:
         logger.info(
-            "図書館の本: Open Library から概要 %d 件、ジャンル %d 件を取得",
+            "%s: Google Books/Open Library から概要 %d 件、ジャンル %d 件を取得",
+            library_id,
             summary_count,
             genre_count,
         )

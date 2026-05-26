@@ -35,6 +35,7 @@ let activeMessageId = null;
 let chartMode = 'count';  // 'count' | 'runtime'
 let relationChartMode = 'genre_rating';  // 'genre_rating' | 'author_genre'
 const PAGE_SIZE = 100;
+const READ_MESSAGES_STORAGE_KEY = 'yonda_read_message_ids';
 const NO_COVER = 'data:image/svg+xml,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="90" viewBox="0 0 64 90">' +
   '<rect fill="#f0e6d8" width="64" height="90" rx="3"/>' +
@@ -655,6 +656,36 @@ function updateStats() {
   updateBookTabLabels();
 }
 
+function loadReadMessageIds() {
+  try {
+    const raw = localStorage.getItem(READ_MESSAGES_STORAGE_KEY);
+    const ids = JSON.parse(raw || '[]');
+    return new Set(Array.isArray(ids) ? ids : []);
+  } catch (_) {
+    return new Set();
+  }
+}
+
+function saveReadMessageIds(ids) {
+  try {
+    localStorage.setItem(READ_MESSAGES_STORAGE_KEY, JSON.stringify([...ids].slice(-500)));
+  } catch (_) {}
+}
+
+function unreadMessageCount() {
+  const readIds = loadReadMessageIds();
+  return yondaMessages.filter((message, idx) => !readIds.has(messageId(message, idx))).length;
+}
+
+function markMessageRead(id) {
+  if (!id) return;
+  const readIds = loadReadMessageIds();
+  if (readIds.has(id)) return;
+  readIds.add(id);
+  saveReadMessageIds(readIds);
+  updateBookTabLabels();
+}
+
 function updateBookTabLabels() {
   const readCount = allBooks.filter(b => b.completed).length;
   const inProgressCount = allBooks.filter(b => isInProgress(b)).length;
@@ -690,7 +721,8 @@ function updateBookTabLabels() {
   }
   if (tabRanking) tabRanking.textContent = 'ランキング';
   if (tabRecommend) tabRecommend.textContent = 'オススメ';
-  if (menuMessages) menuMessages.textContent = `メッセージ${yondaMessages.length ? `（${yondaMessages.length}）` : ''}`;
+  const messageUnreadCount = unreadMessageCount();
+  if (menuMessages) menuMessages.textContent = `メッセージ${messageUnreadCount ? `（${messageUnreadCount}）` : ''}`;
 }
 
 /* --- Filters --- */
@@ -2562,6 +2594,7 @@ function messageUpdatedCount(message) {
 function renderMessageSummaryRow(message, idx) {
   const id = messageId(message, idx);
   const isOpen = activeMessageId === id;
+  const isUnread = !loadReadMessageIds().has(id);
   const updatedCount = messageUpdatedCount(message);
   const dateText = message.created_at ? formatSyncDate(message.created_at) : '日時不明';
   const summary = message.sync_summary || {};
@@ -2570,7 +2603,7 @@ function renderMessageSummaryRow(message, idx) {
     ? sources.map(src => `${src.label || sourceLabel(src.source)} ${Number(src.total || 0)}冊`).join(' / ')
     : '';
   return `
-    <button type="button" class="message-summary-row${isOpen ? ' open' : ''}" data-message-id="${escapeAttr(id)}">
+    <button type="button" class="message-summary-row${isOpen ? ' open' : ''}${isUnread ? ' unread' : ''}" data-message-id="${escapeAttr(id)}">
       <span class="message-summary-main">
         <span class="message-summary-date">${escapeHtml(dateText)}</span>
         <span class="message-summary-count">更新 ${updatedCount}件</span>
@@ -2590,18 +2623,36 @@ function renderMessageBookItem(item) {
     : (cachedInsight || messageInsight);
   const hasPoints = Array.isArray(insight?.points) && insight.points.length > 0;
   const refIndex = messageBookRefs.push({ book, item }) - 1;
+  const completedBadge = book.completed ? '<span class="badge-completed">読了</span> ' : '';
+  const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
+  const summary = (book.summary || '').trim();
+  const summaryCell = summary ? escapeHtml(summary.length > 80 ? summary.substring(0, 80) + '…' : summary) : '—';
+  const genre = book.genre ? escapeHtml(book.genre.length > 30 ? book.genre.substring(0, 30) + '…' : book.genre) : '—';
+  const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span>` : '';
+  const tsundoku = getTsundokuDays(book);
+  const tsundokuStr = tsundoku != null ? tsundoku + '日' : '—';
   return `
-    <section class="message-book">
-      <div class="message-book-title">${escapeHtml(book.title || '不明なタイトル')}</div>
-      <div class="message-book-meta">${escapeHtml(book.author || '')}${book.completed_date ? ` / 読了: ${escapeHtml(formatDateOnly(book.completed_date))}` : ''}</div>
-      <div class="message-book-links">
-        <button type="button" class="message-ai-insight-link" data-message-book-index="${refIndex}">AI書評を開く</button>
-        ${!hasPoints ? `<button type="button" class="message-ai-generate-link" data-message-book-index="${refIndex}">AI書評を生成</button>` : ''}
-        ${book.detail_url ? `<a href="${escapeHtml(book.detail_url)}" target="_blank" rel="noopener">詳細</a>` : ''}
-        ${book.review_url ? `<a href="${escapeHtml(book.review_url)}" target="_blank" rel="noopener">レビューを書く</a>` : ''}
-      </div>
-      ${renderMessageInsight(insight)}
-    </section>
+    <tr class="message-book-row">
+      <td class="col-cover"><img src="${escapeHtml(book.cover_url || NO_COVER)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'"></td>
+      <td class="col-title">
+        <div>${completedBadge}${favoriteBadge}${escapeHtml(book.title || '不明なタイトル')}</div>
+        <div class="message-book-links">
+          <button type="button" class="message-ai-insight-link" data-message-book-index="${refIndex}">AI書評を開く</button>
+          ${!hasPoints ? `<button type="button" class="message-ai-generate-link" data-message-book-index="${refIndex}">AI書評を生成</button>` : ''}
+          ${book.detail_url ? `<a href="${escapeHtml(book.detail_url)}" target="_blank" rel="noopener">詳細</a>` : ''}
+          ${book.review_url ? `<a href="${escapeHtml(book.review_url)}" target="_blank" rel="noopener">レビューを書く</a>` : ''}
+        </div>
+      </td>
+      <td class="col-author" title="${escapeHtml(book.author || '')}">${escapeHtml(book.author || '')}</td>
+      <td class="col-summary" title="${summary ? escapeHtml(summary) : ''}">${summaryCell}</td>
+      <td class="col-genre">${genre}</td>
+      <td class="col-runtime">${(book.runtime_length_min || 0) > 0 ? formatRuntime(book.runtime_length_min) : '—'}</td>
+      <td>${formatDate(book.loan_date)}</td>
+      <td>${book.completed ? formatDateOnly(book.completed_date) : (formatProgress(book) || '—')}</td>
+      <td class="col-tsundoku">${tsundokuStr}</td>
+      <td>${srcBadge}</td>
+      <td class="col-ai-insight">${renderMessageInsight(insight)}</td>
+    </tr>
   `;
 }
 
@@ -2638,7 +2689,24 @@ function renderMessageDetail(message) {
           ${groups.map(group => `
               <div class="message-source-group">
                 <h4 class="message-source-title">${escapeHtml(group.label || sourceLabel(group.source))}（${Number(group.count || 0)}冊）</h4>
-                ${(group.books || []).map(renderMessageBookItem).join('')}
+                <table class="book-table message-book-table">
+                  <thead>
+                    <tr>
+                      <th class="col-cover"></th>
+                      <th class="col-title">タイトル</th>
+                      <th class="col-author">著者</th>
+                      <th class="col-summary">概要</th>
+                      <th class="col-genre">ジャンル</th>
+                      <th class="col-runtime">再生時間</th>
+                      <th>取得日</th>
+                      <th>読了日</th>
+                      <th>積読</th>
+                      <th>ソース</th>
+                      <th class="col-ai-insight">書評ポイント</th>
+                    </tr>
+                  </thead>
+                  <tbody>${(group.books || []).map(renderMessageBookItem).join('')}</tbody>
+                </table>
               </div>
             `).join('')}
         </div>
@@ -2665,7 +2733,9 @@ function renderMessages() {
   listEl.querySelectorAll('.message-summary-row').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-message-id');
-      activeMessageId = activeMessageId === id ? null : id;
+      const willOpen = activeMessageId !== id;
+      activeMessageId = willOpen ? id : null;
+      if (willOpen) markMessageRead(id);
       renderMessages();
     });
   });
