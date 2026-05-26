@@ -2576,26 +2576,6 @@ function findBookFromMessage(book) {
   ) || book;
 }
 
-function renderMessageSummary(message) {
-  const summary = message.sync_summary || {};
-  const sources = Array.isArray(summary.sources) ? summary.sources : [];
-  const sourceHtml = sources.length ? `
-    <div class="message-sync-sources">
-      ${sources.map(src => `
-        <span class="message-sync-source">
-          ${escapeHtml(src.label || sourceLabel(src.source))}: ${Number(src.total || 0)}冊 / 読了${Number(src.completed || 0)}冊
-        </span>
-      `).join('')}
-    </div>
-  ` : '';
-  return `
-    <div class="message-sync-summary">
-      <span>新規読了 ${Number(summary.new_completed_count || (message.books || []).length || 0)}冊</span>
-      ${sourceHtml}
-    </div>
-  `;
-}
-
 function messageUpdatedCount(message) {
   const summary = message.sync_summary || {};
   if (summary.new_completed_count != null) return Number(summary.new_completed_count || 0);
@@ -2687,33 +2667,29 @@ function getMessageSourceGroups(message) {
 function renderMessageDetail(message) {
   const books = message.books || [];
   const groups = getMessageSourceGroups(message);
+  const groupedBooks = groups.flatMap(group => group.books || []);
   return `
     <div class="message-detail">
-      ${renderMessageSummary(message)}
       ${books.length ? `
         <div class="message-books">
-          ${groups.map(group => `
-              <div class="message-source-group">
-                <table class="book-table message-book-table">
-                  <thead>
-                    <tr>
-                      <th class="col-cover"></th>
-                      <th class="col-title">タイトル</th>
-                      <th class="col-author">著者</th>
-                      <th class="col-summary">概要</th>
-                      <th class="col-genre">ジャンル</th>
-                      <th class="col-runtime">再生時間</th>
-                      <th>取得日</th>
-                      <th>読了日</th>
-                      <th>積読</th>
-                      <th>ソース</th>
-                      <th class="col-ai-insight">書評ポイント</th>
-                    </tr>
-                  </thead>
-                  <tbody>${(group.books || []).map(renderMessageBookItem).join('')}</tbody>
-                </table>
-              </div>
-            `).join('')}
+          <table class="book-table message-book-table">
+            <thead>
+              <tr>
+                <th class="col-cover"></th>
+                <th class="col-title">タイトル</th>
+                <th class="col-author">著者</th>
+                <th class="col-summary">概要</th>
+                <th class="col-genre">ジャンル</th>
+                <th class="col-runtime">再生時間</th>
+                <th>取得日</th>
+                <th>読了日</th>
+                <th>積読</th>
+                <th>ソース</th>
+                <th class="col-ai-insight">書評ポイント</th>
+              </tr>
+            </thead>
+            <tbody>${groupedBooks.map(renderMessageBookItem).join('')}</tbody>
+          </table>
         </div>
       ` : '<p class="message-insight-empty">この同期で新しく読了になった本はありません。</p>'}
     </div>

@@ -1373,20 +1373,6 @@ header {
   grid-row: 1 / span 2; grid-column: 2; color: var(--text-secondary); font-size: 0.75rem;
 }
 .message-detail { padding: 0 1rem 1rem; }
-.message-sync-summary {
-  margin-top: 0.65rem; padding: 0.6rem 0.75rem;
-  background: var(--accent-light); border-radius: var(--radius);
-  font-size: 0.82rem; color: var(--text);
-}
-.message-sync-sources {
-  display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem;
-}
-.message-sync-source {
-  padding: 0.12rem 0.45rem; background: #fff;
-  border: 1px solid var(--border); border-radius: 999px;
-  color: var(--text-secondary); font-size: 0.75rem;
-}
-.message-source-group { margin-top: 0.85rem; }
 .message-books { overflow-x: auto; }
 .message-book-table {
   margin-top: 0.35rem;
