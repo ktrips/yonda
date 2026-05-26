@@ -2508,7 +2508,7 @@ function renderTableInsightCell(book) {
     <div class="book-table-insight-wrap">
       <div class="book-table-insight-actions">
         <button type="button" class="btn-copy-insight btn-copy-insight-table" data-book-index="${idx}" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉</button>
-        ${reviewUrl ? `<a href="${escapeAttr(reviewUrl)}" target="_blank" rel="noopener" class="btn-review-insight btn-review-insight-table" title="レビューを書く" aria-label="レビューを書く">本</a>` : ''}
+        ${reviewUrl ? `<a href="${escapeAttr(reviewUrl)}" target="_blank" rel="noopener" class="btn-review-insight btn-review-insight-table" title="レビューを書く" aria-label="レビューを書く">📖</a>` : ''}
       </div>
       <ol class="book-table-insights">
         ${insight.points.slice(0, 5).map((point) => `
@@ -2558,7 +2558,7 @@ function renderMessageInsightActions(insight, book) {
   return `
     <div class="message-insight-actions">
       ${points.length ? `<button type="button" class="btn-copy-insight btn-copy-insight-message" data-message-insight-index="${insightIndex}" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉</button>` : ''}
-      ${reviewUrl ? `<a href="${escapeAttr(reviewUrl)}" target="_blank" rel="noopener" class="btn-review-insight btn-review-insight-message" title="レビューを書く" aria-label="レビューを書く">本</a>` : ''}
+      ${reviewUrl ? `<a href="${escapeAttr(reviewUrl)}" target="_blank" rel="noopener" class="btn-review-insight btn-review-insight-message" title="レビューを書く" aria-label="レビューを書く">📖</a>` : ''}
     </div>
   `;
 }
