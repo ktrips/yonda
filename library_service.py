@@ -495,6 +495,27 @@ def save_yonda_message(message: dict) -> dict:
     return message
 
 
+def update_yonda_message(message: dict) -> dict:
+    """同じidのYonda内メッセージを更新する。なければ先頭に追加する。"""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    data = load_yonda_messages()
+    messages = data.setdefault("messages", [])
+    message_id = message.get("id")
+    replaced = False
+    if message_id:
+        for i, existing in enumerate(messages):
+            if existing.get("id") == message_id:
+                messages[i] = message
+                replaced = True
+                break
+    if not replaced:
+        messages.insert(0, message)
+    del messages[100:]
+    with open(YONDA_MESSAGES_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return message
+
+
 # ------------------------------------------------------------------
 # 図書館の本: 表紙は book.png、概要・ジャンルは Open Library から取得（Amazon 等と共通の書誌データが多い）
 # ------------------------------------------------------------------

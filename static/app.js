@@ -29,6 +29,9 @@ let genreChart = null;
 let currentDetailBook = null;
 let bookInsightsCache = {};
 let yondaMessages = [];
+let messageBookRefs = [];
+let messageInsightRefs = [];
+let activeMessageId = null;
 let chartMode = 'count';  // 'count' | 'runtime'
 let relationChartMode = 'genre_rating';  // 'genre_rating' | 'author_genre'
 const PAGE_SIZE = 100;
@@ -2485,53 +2488,235 @@ function renderTableInsightCell(book) {
 
 function renderMessageInsight(insight) {
   const points = Array.isArray(insight?.points) ? insight.points : [];
+  if (insight?.pending) return '<p class="message-insight-empty">書評ポイントを生成中です。</p>';
   if (!points.length) return '<p class="message-insight-empty">書評ポイントは生成できませんでした。</p>';
+  const insightIndex = messageInsightRefs.push(insight) - 1;
   return `
-    <ol class="message-insight-points">
-      ${points.slice(0, 5).map(point => `
-        <li>
-          <strong>${escapeHtml(point.heading || 'ポイント')}</strong>
-          <span>${escapeHtml(point.text || '')}</span>
-        </li>
+    <div class="message-insight-wrap">
+      <div class="message-insight-header">
+        <span>書評ポイント</span>
+        <button type="button" class="btn-copy-insight btn-copy-insight-message" data-message-insight-index="${insightIndex}" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉</button>
+      </div>
+      <ol class="message-insight-points">
+        ${points.slice(0, 5).map(point => `
+          <li>
+            <strong>${escapeHtml(point.heading || 'ポイント')}</strong>
+            <span>${escapeHtml(point.text || '')}</span>
+          </li>
+        `).join('')}
+      </ol>
+    </div>
+  `;
+}
+
+function messageId(message, idx) {
+  return message.id || `${message.created_at || 'message'}-${idx}`;
+}
+
+function findBookFromMessage(book) {
+  if (!book) return null;
+  const source = (book.source || '').trim();
+  const catalog = (book.catalog_number || book.asin || '').trim();
+  if (catalog) {
+    const matched = allBooks.find(b =>
+      (b.source || '').trim() === source &&
+      ((b.catalog_number || b.asin || '').trim() === catalog)
+    );
+    if (matched) return matched;
+  }
+  const title = (book.title || '').trim();
+  const author = (book.author || '').trim();
+  return allBooks.find(b =>
+    (b.source || '').trim() === source &&
+    (b.title || '').trim() === title &&
+    (b.author || '').trim() === author
+  ) || book;
+}
+
+function renderMessageSummary(message) {
+  const summary = message.sync_summary || {};
+  const sources = Array.isArray(summary.sources) ? summary.sources : [];
+  const sourceHtml = sources.length ? `
+    <div class="message-sync-sources">
+      ${sources.map(src => `
+        <span class="message-sync-source">
+          ${escapeHtml(src.label || sourceLabel(src.source))}: ${Number(src.total || 0)}冊 / 読了${Number(src.completed || 0)}冊
+        </span>
       `).join('')}
-    </ol>
+    </div>
+  ` : '';
+  return `
+    <div class="message-sync-summary">
+      <span>新規読了 ${Number(summary.new_completed_count || (message.books || []).length || 0)}冊</span>
+      ${sourceHtml}
+    </div>
+  `;
+}
+
+function messageUpdatedCount(message) {
+  const summary = message.sync_summary || {};
+  if (summary.new_completed_count != null) return Number(summary.new_completed_count || 0);
+  return (message.books || []).length;
+}
+
+function renderMessageSummaryRow(message, idx) {
+  const id = messageId(message, idx);
+  const isOpen = activeMessageId === id;
+  const updatedCount = messageUpdatedCount(message);
+  const dateText = message.created_at ? formatSyncDate(message.created_at) : '日時不明';
+  const summary = message.sync_summary || {};
+  const sources = Array.isArray(summary.sources) ? summary.sources : [];
+  const sourceText = sources.length
+    ? sources.map(src => `${src.label || sourceLabel(src.source)} ${Number(src.total || 0)}冊`).join(' / ')
+    : '';
+  return `
+    <button type="button" class="message-summary-row${isOpen ? ' open' : ''}" data-message-id="${escapeAttr(id)}">
+      <span class="message-summary-main">
+        <span class="message-summary-date">${escapeHtml(dateText)}</span>
+        <span class="message-summary-count">更新 ${updatedCount}件</span>
+      </span>
+      ${sourceText ? `<span class="message-summary-sub">${escapeHtml(sourceText)}</span>` : ''}
+      <span class="message-summary-arrow">${isOpen ? '▲' : '▼'}</span>
+    </button>
+  `;
+}
+
+function renderMessageBookItem(item) {
+  const book = item.book || {};
+  const messageInsight = item.insight || {};
+  const cachedInsight = findBookInsight(book);
+  const insight = Array.isArray(messageInsight.points) && messageInsight.points.length > 0
+    ? messageInsight
+    : (cachedInsight || messageInsight);
+  const hasPoints = Array.isArray(insight?.points) && insight.points.length > 0;
+  const refIndex = messageBookRefs.push({ book, item }) - 1;
+  return `
+    <section class="message-book">
+      <div class="message-book-title">${escapeHtml(book.title || '不明なタイトル')}</div>
+      <div class="message-book-meta">${escapeHtml(book.author || '')}${book.completed_date ? ` / 読了: ${escapeHtml(formatDateOnly(book.completed_date))}` : ''}</div>
+      <div class="message-book-links">
+        <button type="button" class="message-ai-insight-link" data-message-book-index="${refIndex}">AI書評を開く</button>
+        ${!hasPoints ? `<button type="button" class="message-ai-generate-link" data-message-book-index="${refIndex}">AI書評を生成</button>` : ''}
+        ${book.detail_url ? `<a href="${escapeHtml(book.detail_url)}" target="_blank" rel="noopener">詳細</a>` : ''}
+        ${book.review_url ? `<a href="${escapeHtml(book.review_url)}" target="_blank" rel="noopener">レビューを書く</a>` : ''}
+      </div>
+      ${renderMessageInsight(insight)}
+    </section>
+  `;
+}
+
+function getMessageSourceGroups(message) {
+  if (Array.isArray(message.source_groups) && message.source_groups.length) {
+    return message.source_groups;
+  }
+  const groups = {};
+  for (const item of (message.books || [])) {
+    const book = item.book || {};
+    const source = book.source || 'other';
+    if (!groups[source]) {
+      groups[source] = {
+        source,
+        label: sourceLabel(source) || source || 'その他',
+        count: 0,
+        books: [],
+      };
+    }
+    groups[source].books.push(item);
+    groups[source].count += 1;
+  }
+  return Object.values(groups);
+}
+
+function renderMessageDetail(message) {
+  const books = message.books || [];
+  const groups = getMessageSourceGroups(message);
+  return `
+    <div class="message-detail">
+      ${renderMessageSummary(message)}
+      ${books.length ? `
+        <div class="message-books">
+          ${groups.map(group => `
+              <div class="message-source-group">
+                <h4 class="message-source-title">${escapeHtml(group.label || sourceLabel(group.source))}（${Number(group.count || 0)}冊）</h4>
+                ${(group.books || []).map(renderMessageBookItem).join('')}
+              </div>
+            `).join('')}
+        </div>
+      ` : '<p class="message-insight-empty">この同期で新しく読了になった本はありません。</p>'}
+    </div>
   `;
 }
 
 function renderMessages() {
   const listEl = document.getElementById('messagesList');
   if (!listEl) return;
+  messageBookRefs = [];
+  messageInsightRefs = [];
   if (!yondaMessages.length) {
     listEl.innerHTML = '<p class="messages-empty">まだメッセージはありません。</p>';
     return;
   }
-  listEl.innerHTML = yondaMessages.map(message => `
+  listEl.innerHTML = yondaMessages.map((message, idx) => `
     <article class="message-card">
-      <div class="message-card-header">
-        <div>
-          <div class="message-card-title">${escapeHtml(message.title || 'メッセージ')}</div>
-          <div class="message-card-date">${message.created_at ? formatSyncDate(message.created_at) : ''}${message.ios_sent ? ' / iOS送信済み' : ''}</div>
-        </div>
-      </div>
-      <div class="message-books">
-        ${(message.books || []).map(item => {
-          const book = item.book || {};
-          const insight = item.insight || {};
-          return `
-            <section class="message-book">
-              <div class="message-book-title">${escapeHtml(book.title || '不明なタイトル')}</div>
-              <div class="message-book-meta">${escapeHtml(book.author || '')}${book.completed_date ? ` / 読了: ${escapeHtml(formatDateOnly(book.completed_date))}` : ''}</div>
-              <div class="message-book-links">
-                ${book.detail_url ? `<a href="${escapeHtml(book.detail_url)}" target="_blank" rel="noopener">詳細</a>` : ''}
-                ${book.review_url ? `<a href="${escapeHtml(book.review_url)}" target="_blank" rel="noopener">レビューを書く</a>` : ''}
-              </div>
-              ${renderMessageInsight(insight)}
-            </section>
-          `;
-        }).join('')}
-      </div>
+      ${renderMessageSummaryRow(message, idx)}
+      ${activeMessageId === messageId(message, idx) ? renderMessageDetail(message) : ''}
     </article>
   `).join('');
+  listEl.querySelectorAll('.message-summary-row').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-message-id');
+      activeMessageId = activeMessageId === id ? null : id;
+      renderMessages();
+    });
+  });
+  listEl.querySelectorAll('.message-ai-insight-link').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.getAttribute('data-message-book-index'), 10);
+      const ref = messageBookRefs[idx];
+      const book = ref?.book;
+      const matched = findBookFromMessage(book);
+      if (!matched) return;
+      openBookDetail(matched);
+      setTimeout(() => {
+        document.querySelector('.book-detail-insights-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
+    });
+  });
+  listEl.querySelectorAll('.message-ai-generate-link').forEach(btn => {
+    btn.addEventListener('click', () => generateMessageBookInsight(btn));
+  });
+  listEl.querySelectorAll('.btn-copy-insight-message').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.getAttribute('data-message-insight-index'), 10);
+      const insight = messageInsightRefs[idx];
+      if (insight) copyBookInsightText(insight, btn);
+    });
+  });
+}
+
+async function generateMessageBookInsight(button) {
+  const idx = parseInt(button.getAttribute('data-message-book-index'), 10);
+  const ref = messageBookRefs[idx];
+  if (!ref?.book || !ref?.item) return;
+  button.disabled = true;
+  button.textContent = '生成中…';
+  try {
+    const res = await fetch(API.bookInsights + '/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ book: ref.book }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || '生成に失敗しました');
+    }
+    ref.item.insight = data.insight;
+    if (data.insight?.id) bookInsightsCache[data.insight.id] = data.insight;
+    renderMessages();
+  } catch (e) {
+    ref.item.insight = { points: [], error: e.message || '生成に失敗しました' };
+    renderMessages();
+  }
 }
 
 function showBookInsightForm() {

@@ -1033,7 +1033,7 @@ def _completed_messaged_book_ids() -> set[str]:
     messages = library_service.load_yonda_messages().get("messages") or []
     ids: set[str] = set()
     for message in messages:
-        if message.get("type") not in ("audible_completed", "completed_books"):
+        if message.get("type") not in ("audible_completed", "completed_books", "sync_result"):
             continue
         for item in message.get("books") or []:
             book = item.get("book") if isinstance(item, dict) else None
@@ -1056,24 +1056,80 @@ def _review_url_for_book(book: dict) -> str:
     return ""
 
 
-def _message_text_for_completed_books(books: list[dict]) -> str:
-    lines = ["新しく読了になった本があります。"]
-    for i, item in enumerate(books, 1):
-        book = item["book"]
+def _source_label(source: str) -> str:
+    return {
+        "setagaya": "図書館",
+        "audible_jp": "Audible",
+        "kindle": "Kindle",
+    }.get(source or "", source or "その他")
+
+
+def _group_message_books_by_source(books: list[dict]) -> dict[str, list[dict]]:
+    groups: dict[str, list[dict]] = {}
+    for item in books:
+        book = item.get("book") or {}
+        source = book.get("source") or "other"
+        groups.setdefault(source, []).append(item)
+    return groups
+
+
+def _message_text_for_completed_books(books: list[dict], sync_summary: dict | None = None) -> str:
+    created_at = (sync_summary or {}).get("created_at_jst") or ""
+    lines = [f"データ同期が完了しました。{created_at}".strip()]
+    lines.append(f"新規読了: {len(books)}冊")
+    if not books:
+        return "\n".join(lines)
+
+    groups = _group_message_books_by_source(books)
+    for source, items in groups.items():
         lines.append("")
-        lines.append(f"{i}. {book.get('title') or '不明なタイトル'}")
-        if book.get("author"):
-            lines.append(f"著者: {book['author']}")
-        if book.get("source"):
-            lines.append(f"ソース: {book['source']}")
-        if book.get("review_url"):
-            lines.append(f"レビュー: {book['review_url']}")
-        points = item.get("insight", {}).get("points") or []
-        if points:
-            lines.append("書評ポイント:")
-            for p in points[:5]:
-                lines.append(f"- {(p.get('heading') or 'ポイント')}: {p.get('text') or ''}")
+        lines.append(f"# {_source_label(source)}")
+        for i, item in enumerate(items, 1):
+            book = item["book"]
+            lines.append(f"{i}. {book.get('title') or '不明なタイトル'}")
+            if book.get("author"):
+                lines.append(f"著者: {book['author']}")
+            if book.get("review_url"):
+                lines.append(f"レビュー: {book['review_url']}")
+            points = item.get("insight", {}).get("points") or []
+            if points:
+                lines.append("書評ポイント:")
+                for p in points[:5]:
+                    lines.append(f"- {(p.get('heading') or 'ポイント')}: {p.get('text') or ''}")
     return "\n".join(lines)
+
+
+def _message_source_groups(books: list[dict]) -> list[dict]:
+    groups = _group_message_books_by_source(books)
+    return [
+        {
+            "source": source,
+            "label": _source_label(source),
+            "count": len(items),
+            "books": items,
+        }
+        for source, items in groups.items()
+    ]
+
+
+def _sync_summary(current_payloads: dict[str, dict | None], new_completed_count: int) -> dict:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    now_jst = datetime.now(ZoneInfo("Asia/Tokyo"))
+    sources = []
+    for library_id, payload in current_payloads.items():
+        books = (payload or {}).get("books") or []
+        sources.append({
+            "source": library_id,
+            "label": _source_label(library_id),
+            "total": len(books),
+            "completed": sum(1 for b in books if b.get("completed")),
+        })
+    return {
+        "created_at_jst": now_jst.isoformat(timespec="seconds"),
+        "new_completed_count": new_completed_count,
+        "sources": sources,
+    }
 
 
 def _send_ios_message_webhook(message: dict) -> bool:
@@ -1155,18 +1211,13 @@ def _create_completed_books_message(previous_payloads: dict[str, dict | None], c
             if changed_to_completed or completed_after_last_fetch or completed_recently:
                 newly_completed.append(msg_book)
                 seen_ids.add(identity)
-    if not newly_completed:
-        return None
-
     message_books = []
+    needs_insight = []
     for book in newly_completed:
         insight = library_service.get_book_insight(book)
         if not insight:
-            try:
-                insight = library_service.save_book_insight(book, _generate_book_insight(book))
-            except Exception as e:
-                logger.warning("書評ポイント生成に失敗: %s", e, exc_info=True)
-                insight = {"points": [], "error": str(e)}
+            insight = {"points": [], "pending": True}
+            needs_insight.append((len(message_books), book))
         review_url = _review_url_for_book(book)
         msg_book = dict(book)
         msg_book["review_url"] = review_url
@@ -1176,16 +1227,37 @@ def _create_completed_books_message(previous_payloads: dict[str, dict | None], c
         })
 
     created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    sync_summary = _sync_summary(current_payloads, len(message_books))
     message = {
         "id": str(uuid.uuid4()),
-        "type": "completed_books",
-        "title": f"読了 {len(message_books)}冊",
+        "type": "sync_result",
+        "title": f"データ同期 新規読了{len(message_books)}冊",
         "created_at": created_at,
         "books": message_books,
+        "source_groups": _message_source_groups(message_books),
+        "sync_summary": sync_summary,
+        "ai_status": "pending" if needs_insight else "complete",
     }
-    message["body"] = _message_text_for_completed_books(message_books)
-    message["ios_sent"] = _send_ios_message_webhook(message)
-    return library_service.save_yonda_message(message)
+    message["body"] = _message_text_for_completed_books(message_books, sync_summary)
+    message["ios_sent"] = False
+    library_service.save_yonda_message(message)
+
+    # 同期結果は先に保存し、時間のかかるAI生成は生成できた分から同じメッセージへ反映する。
+    for idx, book in needs_insight:
+        try:
+            insight = library_service.save_book_insight(book, _generate_book_insight(book))
+        except Exception as e:
+            logger.warning("書評ポイント生成に失敗: %s", e, exc_info=True)
+            insight = {"points": [], "error": str(e)}
+        message_books[idx]["insight"] = insight
+        message["books"] = message_books
+        message["source_groups"] = _message_source_groups(message_books)
+        message["body"] = _message_text_for_completed_books(message_books, sync_summary)
+        library_service.update_yonda_message(message)
+
+    message["ai_status"] = "complete"
+    message["ios_sent"] = _send_ios_message_webhook(message) if message_books else False
+    return library_service.update_yonda_message(message)
 
 
 def _create_audible_completed_message(previous_payload: dict | None, current_payload: dict | None) -> dict | None:

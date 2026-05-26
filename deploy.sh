@@ -185,7 +185,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --cpu 1 \
   --min-instances 0 \
   --max-instances 3 \
-  --timeout 300 \
+  --timeout 900 \
   --execution-environment gen2 \
   --add-volume "name=data-vol,type=cloud-storage,bucket=${BUCKET_NAME}" \
   --add-volume-mount "volume=data-vol,mount-path=${DATA_MOUNT}" \
