@@ -258,7 +258,7 @@ jobs:
       - name: Setup Cloud Scheduler (fetch 6/12/18 JST)
         if: ${{ github.event.inputs.image_only != 'true' }}
         run: |
-          FETCH_URL="https://${{ env.DOMAIN }}/api/fetch"
+          FETCH_URL="$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.url)')/api/fetch"
           FETCH_BODY='{"library_id":"all","notify_completed":true}'
           setup_job() {
             local name="$1" schedule="$2"
@@ -271,7 +271,7 @@ jobs:
                 --message-body="${FETCH_BODY}" \
                 --headers="Content-Type=application/json" \
                 --time-zone="Asia/Tokyo" \
-                --attempt-deadline=540s \
+                --attempt-deadline=900s \
                 --quiet \
               && echo "  ✔ ${name} (更新)" || echo "  ⚠ ${name} 更新スキップ（権限不足）"
             else
@@ -282,7 +282,7 @@ jobs:
                 --message-body="${FETCH_BODY}" \
                 --headers="Content-Type=application/json" \
                 --time-zone="Asia/Tokyo" \
-                --attempt-deadline=540s \
+                --attempt-deadline=900s \
                 --quiet \
               && echo "  ✔ ${name} (新規作成)" || echo "  ⚠ ${name} 作成スキップ（権限不足）"
             fi

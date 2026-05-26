@@ -218,7 +218,7 @@ fi
 echo ""
 echo ">>> Cloud Scheduler ジョブを設定（6時/12時/18時 JST）..."
 
-FETCH_URL="https://${DOMAIN}/api/fetch"
+FETCH_URL="${SERVICE_URL}/api/fetch"
 FETCH_BODY='{"library_id":"all","notify_completed":true}'
 SCHEDULER_REGION="asia-northeast1"
 
@@ -234,7 +234,7 @@ setup_scheduler_job() {
       --message-body="${FETCH_BODY}" \
       --update-headers="Content-Type=application/json" \
       --time-zone="Asia/Tokyo" \
-      --attempt-deadline=540s \
+      --attempt-deadline=900s \
       --quiet
     echo "    ✔ ${job_name} (更新)"
   else
@@ -245,7 +245,7 @@ setup_scheduler_job() {
       --message-body="${FETCH_BODY}" \
       --headers="Content-Type=application/json" \
       --time-zone="Asia/Tokyo" \
-      --attempt-deadline=540s \
+      --attempt-deadline=900s \
       --quiet
     echo "    ✔ ${job_name} (新規作成)"
   fi

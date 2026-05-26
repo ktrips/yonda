@@ -2518,25 +2518,36 @@ function renderTableInsightCell(book) {
   `;
 }
 
-function renderMessageInsight(insight) {
+function renderMessageInsight(insight, bookIndex, book) {
   const points = Array.isArray(insight?.points) ? insight.points : [];
-  if (insight?.pending) return '<p class="message-insight-empty">書評ポイントを生成中です。</p>';
-  if (!points.length) return '<p class="message-insight-empty">書評ポイントは生成できませんでした。</p>';
+  const reviewLink = book?.review_url
+    ? `<a href="${escapeHtml(book.review_url)}" target="_blank" rel="noopener" class="message-review-link">レビューを書く</a>`
+    : '';
+  if (!points.length) {
+    return `
+      <div class="message-insight-actions">
+        <button type="button" class="btn-table-ai-insight message-ai-generate-link" data-message-book-index="${bookIndex}">AI生成</button>
+        ${reviewLink}
+      </div>
+    `;
+  }
   const insightIndex = messageInsightRefs.push(insight) - 1;
   return `
     <div class="message-insight-wrap">
-      <div class="message-insight-header">
-        <span>書評ポイント</span>
+      <div class="message-insight-actions">
         <button type="button" class="btn-copy-insight btn-copy-insight-message" data-message-insight-index="${insightIndex}" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉</button>
+        ${reviewLink}
       </div>
-      <ol class="message-insight-points">
+      <div class="message-insight-preview message-detail-open" data-message-book-index="${bookIndex}" role="button" tabindex="0" title="詳細で書評ポイントを確認">
+        <ol class="message-insight-points">
         ${points.slice(0, 5).map(point => `
           <li>
             <strong>${escapeHtml(point.heading || 'ポイント')}</strong>
             <span>${escapeHtml(point.text || '')}</span>
           </li>
         `).join('')}
-      </ol>
+        </ol>
+      </div>
     </div>
   `;
 }
@@ -2621,7 +2632,6 @@ function renderMessageBookItem(item) {
   const insight = Array.isArray(messageInsight.points) && messageInsight.points.length > 0
     ? messageInsight
     : (cachedInsight || messageInsight);
-  const hasPoints = Array.isArray(insight?.points) && insight.points.length > 0;
   const refIndex = messageBookRefs.push({ book, item }) - 1;
   const completedBadge = book.completed ? '<span class="badge-completed">読了</span> ' : '';
   const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
@@ -2635,13 +2645,9 @@ function renderMessageBookItem(item) {
     <tr class="message-book-row">
       <td class="col-cover"><img src="${escapeHtml(book.cover_url || NO_COVER)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'"></td>
       <td class="col-title">
-        <div>${completedBadge}${favoriteBadge}${escapeHtml(book.title || '不明なタイトル')}</div>
-        <div class="message-book-links">
-          <button type="button" class="message-ai-insight-link" data-message-book-index="${refIndex}">AI書評を開く</button>
-          ${!hasPoints ? `<button type="button" class="message-ai-generate-link" data-message-book-index="${refIndex}">AI書評を生成</button>` : ''}
-          ${book.detail_url ? `<a href="${escapeHtml(book.detail_url)}" target="_blank" rel="noopener">詳細</a>` : ''}
-          ${book.review_url ? `<a href="${escapeHtml(book.review_url)}" target="_blank" rel="noopener">レビューを書く</a>` : ''}
-        </div>
+        <button type="button" class="message-book-title-link message-detail-open" data-message-book-index="${refIndex}">
+          ${completedBadge}${favoriteBadge}${escapeHtml(book.title || '不明なタイトル')}
+        </button>
       </td>
       <td class="col-author" title="${escapeHtml(book.author || '')}">${escapeHtml(book.author || '')}</td>
       <td class="col-summary" title="${summary ? escapeHtml(summary) : ''}">${summaryCell}</td>
@@ -2651,7 +2657,7 @@ function renderMessageBookItem(item) {
       <td>${book.completed ? formatDateOnly(book.completed_date) : (formatProgress(book) || '—')}</td>
       <td class="col-tsundoku">${tsundokuStr}</td>
       <td>${srcBadge}</td>
-      <td class="col-ai-insight">${renderMessageInsight(insight)}</td>
+      <td class="col-ai-insight">${renderMessageInsight(insight, refIndex, book)}</td>
     </tr>
   `;
 }
@@ -2688,7 +2694,6 @@ function renderMessageDetail(message) {
         <div class="message-books">
           ${groups.map(group => `
               <div class="message-source-group">
-                <h4 class="message-source-title">${escapeHtml(group.label || sourceLabel(group.source))}（${Number(group.count || 0)}冊）</h4>
                 <table class="book-table message-book-table">
                   <thead>
                     <tr>
@@ -2739,17 +2744,16 @@ function renderMessages() {
       renderMessages();
     });
   });
-  listEl.querySelectorAll('.message-ai-insight-link').forEach(btn => {
+  listEl.querySelectorAll('.message-detail-open').forEach(btn => {
     btn.addEventListener('click', () => {
       const idx = parseInt(btn.getAttribute('data-message-book-index'), 10);
-      const ref = messageBookRefs[idx];
-      const book = ref?.book;
-      const matched = findBookFromMessage(book);
-      if (!matched) return;
-      openBookDetail(matched);
-      setTimeout(() => {
-        document.querySelector('.book-detail-insights-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 150);
+      openMessageBookDetail(idx);
+    });
+    btn.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();
+      const idx = parseInt(btn.getAttribute('data-message-book-index'), 10);
+      openMessageBookDetail(idx);
     });
   });
   listEl.querySelectorAll('.message-ai-generate-link').forEach(btn => {
@@ -2762,6 +2766,16 @@ function renderMessages() {
       if (insight) copyBookInsightText(insight, btn);
     });
   });
+}
+
+function openMessageBookDetail(refIndex) {
+  const ref = messageBookRefs[refIndex];
+  const matched = findBookFromMessage(ref?.book);
+  if (!matched) return;
+  openBookDetail(matched);
+  setTimeout(() => {
+    document.querySelector('.book-detail-insights-wrap')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 150);
 }
 
 async function generateMessageBookInsight(button) {
