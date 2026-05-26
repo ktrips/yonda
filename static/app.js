@@ -2508,7 +2508,7 @@ function renderTableInsightCell(book) {
     <div class="book-table-insight-wrap">
       <div class="book-table-insight-actions">
         <button type="button" class="btn-copy-insight btn-copy-insight-table" data-book-index="${idx}" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉</button>
-        ${reviewUrl ? `<a href="${escapeAttr(reviewUrl)}" target="_blank" rel="noopener" class="btn-review-insight btn-review-insight-table" title="レビューを書く" aria-label="レビューを書く">レビュー</a>` : ''}
+        ${reviewUrl ? `<a href="${escapeAttr(reviewUrl)}" target="_blank" rel="noopener" class="btn-review-insight btn-review-insight-table" title="レビューを書く" aria-label="レビューを書く">本</a>` : ''}
       </div>
       <ol class="book-table-insights">
         ${insight.points.slice(0, 5).map((point) => `
@@ -2530,37 +2530,35 @@ function reviewUrlForBook(book) {
   return '';
 }
 
-function renderMessageInsight(insight, bookIndex, book) {
+function renderMessageInsight(insight, bookIndex) {
   const points = Array.isArray(insight?.points) ? insight.points : [];
-  const reviewUrl = reviewUrlForBook(book);
-  const reviewLink = reviewUrl
-    ? `<a href="${escapeAttr(reviewUrl)}" target="_blank" rel="noopener" class="btn-review-insight btn-review-insight-message" title="レビューを書く" aria-label="レビューを書く">レビュー</a>`
-    : '';
   if (!points.length) {
     return `
-      <div class="message-insight-actions">
-        <button type="button" class="btn-table-ai-insight message-ai-generate-link" data-message-book-index="${bookIndex}">AI生成</button>
-        ${reviewLink}
-      </div>
+      <button type="button" class="btn-table-ai-insight message-ai-generate-link" data-message-book-index="${bookIndex}">AI生成</button>
     `;
   }
+  return `
+    <div class="message-insight-preview message-detail-open" data-message-book-index="${bookIndex}" role="button" tabindex="0" title="詳細で書評ポイントを確認">
+      <ol class="message-insight-points">
+      ${points.slice(0, 5).map(point => `
+        <li>
+          <strong>${escapeHtml(point.heading || 'ポイント')}</strong>
+          <span>${escapeHtml(point.text || '')}</span>
+        </li>
+      `).join('')}
+      </ol>
+    </div>
+  `;
+}
+
+function renderMessageInsightActions(insight, book) {
+  const points = Array.isArray(insight?.points) ? insight.points : [];
+  const reviewUrl = reviewUrlForBook(book);
   const insightIndex = messageInsightRefs.push(insight) - 1;
   return `
-    <div class="message-insight-wrap">
-      <div class="message-insight-actions">
-        <button type="button" class="btn-copy-insight btn-copy-insight-message" data-message-insight-index="${insightIndex}" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉</button>
-        ${reviewLink}
-      </div>
-      <div class="message-insight-preview message-detail-open" data-message-book-index="${bookIndex}" role="button" tabindex="0" title="詳細で書評ポイントを確認">
-        <ol class="message-insight-points">
-        ${points.slice(0, 5).map(point => `
-          <li>
-            <strong>${escapeHtml(point.heading || 'ポイント')}</strong>
-            <span>${escapeHtml(point.text || '')}</span>
-          </li>
-        `).join('')}
-        </ol>
-      </div>
+    <div class="message-insight-actions">
+      ${points.length ? `<button type="button" class="btn-copy-insight btn-copy-insight-message" data-message-insight-index="${insightIndex}" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉</button>` : ''}
+      ${reviewUrl ? `<a href="${escapeAttr(reviewUrl)}" target="_blank" rel="noopener" class="btn-review-insight btn-review-insight-message" title="レビューを書く" aria-label="レビューを書く">本</a>` : ''}
     </div>
   `;
 }
@@ -2650,7 +2648,8 @@ function renderMessageBookItem(item) {
       <td>${book.completed ? formatDateOnly(book.completed_date) : (formatProgress(book) || '—')}</td>
       <td class="col-tsundoku">${tsundokuStr}</td>
       <td>${srcBadge}</td>
-      <td class="col-ai-insight">${renderMessageInsight(insight, refIndex, book)}</td>
+      <td class="col-ai-insight">${renderMessageInsight(insight, refIndex)}</td>
+      <td class="col-message-actions">${renderMessageInsightActions(insight, book)}</td>
     </tr>
   `;
 }
@@ -2699,6 +2698,7 @@ function renderMessageDetail(message) {
                 <th>積読</th>
                 <th>ソース</th>
                 <th class="col-ai-insight">書評ポイント</th>
+                <th class="col-message-actions">操作</th>
               </tr>
             </thead>
             <tbody>${groupedBooks.map(renderMessageBookItem).join('')}</tbody>
