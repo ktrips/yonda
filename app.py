@@ -1077,6 +1077,11 @@ def _message_text_for_completed_books(books: list[dict], sync_summary: dict | No
     created_at = (sync_summary or {}).get("created_at_jst") or ""
     lines = [f"データ同期が完了しました。{created_at}".strip()]
     lines.append(f"新規読了: {len(books)}冊")
+    errors = (sync_summary or {}).get("errors") or {}
+    if errors:
+        lines.append("一部取得エラーあり:")
+        for source, error in errors.items():
+            lines.append(f"- {_source_label(source)}: {error}")
     if not books:
         return "\n".join(lines)
 
@@ -1112,7 +1117,11 @@ def _message_source_groups(books: list[dict]) -> list[dict]:
     ]
 
 
-def _sync_summary(current_payloads: dict[str, dict | None], new_completed_count: int) -> dict:
+def _sync_summary(
+    current_payloads: dict[str, dict | None],
+    new_completed_count: int,
+    errors: dict[str, str] | None = None,
+) -> dict:
     from datetime import datetime
     from zoneinfo import ZoneInfo
     now_jst = datetime.now(ZoneInfo("Asia/Tokyo"))
@@ -1129,6 +1138,8 @@ def _sync_summary(current_payloads: dict[str, dict | None], new_completed_count:
         "created_at_jst": now_jst.isoformat(timespec="seconds"),
         "new_completed_count": new_completed_count,
         "sources": sources,
+        "errors": errors or {},
+        "status": "partial_error" if errors else "complete",
     }
 
 
@@ -1175,9 +1186,14 @@ def _send_ios_message_webhook(message: dict) -> bool:
         return False
 
 
-def _create_completed_books_message(previous_payloads: dict[str, dict | None], current_payloads: dict[str, dict | None]) -> dict | None:
-    """定期同期後、新しく読了になった本があれば書評ポイント付きメッセージを作る。"""
-    if not current_payloads:
+def _create_completed_books_message(
+    previous_payloads: dict[str, dict | None],
+    current_payloads: dict[str, dict | None],
+    errors: dict[str, str] | None = None,
+) -> dict | None:
+    """定期同期後の結果を必ずメッセージ化し、新規読了があれば書評ポイントも付ける。"""
+    errors = errors or {}
+    if not current_payloads and not errors:
         return None
 
     notified_ids = _completed_messaged_book_ids()
@@ -1227,7 +1243,7 @@ def _create_completed_books_message(previous_payloads: dict[str, dict | None], c
         })
 
     created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    sync_summary = _sync_summary(current_payloads, len(message_books))
+    sync_summary = _sync_summary(current_payloads, len(message_books), errors)
     message = {
         "id": str(uuid.uuid4()),
         "type": "sync_result",
@@ -1303,8 +1319,12 @@ def api_fetch():
                 logger.warning("Kindle 自動取得エラー: %s", e)
             combined = library_service.load_saved()
             result = {"success": True, **(combined or {})}
-            if notify_completed and current_payloads:
-                message = _create_completed_books_message(previous_payloads, current_payloads)
+            if notify_completed:
+                message_payloads = dict(current_payloads)
+                for lid in synced_libraries:
+                    if lid not in message_payloads:
+                        message_payloads[lid] = previous_payloads.get(lid) or library_service.load_saved_for(lid)
+                message = _create_completed_books_message(previous_payloads, message_payloads, errors)
                 if message:
                     result["message"] = message
             if errors:
