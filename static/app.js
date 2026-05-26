@@ -2503,9 +2503,13 @@ function renderTableInsightCell(book) {
     return `<button type="button" class="btn-table-ai-insight" data-book-index="${idx}">AI生成</button>`;
   }
   const idx = allBooks.indexOf(book);
+  const reviewUrl = reviewUrlForBook(book);
   return `
     <div class="book-table-insight-wrap">
-      <button type="button" class="btn-copy-insight btn-copy-insight-table" data-book-index="${idx}" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉</button>
+      <div class="book-table-insight-actions">
+        <button type="button" class="btn-copy-insight btn-copy-insight-table" data-book-index="${idx}" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉</button>
+        ${reviewUrl ? `<a href="${escapeAttr(reviewUrl)}" target="_blank" rel="noopener" class="btn-review-insight btn-review-insight-table" title="レビューを書く" aria-label="レビューを書く">レビュー</a>` : ''}
+      </div>
       <ol class="book-table-insights">
         ${insight.points.slice(0, 5).map((point) => `
           <li>
@@ -2518,10 +2522,19 @@ function renderTableInsightCell(book) {
   `;
 }
 
+function reviewUrlForBook(book) {
+  if (!book) return '';
+  if (book.review_url) return book.review_url;
+  if (book.source === 'audible_jp') return getAudibleRatingUrl(book);
+  if (book.source === 'setagaya') return getSetagayaRatingUrl(book);
+  return '';
+}
+
 function renderMessageInsight(insight, bookIndex, book) {
   const points = Array.isArray(insight?.points) ? insight.points : [];
-  const reviewLink = book?.review_url
-    ? `<a href="${escapeHtml(book.review_url)}" target="_blank" rel="noopener" class="message-review-link">レビューを書く</a>`
+  const reviewUrl = reviewUrlForBook(book);
+  const reviewLink = reviewUrl
+    ? `<a href="${escapeAttr(reviewUrl)}" target="_blank" rel="noopener" class="btn-review-insight btn-review-insight-message" title="レビューを書く" aria-label="レビューを書く">レビュー</a>`
     : '';
   if (!points.length) {
     return `
@@ -3840,6 +3853,12 @@ document.getElementById('bookInsightGenerateBtn')?.addEventListener('click', () 
 document.getElementById('bookInsightEditBtn')?.addEventListener('click', showBookInsightForm);
 
 document.getElementById('bookList')?.addEventListener('click', (e) => {
+  const reviewLink = e.target.closest('.btn-review-insight-table');
+  if (reviewLink) {
+    e.stopPropagation();
+    return;
+  }
+
   const copyBtn = e.target.closest('.btn-copy-insight-table');
   if (copyBtn) {
     e.preventDefault();
