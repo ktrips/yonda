@@ -22,6 +22,6 @@ CMD exec gunicorn \
     --bind 0.0.0.0:${PORT} \
     --workers 2 \
     --threads 4 \
-    --timeout 900 \
+    --timeout 1800 \
     --access-logfile - \
     app:app

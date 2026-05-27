@@ -681,9 +681,42 @@ def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
         return
     base = "https://libweb.city.setagaya.tokyo.jp"
     summary_count = genre_count = 0
+    existing_by_key: dict[str, dict] = {}
+    existing_by_title_author: dict[str, dict] = {}
+    try:
+        existing_payload = load_saved_for(library_id) or {}
+        for existing in existing_payload.get("books") or []:
+            catalog = (existing.get("catalog_number") or existing.get("asin") or "").strip()
+            if catalog:
+                existing_by_key[catalog] = existing
+            title_author_key = "::".join([
+                _normalize_book_key(existing.get("title") or ""),
+                _normalize_book_key(existing.get("author") or ""),
+            ])
+            if title_author_key.strip(":"):
+                existing_by_title_author[title_author_key] = existing
+    except Exception:
+        logger.debug("%s: 既存の概要・ジャンル引き継ぎをスキップ", library_id, exc_info=True)
     for i, book in enumerate(records):
         if not book.title:
             continue
+        catalog = (book.catalog_number or "").strip()
+        title_author_key = "::".join([
+            _normalize_book_key(book.title),
+            _normalize_book_key(book.author or ""),
+        ])
+        existing = (
+            existing_by_key.get(catalog)
+            if catalog else None
+        ) or existing_by_title_author.get(title_author_key)
+        if existing:
+            if not (book.full_summary or book.summary or "").strip():
+                book.full_summary = existing.get("full_summary") or existing.get("summary") or ""
+                book.summary = existing.get("summary") or (
+                    book.full_summary[:100] + "…" if len(book.full_summary) > 100 else book.full_summary
+                )
+            if not (book.genre or "").strip():
+                book.genre = existing.get("genre") or ""
         has_cover = book.cover_url and book.cover_url.strip()
         is_library_cover = has_cover and base in (book.cover_url or "")
         if library_id == "setagaya" and (not has_cover or is_library_cover):

@@ -185,7 +185,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --cpu 1 \
   --min-instances 0 \
   --max-instances 3 \
-  --timeout 900 \
+  --timeout 1800 \
   --execution-environment gen2 \
   --add-volume "name=data-vol,type=cloud-storage,bucket=${BUCKET_NAME}" \
   --add-volume-mount "volume=data-vol,mount-path=${DATA_MOUNT}" \
@@ -194,7 +194,8 @@ gcloud run deploy "${SERVICE_NAME}" \
 YONDA_DATA_DIR=${DATA_MOUNT},\
 YONDA_AUTH_FILE=${SECRETS_MOUNT}/auth_jp.json,\
 YONDA_CREDS_PATH=${DATA_MOUNT}/.credentials.json,\
-YONDA_KINDLE_SESSION_PATH=${DATA_MOUNT}/kindle_session.json" \
+YONDA_KINDLE_SESSION_PATH=${DATA_MOUNT}/kindle_session.json,\
+YONDA_AI_CONFIG_PATH=${DATA_MOUNT}/ai_config.json" \
   --quiet
 
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
@@ -234,7 +235,7 @@ setup_scheduler_job() {
       --message-body="${FETCH_BODY}" \
       --update-headers="Content-Type=application/json" \
       --time-zone="Asia/Tokyo" \
-      --attempt-deadline=900s \
+      --attempt-deadline=1800s \
       --quiet
     echo "    ✔ ${job_name} (更新)"
   else
@@ -245,7 +246,7 @@ setup_scheduler_job() {
       --message-body="${FETCH_BODY}" \
       --headers="Content-Type=application/json" \
       --time-zone="Asia/Tokyo" \
-      --attempt-deadline=900s \
+      --attempt-deadline=1800s \
       --quiet
     echo "    ✔ ${job_name} (新規作成)"
   fi
