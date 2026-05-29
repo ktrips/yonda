@@ -1191,7 +1191,7 @@ def _create_completed_books_message(
     current_payloads: dict[str, dict | None],
     errors: dict[str, str] | None = None,
 ) -> dict | None:
-    """定期同期後の結果を必ずメッセージ化し、新規読了があれば書評ポイントも付ける。"""
+    """新規読了があった場合のみメッセージ化し、書評ポイントも付ける。"""
     errors = errors or {}
     if not current_payloads and not errors:
         return None
@@ -1227,6 +1227,9 @@ def _create_completed_books_message(
             if changed_to_completed or completed_after_last_fetch or completed_recently:
                 newly_completed.append(msg_book)
                 seen_ids.add(identity)
+    if not newly_completed and not errors:
+        return None
+
     message_books = []
     needs_insight = []
     for book in newly_completed:
