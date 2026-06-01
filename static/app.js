@@ -2546,8 +2546,14 @@ function reviewUrlForBook(book) {
 function renderMessageInsight(insight, bookIndex) {
   const points = Array.isArray(insight?.points) ? insight.points : [];
   if (!points.length) {
+    const errMsg = insight?.error
+      ? `<span class="message-insight-error" title="${escapeAttr(insight.error)}">⚠ 生成エラー</span>`
+      : '';
     return `
-      <button type="button" class="btn-table-ai-insight message-ai-generate-link" data-message-book-index="${bookIndex}">AI生成</button>
+      <div class="message-insight-empty-row">
+        ${errMsg}
+        <button type="button" class="btn-table-ai-insight message-ai-generate-link" data-message-book-index="${bookIndex}">AI生成</button>
+      </div>
     `;
   }
   return `

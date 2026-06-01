@@ -1417,6 +1417,14 @@ header {
   display: inline-flex;
 }
 .message-ai-generate-link:disabled { opacity: 0.65; cursor: wait; text-decoration: none; }
+.message-insight-empty-row {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+}
+.message-insight-error {
+  font-size: 0.72rem; color: #c62828; background: #ffebee;
+  border: 1px solid #ef9a9a; border-radius: 4px; padding: 0.1em 0.4em;
+  cursor: help;
+}
 .message-insight-actions {
   display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;
 }

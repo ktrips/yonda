@@ -1442,18 +1442,56 @@ def _trim_text(text: str, limit: int = 900) -> str:
     return text[:limit]
 
 
+def _sanitize_json_strings(text: str) -> str:
+    """JSON文字列値内のリテラル制御文字（改行・タブ等）をエスケープして合法的なJSONに修正する。"""
+    result = []
+    in_string = False
+    escaped = False
+    for ch in text:
+        if escaped:
+            result.append(ch)
+            escaped = False
+        elif ch == "\\" and in_string:
+            result.append(ch)
+            escaped = True
+        elif ch == '"':
+            result.append(ch)
+            in_string = not in_string
+        elif in_string and ch == "\n":
+            result.append("\\n")
+        elif in_string and ch == "\r":
+            result.append("\\r")
+        elif in_string and ch == "\t":
+            result.append("\\t")
+        else:
+            result.append(ch)
+    return "".join(result)
+
+
 def _extract_json_object(text: str) -> dict:
-    """AI応答からJSONオブジェクト部分を取り出す。"""
+    """AI応答からJSONオブジェクト部分を取り出す。不完全なJSONも修復を試みる。"""
     text = (text or "").strip()
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE | re.MULTILINE).strip()
+    # 1. 標準パース
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start >= 0 and end > start:
-            return json.loads(text[start:end + 1])
-        raise
+        pass
+    # 2. {...} の最外殻を抽出して再試行
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        candidate = text[start:end + 1]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            pass
+        # 3. リテラル制御文字を修正して再試行
+        try:
+            return json.loads(_sanitize_json_strings(candidate))
+        except json.JSONDecodeError:
+            pass
+    raise json.JSONDecodeError("JSONの抽出に失敗しました", text, 0)
 
 
 def _fetch_book_context_from_internet(book: dict) -> list[dict]:
@@ -1690,7 +1728,7 @@ def _fetch_book_context_from_internet(book: dict) -> list[dict]:
     return unique[:10]
 
 
-def _call_text_ai(prompt: str, max_tokens: int = 2200, temperature: float = 0.2) -> tuple[str, str, str]:
+def _call_text_ai(prompt: str, max_tokens: int = 2200, temperature: float = 0.2, json_mode: bool = False) -> tuple[str, str, str]:
     """既存AI設定を使ってテキスト生成する。戻り値: (text, provider, model)。"""
     cfg = _load_ai_config()
     api_key = (cfg.get("api_key") or "").strip()
@@ -1705,6 +1743,8 @@ def _call_text_ai(prompt: str, max_tokens: int = 2200, temperature: float = 0.2)
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
         r = requests.post(
             "https://api.openai.com/v1/chat/completions",
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -1726,9 +1766,12 @@ def _call_text_ai(prompt: str, max_tokens: int = 2200, temperature: float = 0.2)
     for model in models_to_try:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            gen_config: dict = {"maxOutputTokens": max_tokens, "temperature": temperature}
+            if json_mode:
+                gen_config["response_mime_type"] = "application/json"
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"maxOutputTokens": max_tokens, "temperature": temperature},
+                "generationConfig": gen_config,
                 "safetySettings": safety_settings,
             }
             r = requests.post(url, json=payload, timeout=90)
@@ -1798,7 +1841,7 @@ JSON形式:
     }}
   ]
 }}"""
-    text, provider, model = _call_text_ai(prompt)
+    text, provider, model = _call_text_ai(prompt, max_tokens=4096, json_mode=True)
     data = _extract_json_object(text)
     points = data.get("points") if isinstance(data, dict) else None
     if not isinstance(points, list):
