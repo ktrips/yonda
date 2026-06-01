@@ -517,6 +517,51 @@ def update_yonda_message(message: dict) -> dict:
     return message
 
 
+def delete_yonda_message(message_id: str) -> bool:
+    """指定IDのメッセージを削除する。削除できたらTrueを返す。"""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    data = load_yonda_messages()
+    messages = data.get("messages") or []
+    new_messages = [m for m in messages if m.get("id") != message_id]
+    if len(new_messages) == len(messages):
+        return False
+    data["messages"] = new_messages
+    with open(YONDA_MESSAGES_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return True
+
+
+def archive_old_messages(months: int = 3) -> int:
+    """3ヶ月以上前のメッセージをarchivedへ移動する。移動件数を返す。"""
+    from datetime import datetime, timezone, timedelta
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    data = load_yonda_messages()
+    messages = data.get("messages") or []
+    archived = data.get("archived") or []
+    threshold = datetime.now(timezone.utc) - timedelta(days=months * 30)
+    keep, move = [], []
+    for m in messages:
+        try:
+            created = datetime.fromisoformat(m.get("created_at", "").replace("Z", "+00:00"))
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            if created < threshold:
+                move.append(m)
+            else:
+                keep.append(m)
+        except Exception:
+            keep.append(m)
+    if not move:
+        return 0
+    archived = move + archived
+    del archived[500:]
+    data["messages"] = keep
+    data["archived"] = archived
+    with open(YONDA_MESSAGES_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return len(move)
+
+
 # ------------------------------------------------------------------
 # 図書館/Kindleの本: 概要・ジャンルは Google Books 優先で取得
 # ------------------------------------------------------------------

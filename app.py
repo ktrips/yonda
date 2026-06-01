@@ -1917,8 +1917,16 @@ def api_book_insight_save():
 
 @app.route("/api/messages", methods=["GET"])
 def api_messages():
-    """Yonda内メッセージ一覧を返す。"""
+    """Yonda内メッセージ一覧を返す。同期のタイミングで古いメッセージを自動アーカイブ。"""
+    library_service.archive_old_messages(months=3)
     return jsonify({"success": True, **library_service.load_yonda_messages()})
+
+
+@app.route("/api/messages/<message_id>", methods=["DELETE"])
+def api_message_delete(message_id: str):
+    """指定IDのメッセージを削除する。"""
+    deleted = library_service.delete_yonda_message(message_id)
+    return jsonify({"success": deleted})
 
 
 @app.route("/api/libraries")

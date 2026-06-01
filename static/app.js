@@ -29,6 +29,7 @@ let genreChart = null;
 let currentDetailBook = null;
 let bookInsightsCache = {};
 let yondaMessages = [];
+let archivedMessages = [];
 let messageBookRefs = [];
 let messageInsightRefs = [];
 let activeMessageId = null;
@@ -487,11 +488,13 @@ async function loadMessages() {
     const res = await fetch(API.messages);
     const data = await res.json();
     yondaMessages = data.success && Array.isArray(data.messages) ? data.messages : [];
+    archivedMessages = data.success && Array.isArray(data.archived) ? data.archived : [];
     updateBookTabLabels();
     if (activeBookTab === 'messages') renderMessages();
   } catch (e) {
     console.error('loadMessages error:', e);
     yondaMessages = [];
+    archivedMessages = [];
   }
 }
 
@@ -648,7 +651,17 @@ function updateStats() {
   ).length;
   const favorite = allBooks.filter(b => b.favorite).length;
 
-  document.getElementById('statRatedVal').textContent = completed;
+  // 最新メッセージに新規読了があればヘッダー読了数に (N) を追加
+  const latestNewCount = yondaMessages.length > 0
+    ? (yondaMessages[0].sync_summary?.new_completed_count || yondaMessages[0].books?.length || 0)
+    : 0;
+  const ratedEl = document.getElementById('statRatedVal');
+  if (ratedEl) {
+    ratedEl.innerHTML = latestNewCount > 0
+      ? `${completed}<span class="stat-new-badge" id="statNewBadge">(${latestNewCount})</span>`
+      : String(completed);
+  }
+
   document.getElementById('statTsundokuVal').textContent = inProgress;
   document.getElementById('statYearlyVal').textContent = yearlyCompleted;
   document.getElementById('statYearlyLabel').textContent = year + '年';
@@ -2714,16 +2727,34 @@ function renderMessages() {
   if (!listEl) return;
   messageBookRefs = [];
   messageInsightRefs = [];
-  if (!yondaMessages.length) {
+  if (!yondaMessages.length && !archivedMessages.length) {
     listEl.innerHTML = '<p class="messages-empty">まだメッセージはありません。</p>';
     return;
   }
-  listEl.innerHTML = yondaMessages.map((message, idx) => `
+  let html = yondaMessages.map((message, idx) => `
     <article class="message-card">
       ${renderMessageSummaryRow(message, idx)}
       ${activeMessageId === messageId(message, idx) ? renderMessageDetail(message) : ''}
     </article>
   `).join('');
+
+  if (archivedMessages.length) {
+    html += `
+      <details class="messages-archive-section" id="messagesArchive">
+        <summary class="messages-archive-toggle">アーカイブ（${archivedMessages.length}件）</summary>
+        <div class="messages-archive-list">
+          ${archivedMessages.map((message, idx) => `
+            <article class="message-card message-card-archived">
+              ${renderMessageSummaryRow(message, yondaMessages.length + idx)}
+              ${activeMessageId === messageId(message, yondaMessages.length + idx) ? renderMessageDetail(message) : ''}
+            </article>
+          `).join('')}
+        </div>
+      </details>
+    `;
+  }
+
+  listEl.innerHTML = html;
   listEl.querySelectorAll('.message-summary-row').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.getAttribute('data-message-id');
@@ -3942,6 +3973,14 @@ document.querySelectorAll('.header-tab').forEach(tab => {
 
 document.getElementById('statRated')?.addEventListener('click', (e) => {
   e.preventDefault();
+  // 新規更新バッジがあればメッセージへ、なければ読了リストへ
+  const latestNewCount = yondaMessages.length > 0
+    ? (yondaMessages[0].sync_summary?.new_completed_count || yondaMessages[0].books?.length || 0)
+    : 0;
+  if (latestNewCount > 0) {
+    openMessagesFromMenu();
+    return;
+  }
   activeMainTab = 'yonda';
   activeBookTab = 'read';
   document.getElementById('ratingFilter').value = 'completed';

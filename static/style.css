@@ -1340,6 +1340,30 @@ header {
   color: var(--text-secondary); font-size: 0.9rem; padding: 1rem;
   background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
 }
+/* アーカイブセクション */
+.messages-archive-section {
+  margin-top: 1.25rem;
+}
+.messages-archive-toggle {
+  cursor: pointer; padding: 0.6rem 1rem;
+  background: var(--bg-secondary, #f5f5f5); border: 1px solid var(--border);
+  border-radius: var(--radius); font-size: 0.85rem; color: var(--text-secondary);
+  list-style: none; display: flex; align-items: center; gap: 0.4rem;
+}
+.messages-archive-toggle::before { content: '▶'; font-size: 0.7rem; transition: transform 0.2s; }
+.messages-archive-section[open] .messages-archive-toggle::before { transform: rotate(90deg); }
+.messages-archive-list { margin-top: 0.5rem; }
+.message-card-archived { opacity: 0.72; }
+/* ヘッダー読了数の新着バッジ */
+.stat-new-badge {
+  font-size: 0.75rem; font-weight: 600; color: #fff;
+  background: var(--accent, #e53935); border-radius: 999px;
+  padding: 0 0.4em; margin-left: 0.25em; vertical-align: middle;
+  animation: badge-pop 0.3s ease;
+}
+@keyframes badge-pop {
+  0% { transform: scale(0.6); } 80% { transform: scale(1.15); } 100% { transform: scale(1); }
+}
 .message-card {
   background: var(--bg-card); border: 1px solid var(--border);
   border-radius: var(--radius); box-shadow: var(--shadow);
