@@ -2967,8 +2967,7 @@ function openBookDetail(book) {
     '<rect fill="#f0e6d8" width="64" height="90" rx="3"/>' +
     '<text x="32" y="50" text-anchor="middle" fill="#8a7968" font-size="10" font-family="sans-serif">No Cover</text></svg>'
   );
-  document.getElementById('bookDetailTitle').textContent = book.title || '—';
-  document.getElementById('bookDetailAuthor').textContent = book.author ? `著者: ${book.author}` : '';
+  // タイトル・著者・概要はdetailHref設定後にまとめてリンク付きで設定する
   document.getElementById('bookDetailGenre').textContent = book.genre ? `ジャンル: ${book.genre}` : '';
   document.getElementById('bookDetailFavorite').textContent = book.favorite ? '♥ お気に入り' : '';
   document.getElementById('bookDetailFavorite').style.display = book.favorite ? '' : 'none';
@@ -3006,13 +3005,65 @@ function openBookDetail(book) {
   document.getElementById('bookDetailComment').textContent = book.comment || '';
   document.getElementById('bookDetailCover').src = book.cover_url || NO_COVER;
   document.getElementById('bookDetailCover').onerror = function() { this.src = NO_COVER; };
-  let detailHref = book.detail_url || '#';
+  let detailHref = book.detail_url || '';
   if (book.detail_url && (book.source === 'kindle' || book.source === 'audible_jp')) {
     const tag = getAffiliateTag();
     if (tag) detailHref = appendTagToUrl(book.detail_url, tag);
   }
-  document.getElementById('bookDetailLink').href = detailHref;
-  document.getElementById('bookDetailLink').style.display = book.detail_url ? '' : 'none';
+
+  // タイトル: detail URLがあればリンクにする
+  const titleEl = document.getElementById('bookDetailTitle');
+  if (detailHref) {
+    titleEl.innerHTML = `<a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener" class="book-detail-title-link">${escapeHtml(book.title || '—')}</a>`;
+  } else {
+    titleEl.textContent = book.title || '—';
+  }
+
+  // 著者: detail URLがあればリンクにする
+  const authorEl = document.getElementById('bookDetailAuthor');
+  if (book.author && detailHref) {
+    authorEl.innerHTML = `<a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener" class="book-detail-meta-link">著者: ${escapeHtml(book.author)}</a>`;
+  } else {
+    authorEl.textContent = book.author ? `著者: ${book.author}` : '';
+  }
+
+  document.getElementById('bookDetailGenre').textContent = book.genre ? `ジャンル: ${book.genre}` : '';
+  document.getElementById('bookDetailFavorite').textContent = book.favorite ? '♥ お気に入り' : '';
+  document.getElementById('bookDetailFavorite').style.display = book.favorite ? '' : 'none';
+  const ratingEl = document.getElementById('bookDetailRating');
+  if (book.source === 'audible_jp') {
+    const bookUrl = getAudibleRatingUrl(book);
+    const dispRating = displayRating(book);
+    const ratingContent = dispRating > 0
+      ? `総合評価: ${starsHtml(dispRating, { asLink: true, source: book.source, detailUrl: bookUrl })}${(book.catalog_rating || 0) > 0 && (book.catalog_rating || 0) % 1 !== 0 ? ` (${book.catalog_rating})` : ''}`
+      : `総合評価: <a href="${escapeHtml(bookUrl)}" target="_blank" rel="noopener" class="rating-link" title="Audibleで評価を入力">— 評価を入力</a>`;
+    ratingEl.innerHTML = ratingContent;
+  } else {
+    ratingEl.innerHTML = book.rating ? `評価: ${starsHtml(book.rating)}` : '評価: —';
+  }
+  const headlineEl = document.getElementById('bookDetailReviewHeadline');
+  if (book.review_headline) {
+    headlineEl.textContent = `見出し: ${book.review_headline}`;
+    headlineEl.style.display = '';
+  } else {
+    headlineEl.textContent = '';
+    headlineEl.style.display = 'none';
+  }
+  document.getElementById('bookDetailLoanDate').textContent = book.loan_date ? `購入・貸出: ${book.loan_date}` : '';
+  const compEl = document.getElementById('bookDetailCompleted');
+  if (book.completed) {
+    compEl.textContent = book.completed_date ? `読了: ${formatDateOnly(book.completed_date)}` : '読了';
+    compEl.style.display = '';
+  } else if (formatProgress(book)) {
+    compEl.textContent = `進捗: ${formatProgress(book)}`;
+    compEl.style.display = '';
+  } else {
+    compEl.textContent = '';
+    compEl.style.display = 'none';
+  }
+  document.getElementById('bookDetailComment').textContent = book.comment || '';
+  document.getElementById('bookDetailCover').src = book.cover_url || NO_COVER;
+  document.getElementById('bookDetailCover').onerror = function() { this.src = NO_COVER; };
   const searchQ = `${book.title || ''} ${book.author || ''}`.trim() || book.title || '';
   const urls = getBookSearchUrls(searchQ);
   const amazonEl = document.getElementById('bookDetailAmazon');
@@ -3025,8 +3076,24 @@ function openBookDetail(book) {
     mercariEl.href = urls.mercari;
     mercariEl.style.display = searchQ ? '' : 'none';
   }
+
+  // 概要: detail URLがあればリンクにする
   const summaryText = book.full_summary || book.summary || '';
-  document.getElementById('bookDetailSummary').textContent = summaryText || '（概要なし）';
+  const summaryEl = document.getElementById('bookDetailSummary');
+  if (summaryText && detailHref) {
+    summaryEl.innerHTML = `<a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener" class="book-detail-summary-link">${escapeHtml(summaryText)}</a>`;
+  } else {
+    summaryEl.textContent = summaryText || '（概要なし）';
+  }
+
+  // 書評ポイント横のレビューボタン
+  const reviewUrl = reviewUrlForBook(book);
+  const reviewBtn = document.getElementById('bookDetailReviewBtn');
+  if (reviewBtn) {
+    reviewBtn.href = reviewUrl || '#';
+    reviewBtn.style.display = reviewUrl ? '' : 'none';
+  }
+
   loadBookInsight(book);
   modal.classList.add('open');
 }
