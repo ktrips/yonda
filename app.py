@@ -1738,7 +1738,7 @@ def _call_text_ai(prompt: str, max_tokens: int = 2200, temperature: float = 0.2,
 
     if provider == "openai":
         payload = {
-            "model": "gpt-4o-mini",
+            "model": "gpt-5-nano",
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
             "temperature": temperature,
@@ -1753,7 +1753,7 @@ def _call_text_ai(prompt: str, max_tokens: int = 2200, temperature: float = 0.2,
         )
         r.raise_for_status()
         text = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
-        return text, provider, "gpt-4o-mini"
+        return text, provider, "gpt-5-nano"
 
     models_to_try = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-2.5-flash"]
     last_err = None
