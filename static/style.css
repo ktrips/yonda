@@ -2079,7 +2079,10 @@ header {
 .book-detail-summary-link:hover { text-decoration: underline; color: var(--accent); }
 .book-detail-genre { font-size: 0.8rem; color: var(--accent); margin-bottom: 0.35rem; }
 .book-detail-favorite { font-size: 0.85rem; color: #c45c6a; margin-bottom: 0.35rem; }
-.book-detail-rating { font-size: 0.9rem; margin-bottom: 0.35rem; }
+.book-detail-rating-row {
+  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;
+}
+.book-detail-rating { font-size: 0.9rem; }
 .book-detail-rating .stars { color: var(--star); }
 .book-detail-review-headline { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.35rem; font-style: italic; }
 .rating-link { color: inherit; text-decoration: none; cursor: pointer; }

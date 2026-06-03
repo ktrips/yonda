@@ -3056,8 +3056,13 @@ function openBookDetail(book) {
     summaryEl.textContent = summaryText || '（概要なし）';
   }
 
-  // 書評ポイント横のレビューボタン
+  // レビューURL（評価横アイコン＆書評ポイント横ボタン共通）
   const reviewUrl = reviewUrlForBook(book);
+  const reviewIcon = document.getElementById('bookDetailReviewIcon');
+  if (reviewIcon) {
+    reviewIcon.href = reviewUrl || '#';
+    reviewIcon.style.display = reviewUrl ? '' : 'none';
+  }
   const reviewBtn = document.getElementById('bookDetailReviewBtn');
   if (reviewBtn) {
     reviewBtn.href = reviewUrl || '#';

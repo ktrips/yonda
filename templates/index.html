@@ -472,7 +472,10 @@
             <div class="book-detail-author" id="bookDetailAuthor"></div>
             <div class="book-detail-genre" id="bookDetailGenre"></div>
             <div class="book-detail-favorite" id="bookDetailFavorite"></div>
-            <div class="book-detail-rating" id="bookDetailRating"></div>
+            <div class="book-detail-rating-row">
+              <div class="book-detail-rating" id="bookDetailRating"></div>
+              <a id="bookDetailReviewIcon" href="#" target="_blank" rel="noopener" class="btn-review-detail" title="レビューを書く" style="display:none;">📖</a>
+            </div>
             <div class="book-detail-review-headline" id="bookDetailReviewHeadline"></div>
             <div class="book-detail-dates">
               <span id="bookDetailLoanDate"></span>
@@ -493,7 +496,7 @@
           <div class="book-detail-insights-header">
             <h3>書評ポイント</h3>
             <div class="book-detail-insights-actions">
-              <a id="bookDetailReviewBtn" href="#" target="_blank" rel="noopener" class="btn-review-detail" title="レビューを書く" style="display:none;">📖</a>
+              <a id="bookDetailReviewBtn" href="#" target="_blank" rel="noopener" class="btn btn-secondary btn-review-text" title="レビューを書く" style="display:none;">レビューを書く</a>
               <button type="button" class="btn btn-secondary" id="bookInsightEditBtn">手入力</button>
               <button type="button" class="btn btn-secondary" id="bookInsightGenerateBtn">AIで生成</button>
             </div>
