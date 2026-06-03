@@ -1740,7 +1740,7 @@ def _call_text_ai(prompt: str, max_tokens: int = 2200, temperature: float = 0.2,
         payload = {
             "model": "gpt-5-nano",
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
+            "max_completion_tokens": max_tokens,
             "temperature": temperature,
         }
         if json_mode:
