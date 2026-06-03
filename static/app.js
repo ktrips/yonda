@@ -2967,44 +2967,8 @@ function openBookDetail(book) {
     '<rect fill="#f0e6d8" width="64" height="90" rx="3"/>' +
     '<text x="32" y="50" text-anchor="middle" fill="#8a7968" font-size="10" font-family="sans-serif">No Cover</text></svg>'
   );
-  // タイトル・著者・概要はdetailHref設定後にまとめてリンク付きで設定する
-  document.getElementById('bookDetailGenre').textContent = book.genre ? `ジャンル: ${book.genre}` : '';
-  document.getElementById('bookDetailFavorite').textContent = book.favorite ? '♥ お気に入り' : '';
-  document.getElementById('bookDetailFavorite').style.display = book.favorite ? '' : 'none';
-  const ratingEl = document.getElementById('bookDetailRating');
-  if (book.source === 'audible_jp') {
-    const bookUrl = getAudibleRatingUrl(book);
-    const dispRating = displayRating(book);
-    const ratingContent = dispRating > 0
-      ? `総合評価: ${starsHtml(dispRating, { asLink: true, source: book.source, detailUrl: bookUrl })}${(book.catalog_rating || 0) > 0 && (book.catalog_rating || 0) % 1 !== 0 ? ` (${book.catalog_rating})` : ''}`
-      : `総合評価: <a href="${escapeHtml(bookUrl)}" target="_blank" rel="noopener" class="rating-link" title="Audibleで評価を入力">— 評価を入力</a>`;
-    ratingEl.innerHTML = ratingContent;
-  } else {
-    ratingEl.innerHTML = book.rating ? `評価: ${starsHtml(book.rating)}` : '評価: —';
-  }
-  const headlineEl = document.getElementById('bookDetailReviewHeadline');
-  if (book.review_headline) {
-    headlineEl.textContent = `見出し: ${book.review_headline}`;
-    headlineEl.style.display = '';
-  } else {
-    headlineEl.textContent = '';
-    headlineEl.style.display = 'none';
-  }
-  document.getElementById('bookDetailLoanDate').textContent = book.loan_date ? `購入・貸出: ${book.loan_date}` : '';
-  const compEl = document.getElementById('bookDetailCompleted');
-  if (book.completed) {
-    compEl.textContent = book.completed_date ? `読了: ${formatDateOnly(book.completed_date)}` : '読了';
-    compEl.style.display = '';
-  } else if (formatProgress(book)) {
-    compEl.textContent = `進捗: ${formatProgress(book)}`;
-    compEl.style.display = '';
-  } else {
-    compEl.textContent = '';
-    compEl.style.display = 'none';
-  }
-  document.getElementById('bookDetailComment').textContent = book.comment || '';
-  document.getElementById('bookDetailCover').src = book.cover_url || NO_COVER;
-  document.getElementById('bookDetailCover').onerror = function() { this.src = NO_COVER; };
+
+  // detail URLを先に解決（タイトル・著者・概要のリンクに使う）
   let detailHref = book.detail_url || '';
   if (book.detail_url && (book.source === 'kindle' || book.source === 'audible_jp')) {
     const tag = getAffiliateTag();
@@ -3030,6 +2994,7 @@ function openBookDetail(book) {
   document.getElementById('bookDetailGenre').textContent = book.genre ? `ジャンル: ${book.genre}` : '';
   document.getElementById('bookDetailFavorite').textContent = book.favorite ? '♥ お気に入り' : '';
   document.getElementById('bookDetailFavorite').style.display = book.favorite ? '' : 'none';
+
   const ratingEl = document.getElementById('bookDetailRating');
   if (book.source === 'audible_jp') {
     const bookUrl = getAudibleRatingUrl(book);
@@ -3041,6 +3006,7 @@ function openBookDetail(book) {
   } else {
     ratingEl.innerHTML = book.rating ? `評価: ${starsHtml(book.rating)}` : '評価: —';
   }
+
   const headlineEl = document.getElementById('bookDetailReviewHeadline');
   if (book.review_headline) {
     headlineEl.textContent = `見出し: ${book.review_headline}`;
@@ -3049,7 +3015,9 @@ function openBookDetail(book) {
     headlineEl.textContent = '';
     headlineEl.style.display = 'none';
   }
+
   document.getElementById('bookDetailLoanDate').textContent = book.loan_date ? `購入・貸出: ${book.loan_date}` : '';
+
   const compEl = document.getElementById('bookDetailCompleted');
   if (book.completed) {
     compEl.textContent = book.completed_date ? `読了: ${formatDateOnly(book.completed_date)}` : '読了';
@@ -3061,9 +3029,11 @@ function openBookDetail(book) {
     compEl.textContent = '';
     compEl.style.display = 'none';
   }
+
   document.getElementById('bookDetailComment').textContent = book.comment || '';
   document.getElementById('bookDetailCover').src = book.cover_url || NO_COVER;
   document.getElementById('bookDetailCover').onerror = function() { this.src = NO_COVER; };
+
   const searchQ = `${book.title || ''} ${book.author || ''}`.trim() || book.title || '';
   const urls = getBookSearchUrls(searchQ);
   const amazonEl = document.getElementById('bookDetailAmazon');
