@@ -2526,3 +2526,125 @@ header {
   .tag-trend-grid { grid-template-columns: 1fr; }
   .tag-detail-book { width: 100%; }
 }
+
+/* ============================================================
+   タグ分析 v2 — カテゴリ分布・タブ
+   ============================================================ */
+
+/* カテゴリ分布バー */
+.tag-overview-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+.tag-overview-bar-item {
+  display: grid;
+  grid-template-columns: 11rem 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.tag-overview-bar-item:hover,
+.tag-overview-bar-active { background: #fde9d6; }
+.tag-overview-bar-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #5a3e28;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tag-overview-bar-bg {
+  background: #e8d5c0;
+  border-radius: 4px;
+  height: 10px;
+  overflow: hidden;
+}
+.tag-overview-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #c8865a, #e8b080);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+  min-width: 2px;
+}
+.tag-overview-bar-stats {
+  font-size: 0.73rem;
+  color: #888;
+  white-space: nowrap;
+}
+
+/* カテゴリタブ */
+.tag-cat-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.75rem;
+}
+.tag-cat-tab {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.78rem;
+  border: 1px solid #d0bca0;
+  border-radius: 6px;
+  background: #fff;
+  color: #5a3e28;
+  cursor: pointer;
+  transition: background 0.14s, border-color 0.14s;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.tag-cat-tab:hover { background: #fde9d6; }
+.tag-cat-tab.active {
+  background: #c8865a;
+  color: #fff;
+  border-color: #c8865a;
+  font-weight: 600;
+}
+.tag-cat-tab-count {
+  font-size: 0.68rem;
+  background: rgba(0,0,0,0.12);
+  border-radius: 999px;
+  padding: 0 5px;
+  line-height: 1.5;
+}
+
+/* カテゴリ統計 */
+.tag-cat-stats {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.82rem;
+  margin-bottom: 0.5rem;
+  color: #5a3e28;
+}
+.tag-cat-stat-read  { color: #2e7d32; }
+.tag-cat-stat-unread { color: #b71c1c; }
+
+/* タグクラウド空状態 */
+.tag-cloud-empty {
+  font-size: 0.82rem;
+  color: #aaa;
+  text-align: center;
+  padding: 1rem;
+  line-height: 1.6;
+}
+
+/* カバー画像プレースホルダー */
+.tag-detail-cover-placeholder {
+  width: 36px;
+  height: 50px;
+  background: #f0e6d8;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* レスポンシブ */
+@media (max-width: 600px) {
+  .tag-overview-bar-item {
+    grid-template-columns: 7rem 1fr auto;
+  }
+  .tag-cat-tab { font-size: 0.72rem; padding: 0.25rem 0.45rem; }
+}

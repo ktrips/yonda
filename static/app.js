@@ -3311,12 +3311,96 @@ document.getElementById('recommendRefreshBtn')?.addEventListener('click', () => 
 document.getElementById('messagesRefreshBtn')?.addEventListener('click', loadMessages);
 
 /* ============================================================
-   タグ傾向分析
+   タグ傾向分析 v2 — カテゴリ別タグクラウド
    ============================================================ */
 
-let _tagAnalyticsFilter = 'all'; // 'all' | 'read' | 'unread'
-let _tagAnalyticsSort   = 'total'; // 'total' | 'recent' | 'unread'
-let _tagChartInstance   = null;
+const TAG_MAIN_CATEGORIES = [
+  '文学・フィクション',
+  'ビジネス・自己啓発・政治・社会',
+  'テクノロジー・科学',
+  'ライフ',
+  'その他',
+];
+
+// ジャンル文字列のキーワードでカテゴリを決定
+const TAG_CATEGORY_GENRE_KEYWORDS = {
+  '文学・フィクション': ['文学', '小説', 'フィクション', '文芸', '詩', '海外文学', 'エンターテインメント', 'sf', 'ミステリー', '推理', 'ホラー', 'ファンタジー', 'ロマンス', '歴史小説', 'サスペンス', 'スリラー', '冒険', '児童文学', '絵本', 'コミック', '漫画', 'ライトノベル', '大衆小説', '純文学', '外国文学', '日本文学', '現代文学', 'fiction', 'drama'],
+  'ビジネス・自己啓発・政治・社会': ['ビジネス', '経営', 'マネジメント', 'リーダーシップ', '起業', 'マーケティング', '投資', '金融', '経済', '自己啓発', '政治', '社会', '哲学', '歴史', '宗教', '倫理', 'キャリア', '人間関係', 'コミュニケーション', 'スピリチュアル', '心理', '脳科学', '認知', '教養', '資産', '人文', '思想', 'business', 'psychology'],
+  'テクノロジー・科学': ['テクノロジー', 'ai', '人工知能', 'プログラミング', 'コンピュータ', 'it', 'サイエンス', '科学', '医学', '生物', '物理', '数学', 'エンジニアリング', 'データ', 'デジタル', '宇宙', '工学', '医療', 'technology', 'science'],
+  'ライフ': ['ライフ', '料理', '健康', 'スポーツ', '旅行', '趣味', '家族', '教育', '子育て', 'ファッション', 'アート', '音楽', '映画', 'エッセイ', '随筆', '育児', '美容', 'ガーデニング', 'インテリア', '語学', 'ホビー', '食', 'グルメ', 'ライフスタイル', 'アウトドア', 'life', 'essay'],
+};
+
+// カテゴリ別・summary/full_summary からの詳細タグ抽出パターン
+const DETAIL_TAG_PATTERNS = {
+  '文学・フィクション': [
+    { tag: '恋愛・ロマンス',     words: ['恋愛', '恋人', 'ロマンス', '片思い', '初恋', '恋心', '愛し', '恋し', '結婚', 'プロポーズ', '交際', '告白', 'love', 'romance'] },
+    { tag: '家族・親子',         words: ['家族', '親子', '夫婦', '母親', '父親', '兄弟', '姉妹', '子ども', '子供', '息子', '娘', '両親', '兄', '弟', '姉', '妹'] },
+    { tag: '青春・学生',         words: ['青春', '高校生', '中学生', '大学生', '学生', '受験', '部活', '文化祭', '修学旅行', '進路', '学校', '少年', '少女'] },
+    { tag: '友情・仲間',         words: ['友情', '友人', '友達', '仲間', '絆', '親友'] },
+    { tag: 'ミステリー・謎解き', words: ['謎', '推理', '殺人', '事件', '探偵', '刑事', '犯罪', '犯人', '容疑者', 'トリック', 'mystery', 'detective'] },
+    { tag: 'ホラー・恐怖',       words: ['ホラー', '恐怖', '怖い', '幽霊', '呪い', '恐ろしい', 'horror'] },
+    { tag: 'サスペンス・スリラー', words: ['サスペンス', 'スリラー', '心理戦', '追跡', '逃亡', 'thriller', 'suspense'] },
+    { tag: 'SF・未来',           words: ['sf', '宇宙', '未来', 'ロボット', 'タイムトラベル', 'クローン', 'サイバー', '仮想現実', 'ディストピア', 'science fiction'] },
+    { tag: 'ファンタジー・異世界', words: ['魔法', '異世界', 'ファンタジー', '魔王', '勇者', 'ドラゴン', '精霊', '魔法使い', 'fantasy'] },
+    { tag: '歴史・時代小説',     words: ['江戸', '明治', '昭和', '侍', '武士', '戦国', '幕末', '平安', '鎌倉', '時代小説', '大正'] },
+    { tag: '戦争・戦時',         words: ['戦争', '戦時', '兵士', '戦場', '爆撃', '特攻', '捕虜', '空襲'] },
+    { tag: '感動・泣ける',       words: ['感動', '涙', '泣ける', '切ない', '号泣', '心打つ', '胸に刺さる'] },
+    { tag: '社会・格差',         words: ['格差', '差別', '貧困', '社会問題', '不平等', 'いじめ', '孤独', '孤立'] },
+    { tag: '成長・自己発見',     words: ['成長', '自己発見', '変化', '新しい自分', '旅立ち', '挑戦', '夢', '再生'] },
+    { tag: '死・喪失・悲哀',     words: ['死', '喪失', '悲しみ', '亡くなる', '別れ', '悲劇', '追悼'] },
+    { tag: '職場・仕事',         words: ['仕事', '職場', '会社', 'サラリーマン', '転職', '出世', '同僚', '上司'] },
+    { tag: '冒険・旅',           words: ['冒険', '旅', '探検', '旅人', '旅行', 'adventure'] },
+    { tag: 'コメディ・ユーモア', words: ['笑い', 'コメディ', 'ユーモア', 'おかしい', '笑える', 'comedy', 'humor'] },
+  ],
+  'ビジネス・自己啓発・政治・社会': [
+    { tag: 'リーダーシップ・組織', words: ['リーダー', 'リーダーシップ', '組織', 'チーム', 'マネジメント', '部下', '上司', 'management'] },
+    { tag: '起業・スタートアップ', words: ['起業', 'スタートアップ', 'ベンチャー', '創業', '事業', '独立', 'startup'] },
+    { tag: '投資・資産形成',     words: ['投資', '資産', '株', '資産形成', '節約', '節税', 'お金', 'ファイナンス', 'investment'] },
+    { tag: 'マーケティング・戦略', words: ['マーケティング', '戦略', 'ブランド', '広告', 'セールス', '顧客', '市場', 'marketing'] },
+    { tag: '心理学・行動経済学', words: ['心理', '行動', '認知', '意思決定', 'バイアス', '脳', 'ナッジ', 'psychology'] },
+    { tag: '自己啓発・習慣',     words: ['習慣', '生産性', '目標', '朝活', 'マインドフルネス', '瞑想', '集中', '時間管理', 'habit'] },
+    { tag: '哲学・思想',         words: ['哲学', '思想', '倫理', '道徳', '存在', '自由', '幸福', '正義', 'philosophy'] },
+    { tag: '歴史・政治',         words: ['歴史', '政治', '選挙', '外交', '国際', '民主主義', '経済史', 'history'] },
+    { tag: 'コミュニケーション', words: ['コミュニケーション', '人間関係', '対話', '交渉', '説得', '共感', 'communication'] },
+    { tag: 'キャリア・転職',     words: ['キャリア', '転職', '就職', '仕事術', '働き方', 'ワークライフ', 'career'] },
+    { tag: '社会問題・格差',     words: ['格差', '貧困', '差別', '不平等', 'ジェンダー', '少子化', '高齢化', '社会問題'] },
+    { tag: 'イノベーション・DX', words: ['イノベーション', 'dx', 'デジタル変革', '変革', 'トランスフォーメーション', 'innovation'] },
+    { tag: '経済・金融',         words: ['経済', '金融', 'gdp', '景気', '貿易', 'economics', 'finance'] },
+    { tag: '教育・学習',         words: ['教育', '学習', '学び', '勉強', '学校', 'education', 'learning'] },
+    { tag: '健康・ウェルネス',   words: ['健康', 'ウェルネス', 'メンタル', '幸福', '充実', 'wellness'] },
+  ],
+  'テクノロジー・科学': [
+    { tag: 'AI・機械学習',           words: ['ai', '機械学習', 'ディープラーニング', 'chatgpt', '生成ai', '人工知能', 'llm', '深層学習'] },
+    { tag: 'プログラミング・開発',   words: ['プログラミング', 'コーディング', '開発', 'エンジニア', 'ソフトウェア', 'アプリ', 'coding'] },
+    { tag: 'データサイエンス・統計', words: ['データ', '統計', '分析', 'データサイエンス', 'ビッグデータ', 'analytics'] },
+    { tag: 'セキュリティ',           words: ['セキュリティ', 'ハッキング', 'サイバー', 'プライバシー', '暗号', 'security'] },
+    { tag: '医療・バイオ',           words: ['医療', '医学', '遺伝子', 'バイオ', '病気', 'がん', 'ゲノム', '薬', 'medicine', 'biology'] },
+    { tag: '宇宙・天文',             words: ['宇宙', '天文', 'ブラックホール', '天体', '星', '惑星', '銀河', 'space'] },
+    { tag: '物理・量子',             words: ['物理', '量子', '相対性', '素粒子', 'physics', 'quantum'] },
+    { tag: '数学・論理',             words: ['数学', '論理', '確率', '証明', '数式', 'math', 'mathematics'] },
+    { tag: 'ロボット・自動化',       words: ['ロボット', '自動化', 'オートメーション', '自律', 'robot'] },
+    { tag: '環境・エネルギー',       words: ['環境', 'エネルギー', '再生可能', '気候変動', 'カーボン', 'サステナブル', 'environment'] },
+    { tag: 'デジタル・インターネット', words: ['インターネット', 'デジタル', 'web', 'sns', 'ソーシャル', 'digital'] },
+  ],
+  'ライフ': [
+    { tag: '料理・グルメ',       words: ['料理', 'レシピ', '食', 'グルメ', '食べ物', '食材', 'レストラン', 'シェフ', 'cooking'] },
+    { tag: '健康・ダイエット',   words: ['健康', 'ダイエット', '体', '栄養', '食事管理', 'ヘルシー', 'health'] },
+    { tag: 'フィットネス・スポーツ', words: ['運動', 'フィットネス', 'スポーツ', 'トレーニング', '筋肉', 'ランニング', 'exercise'] },
+    { tag: '子育て・育児',       words: ['子育て', '育児', '子ども', '子供', '親', '保育', 'parenting'] },
+    { tag: '教育・学習',         words: ['教育', '学習', '学び', '学校', '塾', 'education'] },
+    { tag: '旅行・アウトドア',   words: ['旅行', '旅', 'アウトドア', '登山', '海外', '観光', '旅人', 'travel'] },
+    { tag: 'アート・デザイン',   words: ['アート', '美術', 'デザイン', 'クリエイティブ', '絵', '写真', '芸術', 'art'] },
+    { tag: '音楽・映画',         words: ['音楽', '映画', 'エンタメ', '映像', '演劇', 'ライブ', 'アニメ', 'music'] },
+    { tag: 'エッセイ・回顧録',   words: ['エッセイ', '随筆', '体験', '自伝', '回顧録', '伝記', 'memoir', 'essay'] },
+    { tag: 'マインド・メンタル', words: ['メンタル', '心', 'ストレス', '不安', 'うつ', '癒し', '幸福', '充実', 'mental'] },
+    { tag: '語学・学習',         words: ['語学', '英語', '言語', '外国語', '学習', '勉強', 'language'] },
+    { tag: '住まい・インテリア', words: ['インテリア', '住まい', '家', '部屋', '収納', 'diy', 'interior'] },
+    { tag: '環境・サステナブル', words: ['環境', 'サステナブル', 'エコ', 'ゼロウェイスト', 'sustainable'] },
+  ],
+};
+
+let _tagActiveCat  = TAG_MAIN_CATEGORIES[0];
+let _tagCatData    = null; // computeCategoryTagAnalytics() の結果をキャッシュ
 
 /** book の insight key を返す (bookInsightsCache のキーと一致) */
 function _bookInsightKey(book) {
@@ -3326,263 +3410,210 @@ function _bookInsightKey(book) {
   return null;
 }
 
-/** 1冊分のタグ配列を生成 (genre + insight headings) */
-function generateBookTags(book) {
-  const tags = new Set();
-  genreTags(book.genre).forEach(g => { if (g) tags.add(g); });
-  const key = _bookInsightKey(book);
-  if (key) {
-    const insight = bookInsightsCache[key];
-    if (insight?.points) {
-      insight.points.forEach(p => {
-        const h = (p.heading || '').trim();
-        if (h && h.length <= 25) tags.add(h);
-      });
+/** book を5大カテゴリに分類 */
+function classifyBookToMainCategory(book) {
+  const genreRaw = (book.genre || '').toLowerCase();
+  for (const [cat, keywords] of Object.entries(TAG_CATEGORY_GENRE_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (genreRaw.includes(kw)) return cat;
     }
+  }
+  return 'その他';
+}
+
+/** 1冊の詳細タグを生成（insight headings + genre sub + summary patterns） */
+function generateDetailedTagsForBook(book, mainCat) {
+  const tags = new Set();
+  // 1. insight point headings
+  const key = _bookInsightKey(book);
+  if (key && bookInsightsCache[key]?.points) {
+    bookInsightsCache[key].points.forEach(p => {
+      const h = (p.heading || '').trim();
+      if (h && h.length <= 20) tags.add(h);
+    });
+  }
+  // 2. ジャンルの2階層目以降
+  genreTags(book.genre).slice(1).forEach(g => {
+    if (g && g.length <= 20) tags.add(g);
+  });
+  // 3. summary / full_summary のキーワードパターン
+  const summaryText = ((book.full_summary || '') + ' ' + (book.summary || '')).toLowerCase();
+  const patterns = DETAIL_TAG_PATTERNS[mainCat] || [];
+  for (const { tag, words } of patterns) {
+    if (words.some(w => summaryText.includes(w))) tags.add(tag);
   }
   return [...tags];
 }
 
-/** 全書籍からタグ集計を作成 */
-function computeTagAnalytics() {
-  const tagMap = {};
+/** カテゴリ別にタグ集計データを作成 */
+function computeCategoryTagAnalytics() {
+  const result = {};
+  for (const cat of TAG_MAIN_CATEGORIES) result[cat] = { books: [], tagMap: {} };
   for (const book of allBooks) {
-    const tags = generateBookTags(book);
-    for (const tag of tags) {
-      if (!tagMap[tag]) tagMap[tag] = { total: 0, read: 0, unread: 0, lastRead: '', books: [] };
-      tagMap[tag].total++;
-      if (book.completed) {
-        tagMap[tag].read++;
-        const d = book.completed_date || '';
-        if (d > tagMap[tag].lastRead) tagMap[tag].lastRead = d;
-      } else {
-        tagMap[tag].unread++;
-      }
-      tagMap[tag].books.push(book);
+    const cat = classifyBookToMainCategory(book);
+    result[cat].books.push(book);
+    const detailTags = generateDetailedTagsForBook(book, cat);
+    for (const tag of detailTags) {
+      if (!result[cat].tagMap[tag]) result[cat].tagMap[tag] = { total: 0, read: 0, unread: 0, books: [] };
+      const td = result[cat].tagMap[tag];
+      td.total++;
+      book.completed ? td.read++ : td.unread++;
+      td.books.push(book);
     }
   }
-  return tagMap;
+  return result;
 }
 
-/** タグ配列をソートして上位N件返す */
-function sortedTags(tagMap, sort, filter, limit = 25) {
-  let entries = Object.entries(tagMap);
-  if (filter === 'read')   entries = entries.filter(([, d]) => d.read > 0);
-  if (filter === 'unread') entries = entries.filter(([, d]) => d.unread > 0);
-  if (sort === 'total')  entries.sort((a, b) => b[1].total  - a[1].total);
-  if (sort === 'recent') entries.sort((a, b) => (b[1].lastRead || '').localeCompare(a[1].lastRead || ''));
-  if (sort === 'unread') entries.sort((a, b) => b[1].unread - a[1].unread);
-  return entries.slice(0, limit);
-}
-
-/** 横棒グラフを描画 */
-async function renderTagChart(topTags) {
-  await loadChartJs();
-  const canvas = document.getElementById('tagFrequencyChart');
-  if (!canvas) return;
-  if (_tagChartInstance) { _tagChartInstance.destroy(); _tagChartInstance = null; }
-  const labels = topTags.map(([tag]) => tag.length > 14 ? tag.slice(0, 13) + '…' : tag);
-  const readData   = topTags.map(([, d]) => d.read);
-  const unreadData = topTags.map(([, d]) => d.unread);
-  const H = Math.max(200, topTags.length * 26);
-  canvas.style.height = H + 'px';
-  canvas.height = H;
-  _tagChartInstance = new Chart(canvas, {
-    type: 'bar',
-    data: {
-      labels,
-      datasets: [
-        { label: '読了', data: readData,   backgroundColor: 'rgba(76,175,80,0.75)', borderRadius: 3 },
-        { label: '未読', data: unreadData, backgroundColor: 'rgba(189,189,189,0.6)', borderRadius: 3 },
-      ],
-    },
-    options: {
-      indexAxis: 'y',
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { position: 'top' }, tooltip: { mode: 'index', intersect: false } },
-      scales: {
-        x: { stacked: true, ticks: { precision: 0 } },
-        y: { stacked: true, ticks: { font: { size: 11 } } },
-      },
-    },
-  });
-}
-
-/** タグクラウドを描画 */
-function renderTagCloud(topTags) {
-  const wrap = document.getElementById('tagCloudWrap');
-  if (!wrap) return;
-  const max = topTags.reduce((m, [, d]) => Math.max(m, d.total), 1);
-  wrap.innerHTML = topTags.map(([tag, d]) => {
-    const size = 0.75 + (d.total / max) * 1.1;
-    const opacity = 0.55 + (d.total / max) * 0.45;
-    const pct = d.read > 0 ? Math.round((d.read / d.total) * 100) : 0;
-    return `<span class="tag-chip" data-tag="${escapeAttr(tag)}" style="font-size:${size.toFixed(2)}rem;opacity:${opacity.toFixed(2)}" title="${escapeHtml(tag)}: 計${d.total}冊（読了${d.read} / 未読${d.unread}）">${escapeHtml(tag)}<span class="tag-chip-pct">${pct}%</span></span>`;
+/** カテゴリ分布バーを描画 */
+function renderCategoryOverview(catData) {
+  const el = document.getElementById('tagCatOverview');
+  if (!el) return;
+  const total = allBooks.length || 1;
+  const bars = TAG_MAIN_CATEGORIES.map(cat => {
+    const n = catData[cat].books.length;
+    const pct = Math.round((n / total) * 100);
+    const read = catData[cat].books.filter(b => b.completed).length;
+    const isActive = cat === _tagActiveCat ? ' tag-overview-bar-active' : '';
+    return `<div class="tag-overview-bar-item${isActive}" data-cat="${escapeAttr(cat)}">
+      <div class="tag-overview-bar-label">${escapeHtml(cat)}</div>
+      <div class="tag-overview-bar-bg"><div class="tag-overview-bar-fill" style="width:${pct}%"></div></div>
+      <div class="tag-overview-bar-stats">${n}冊 / 読了${read}</div>
+    </div>`;
   }).join('');
-  wrap.querySelectorAll('.tag-chip').forEach(el => {
-    el.addEventListener('click', () => {
-      const tag = el.getAttribute('data-tag');
-      showTagDetail(tag);
+  el.innerHTML = `<div class="tag-overview-bars">${bars}</div>`;
+  el.querySelectorAll('.tag-overview-bar-item').forEach(item => {
+    item.addEventListener('click', () => {
+      _tagActiveCat = item.dataset.cat;
+      renderCategoryOverview(catData);
+      renderCategoryTabs(catData);
+      renderCategoryCloud(catData);
     });
   });
 }
 
-/** トレンドセクション（直近3ヶ月 vs それ以前）を描画 */
-function renderTagTrend(tagMap) {
-  const wrap = document.getElementById('tagTrendSection');
-  if (!wrap) return;
-  const today = new Date();
-  const threeMonthsAgo = new Date(today); threeMonthsAgo.setMonth(today.getMonth() - 3);
-  const threeMonthsStr = threeMonthsAgo.toISOString().slice(0, 10);
-
-  const recentTags = {}, unreadTop = [];
-  for (const [tag, d] of Object.entries(tagMap)) {
-    const recentRead = d.books.filter(b => b.completed && (b.completed_date || '') >= threeMonthsStr).length;
-    if (recentRead > 0) recentTags[tag] = recentRead;
-    if (d.unread > 0) unreadTop.push({ tag, unread: d.unread, total: d.total });
-  }
-  const topRecent = Object.entries(recentTags).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  const topUnread = unreadTop.sort((a, b) => b.unread - a.unread).slice(0, 8);
-
-  wrap.innerHTML = `
-    <div class="tag-trend-grid">
-      <div class="tag-trend-block">
-        <h4 class="tag-trend-title">📈 直近3ヶ月で多く読んだテーマ</h4>
-        <div class="tag-trend-chips">
-          ${topRecent.length
-            ? topRecent.map(([tag, cnt]) => `<span class="tag-trend-chip tag-trend-read" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)} <em>${cnt}冊</em></span>`).join('')
-            : '<span class="tag-trend-empty">データなし</span>'}
-        </div>
-      </div>
-      <div class="tag-trend-block">
-        <h4 class="tag-trend-title">📚 まだ読んでいない本が多いテーマ</h4>
-        <div class="tag-trend-chips">
-          ${topUnread.length
-            ? topUnread.map(({ tag, unread }) => `<span class="tag-trend-chip tag-trend-unread" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)} <em>${unread}冊</em></span>`).join('')
-            : '<span class="tag-trend-empty">データなし</span>'}
-        </div>
-      </div>
-    </div>
-  `;
-  wrap.querySelectorAll('[data-tag]').forEach(el => {
-    el.addEventListener('click', () => showTagDetail(el.getAttribute('data-tag')));
-  });
-}
-
-/** タグ一覧テーブルを描画 */
-function renderTagTable(allTagsSorted) {
-  const wrap = document.getElementById('tagAnalyticsTableWrap');
-  if (!wrap) return;
-  const rows = allTagsSorted.map(([tag, d]) => {
-    const pct = d.total > 0 ? Math.round((d.read / d.total) * 100) : 0;
-    const lastReadStr = d.lastRead ? d.lastRead.slice(0, 7) : '—';
-    return `<tr class="tag-table-row" data-tag="${escapeAttr(tag)}">
-      <td class="tag-table-name">${escapeHtml(tag)}</td>
-      <td class="tag-table-num">${d.total}</td>
-      <td class="tag-table-num tag-table-read">${d.read}</td>
-      <td class="tag-table-num tag-table-unread">${d.unread}</td>
-      <td class="tag-table-pct"><div class="tag-table-bar" style="width:${pct}%"></div><span>${pct}%</span></td>
-      <td class="tag-table-date">${lastReadStr}</td>
-    </tr>`;
+/** カテゴリタブを描画 */
+function renderCategoryTabs(catData) {
+  const el = document.getElementById('tagCatTabs');
+  if (!el) return;
+  el.innerHTML = TAG_MAIN_CATEGORIES.map(cat => {
+    const n = catData[cat].books.length;
+    const active = cat === _tagActiveCat ? ' active' : '';
+    return `<button type="button" class="tag-cat-tab${active}" data-cat="${escapeAttr(cat)}">${escapeHtml(cat)}<span class="tag-cat-tab-count">${n}</span></button>`;
   }).join('');
-  wrap.innerHTML = `
-    <table class="tag-analytics-table">
-      <thead><tr>
-        <th>タグ</th><th>計</th><th>読了</th><th>未読</th><th>読了率</th><th>最終読了</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  `;
-  wrap.querySelectorAll('.tag-table-row').forEach(row => {
-    row.addEventListener('click', () => showTagDetail(row.getAttribute('data-tag')));
+  el.querySelectorAll('.tag-cat-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _tagActiveCat = btn.dataset.cat;
+      renderCategoryOverview(catData);
+      renderCategoryTabs(catData);
+      renderCategoryCloud(catData);
+    });
   });
 }
 
-/** タグクリック時: 該当書籍リストをモーダルではなくインラインに表示 */
-function showTagDetail(tag) {
-  const tagMap = computeTagAnalytics();
-  const d = tagMap[tag];
-  if (!d) return;
-  const books = d.books.slice().sort((a, b) => {
-    const da = a.completed_date || '', db = b.completed_date || '';
+/** 選択カテゴリのタグクラウドを描画 */
+function renderCategoryCloud(catData) {
+  const el = document.getElementById('tagCatContent');
+  if (!el) return;
+  const catInfo = catData[_tagActiveCat];
+  if (!catInfo) return;
+  const { books, tagMap } = catInfo;
+  const read = books.filter(b => b.completed).length;
+  const unread = books.length - read;
+  const sortedTagList = Object.entries(tagMap).sort((a, b) => b[1].total - a[1].total);
+  const max = sortedTagList.length ? sortedTagList[0][1].total : 1;
+
+  const cloudHtml = sortedTagList.length
+    ? sortedTagList.map(([tag, d]) => {
+        const size = 0.7 + (d.total / max) * 1.2;
+        const opacity = 0.45 + (d.total / max) * 0.55;
+        const pct = d.total > 0 ? Math.round((d.read / d.total) * 100) : 0;
+        return `<span class="tag-chip" data-tag="${escapeAttr(tag)}" style="font-size:${size.toFixed(2)}rem;opacity:${opacity.toFixed(2)}" title="${escapeHtml(tag)}: 計${d.total}冊（読了${d.read} / 未読${d.unread}）">${escapeHtml(tag)}<span class="tag-chip-pct">${pct}%</span></span>`;
+      }).join('')
+    : '<p class="tag-cloud-empty">このカテゴリにタグはまだありません<br><small>AI書評を生成すると詳細タグが増えます</small></p>';
+
+  el.innerHTML = `
+    <div class="tag-cat-stats">
+      <span>計 <strong>${books.length}</strong>冊</span>
+      <span class="tag-cat-stat-read">読了 <strong>${read}</strong></span>
+      <span class="tag-cat-stat-unread">未読 <strong>${unread}</strong></span>
+    </div>
+    <div class="tag-cloud-wrap">${cloudHtml}</div>
+    <div class="tag-detail-panel" id="tagDetailPanel" style="display:none"></div>
+  `;
+
+  el.querySelectorAll('.tag-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const tag = chip.dataset.tag;
+      const tagBooks = tagMap[tag]?.books || [];
+      _showTagDetailInline(tag, tagBooks, el);
+    });
+  });
+}
+
+/** タグクリック時: 該当書籍リストをインライン表示 */
+function _showTagDetailInline(tag, books, container) {
+  const panel = container.querySelector('#tagDetailPanel');
+  if (!panel) return;
+  const sorted = books.slice().sort((a, b) => {
     if (a.completed && !b.completed) return -1;
     if (!a.completed && b.completed) return 1;
-    return db.localeCompare(da);
+    return (b.completed_date || '').localeCompare(a.completed_date || '');
   });
-  const html = books.map(b => {
+  const html = sorted.map(b => {
     const status = b.completed
       ? `<span class="tag-detail-read">読了 ${(b.completed_date || '').slice(0, 7)}</span>`
       : `<span class="tag-detail-unread">未読</span>`;
-    return `<div class="tag-detail-book">
-      ${b.cover_url ? `<img class="tag-detail-cover" src="${escapeHtml(b.cover_url)}" alt="">` : ''}
+    const idx = allBooks.indexOf(b);
+    return `<div class="tag-detail-book" ${idx >= 0 ? `data-book-idx="${idx}"` : ''}>
+      ${b.cover_url ? `<img class="tag-detail-cover" src="${escapeHtml(b.cover_url)}" alt="" loading="lazy">` : '<div class="tag-detail-cover tag-detail-cover-placeholder"></div>'}
       <div class="tag-detail-info"><strong>${escapeHtml(b.title || '—')}</strong><br><small>${escapeHtml(b.author || '')}</small><br>${status}</div>
     </div>`;
   }).join('');
-  const panel = document.getElementById('tagDetailPanel');
-  if (panel) {
-    panel.innerHTML = `<div class="tag-detail-header"><strong>「${escapeHtml(tag)}」の本 ${books.length}冊</strong><button class="tag-detail-close" id="tagDetailClose">✕</button></div><div class="tag-detail-list">${html}</div>`;
-    panel.style.display = 'block';
-    document.getElementById('tagDetailClose')?.addEventListener('click', () => { panel.style.display = 'none'; });
-  }
+  panel.innerHTML = `
+    <div class="tag-detail-header">
+      <strong>「${escapeHtml(tag)}」の本 ${books.length}冊</strong>
+      <button class="tag-detail-close" id="tagDetailClose">✕</button>
+    </div>
+    <div class="tag-detail-list">${html}</div>
+  `;
+  panel.style.display = 'block';
+  panel.querySelector('#tagDetailClose')?.addEventListener('click', () => { panel.style.display = 'none'; });
+  panel.querySelectorAll('.tag-detail-book[data-book-idx]').forEach(item => {
+    item.style.cursor = 'pointer';
+    item.addEventListener('click', () => {
+      const idx = parseInt(item.dataset.bookIdx);
+      if (!isNaN(idx) && allBooks[idx]) openBookDetail(allBooks[idx]);
+    });
+  });
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
-/** メインのレンダリング関数 */
-async function renderTagAnalytics() {
+/** Yomuタブ表示時にタグ分析を初期化・描画 */
+function renderTagAnalytics() {
   if (!allBooks.length) return;
   const section = document.getElementById('tagAnalyticsSection');
   if (!section) return;
-
-  // details要素が閉じている場合は計算のみスキップ（開いた時に計算）
   if (!section.open) {
-    section.addEventListener('toggle', function onToggle() {
+    // details が閉じている間は toggle イベント登録だけ
+    const onToggle = () => {
       if (section.open) {
         section.removeEventListener('toggle', onToggle);
         _doRenderTagAnalytics();
       }
-    }, { once: false });
+    };
+    section.addEventListener('toggle', onToggle);
     return;
   }
   _doRenderTagAnalytics();
 }
 
-async function _doRenderTagAnalytics() {
-  const tagMap = computeTagAnalytics();
-  if (!Object.keys(tagMap).length) return;
-  const top = sortedTags(tagMap, _tagAnalyticsSort, _tagAnalyticsFilter, 25);
-  await renderTagChart(top);
-  renderTagCloud(top);
-  renderTagTrend(tagMap);
-  const allSorted = sortedTags(tagMap, _tagAnalyticsSort, _tagAnalyticsFilter, 999);
-  renderTagTable(allSorted);
-
-  // タグ詳細パネルがなければ追加
-  if (!document.getElementById('tagDetailPanel')) {
-    const panel = document.createElement('div');
-    panel.id = 'tagDetailPanel';
-    panel.className = 'tag-detail-panel';
-    panel.style.display = 'none';
-    document.getElementById('tagAnalyticsSection')?.appendChild(panel);
-  }
-
-  // フィルター/ソートボタンのイベント
-  document.querySelectorAll('.tag-filter-btn').forEach(btn => {
-    btn.onclick = () => {
-      _tagAnalyticsFilter = btn.dataset.filter;
-      document.querySelectorAll('.tag-filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      _doRenderTagAnalytics();
-    };
-  });
-  document.querySelectorAll('.tag-sort-btn').forEach(btn => {
-    btn.onclick = () => {
-      _tagAnalyticsSort = btn.dataset.sort;
-      document.querySelectorAll('.tag-sort-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      _doRenderTagAnalytics();
-    };
-  });
+function _doRenderTagAnalytics() {
+  _tagCatData = computeCategoryTagAnalytics(); // 常に再計算
+  renderCategoryOverview(_tagCatData);
+  renderCategoryTabs(_tagCatData);
+  renderCategoryCloud(_tagCatData);
 }
+
 
 function openMessagesFromMenu() {
   activeMainTab = 'yonda';
