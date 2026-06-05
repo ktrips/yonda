@@ -831,7 +831,11 @@ def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
             book.cover_url = LIBRARY_COVER_URL
         needs_summary = not (book.full_summary or book.summary or "").strip()
         needs_genre = not (book.genre or "").strip()
-        if needs_summary or needs_genre:
+        # 図書館の本は「既読（評価済み = completed）」になったタイミングで
+        # 概要・ジャンルを外部APIから補完する。未読の貸出履歴は対象外とし、
+        # 既存データの引き継ぎ（上記）のみ行う。
+        enrich_allowed = book.completed if library_id == "setagaya" else True
+        if enrich_allowed and (needs_summary or needs_genre):
             # catalog_number が ISBN 形式であれば ISBN 検索に活用
             isbn = None
             catalog = (book.catalog_number or "").strip()
@@ -914,6 +918,9 @@ def enrich_library_books_missing_genre(
     for book in books:
         if updated + len(targets) >= max_books:
             break
+        # 図書館の本は既読（completed）になった本のみ補完対象にする。
+        if library_id == "setagaya" and not book.get("completed"):
+            continue
         needs = not (book.get("genre") or "").strip() or not (book.get("summary") or book.get("full_summary") or "").strip()
         if needs:
             targets.append(book)
