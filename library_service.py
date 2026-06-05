@@ -931,13 +931,21 @@ def enrich_library_books_missing_genre(
         try:
             needs_summary = not (book.get("full_summary") or book.get("summary") or "").strip()
             needs_genre = not (book.get("genre") or "").strip()
-            summary, genre = _fetch_summary_and_genre_from_google_books(
-                title, author, isbn=isbn, api_key=google_api_key
-            )
-            if (needs_summary and not summary) or (needs_genre and not genre):
-                ol_s, ol_g = _fetch_summary_and_genre_from_open_library(title, author, isbn=isbn)
-                summary = summary or ol_s
-                genre = genre or ol_g
+            summary: Optional[str] = None
+            genre: Optional[str] = None
+
+            # ① Open Library（API キー不要・日本語書籍も対応）を先に試す
+            ol_s, ol_g = _fetch_summary_and_genre_from_open_library(title, author, isbn=isbn)
+            summary, genre = ol_s, ol_g
+
+            # ② Google Books（API キーがある場合のみ追加で試す）
+            if google_api_key and (needs_summary and not summary or needs_genre and not genre):
+                gb_s, gb_g = _fetch_summary_and_genre_from_google_books(
+                    title, author, isbn=isbn, api_key=google_api_key
+                )
+                summary = summary or gb_s
+                genre = genre or gb_g
+
             if summary and needs_summary:
                 book["full_summary"] = summary
                 book["summary"] = summary[:100] + "…" if len(summary) > 100 else summary
@@ -952,7 +960,7 @@ def enrich_library_books_missing_genre(
         except Exception as e:
             errors += 1
             logger.warning("エンリッチエラー [%s]: %s", title[:30], e)
-        time.sleep(0.6 if google_api_key else 1.2)
+        time.sleep(0.5)
 
     if updated:
         with open(path, "w", encoding="utf-8") as f:
