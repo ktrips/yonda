@@ -1332,6 +1332,14 @@ def api_fetch():
                     result["message"] = message
             if errors:
                 result["errors"] = errors
+            # 同期後にバックグラウンドでinsights未生成の本を補完（最大5冊/回）
+            import threading
+            threading.Thread(
+                target=_backfill_missing_insights,
+                kwargs={"max_books": 5},
+                daemon=False,
+                name="insights-backfill",
+            ).start()
             return jsonify(result)
         previous_audible = (
             library_service.load_saved_for(library_id)
@@ -1955,6 +1963,49 @@ def api_book_insight_save():
         "model": "manual",
     })
     return jsonify({"success": True, "insight": insight})
+
+
+def _backfill_missing_insights(max_books: int = 10) -> dict:
+    """insights未生成の読了本にAI書評を自動生成するバックフィル処理。
+    同期や定期ジョブから呼び出される。"""
+    candidates = library_service.get_completed_books_without_insights(max_count=max_books * 3)
+    processed = 0
+    skipped = 0
+    errors = 0
+    for book in candidates:
+        if processed >= max_books:
+            break
+        # ループ中に他のリクエストが生成済みにした場合はスキップ
+        if library_service.get_book_insight(book):
+            skipped += 1
+            continue
+        try:
+            insight = _generate_book_insight(book)
+            library_service.save_book_insight(book, insight)
+            processed += 1
+            logger.info("バックフィル書評生成完了: %s", book.get("title", "—"))
+        except Exception as e:
+            errors += 1
+            logger.warning("バックフィル書評生成エラー [%s]: %s", book.get("title", "—"), e)
+    remaining = library_service.get_completed_books_without_insights(max_count=1)
+    logger.info("バックフィル完了 processed=%d skipped=%d errors=%d remaining=%s",
+                processed, skipped, errors, "1+" if remaining else "0")
+    return {"processed": processed, "skipped": skipped, "errors": errors,
+            "has_remaining": bool(remaining)}
+
+
+@app.route("/api/enrich", methods=["POST"])
+def api_enrich():
+    """書籍データ一括エンリッチ: insights/genre/summary 補完。
+    Cloud Scheduler の週次ジョブから呼び出される。"""
+    try:
+        body = request.get_json(silent=True) or {}
+        max_books = int(body.get("max_books", 50))
+        result = _backfill_missing_insights(max_books=max_books)
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        logger.warning("api_enrich エラー: %s", e, exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/api/messages", methods=["GET"])

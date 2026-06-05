@@ -470,6 +470,24 @@ def save_book_insight(book: dict, insight: dict) -> dict:
     return insight
 
 
+def get_completed_books_without_insights(max_count: int | None = None) -> list[dict]:
+    """AI書評（insights）が未生成の読了本リストを返す。
+    max_count 指定時はその件数で打ち切る。"""
+    combined = load_saved()
+    if not combined:
+        return []
+    existing_keys = set(load_book_insights().get("items", {}).keys())
+    result: list[dict] = []
+    for book in combined.get("books", []):
+        if not book.get("completed"):
+            continue
+        if book_insight_key(book) not in existing_keys:
+            result.append(book)
+            if max_count and len(result) >= max_count:
+                break
+    return result
+
+
 def load_yonda_messages() -> dict:
     """Yonda内メッセージ一覧を読み込む。"""
     if not YONDA_MESSAGES_PATH.exists():

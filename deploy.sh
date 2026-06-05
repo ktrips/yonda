@@ -256,6 +256,39 @@ setup_scheduler_job "yonda-fetch-morning" "0 6 * * *"
 setup_scheduler_job "yonda-fetch-noon"    "0 12 * * *"
 setup_scheduler_job "yonda-fetch-evening" "0 18 * * *"
 
+# ---------- 10. Cloud Scheduler 週次エンリッチジョブ ----------
+echo ""
+echo ">>> Cloud Scheduler 週次エンリッチジョブを設定（日曜 03:00 JST）..."
+
+ENRICH_URL="${SERVICE_URL}/api/enrich"
+ENRICH_BODY='{"max_books":50}'
+ENRICH_JOB="yonda-enrich-weekly"
+
+if gcloud scheduler jobs describe "${ENRICH_JOB}" \
+     --location="${SCHEDULER_REGION}" --format='value(name)' 2>/dev/null; then
+  gcloud scheduler jobs update http "${ENRICH_JOB}" \
+    --location="${SCHEDULER_REGION}" \
+    --schedule="0 3 * * 0" \
+    --uri="${ENRICH_URL}" \
+    --message-body="${ENRICH_BODY}" \
+    --update-headers="Content-Type=application/json" \
+    --time-zone="Asia/Tokyo" \
+    --attempt-deadline=1800s \
+    --quiet
+  echo "    ✔ ${ENRICH_JOB} (更新)"
+else
+  gcloud scheduler jobs create http "${ENRICH_JOB}" \
+    --location="${SCHEDULER_REGION}" \
+    --schedule="0 3 * * 0" \
+    --uri="${ENRICH_URL}" \
+    --message-body="${ENRICH_BODY}" \
+    --headers="Content-Type=application/json" \
+    --time-zone="Asia/Tokyo" \
+    --attempt-deadline=1800s \
+    --quiet
+  echo "    ✔ ${ENRICH_JOB} (新規作成)"
+fi
+
 echo ""
 echo "============================================"
 echo "  デプロイ完了!"
@@ -267,6 +300,7 @@ echo "  定期取得スケジュール (JST):"
 echo "    朝  06:00  yonda-fetch-morning"
 echo "    昼  12:00  yonda-fetch-noon"
 echo "    夕  18:00  yonda-fetch-evening"
+echo "    週次 日曜 03:00  yonda-enrich-weekly（insights一括補完）"
 echo ""
 echo "  ★ DNS 設定が必要です:"
 echo "    ${DOMAIN} → CNAME → ghs.googlehosted.com."
