@@ -3490,13 +3490,19 @@ function _bookInsightKey(book) {
 function classifyBookToMainCategory(book) {
   const genreRaw = (book.genre || '').trim();
   const genreLow = genreRaw.toLowerCase();
+  // " / " で分割したサブジャンルリスト（例: "文学・フィクション / エッセイ" → ["文学・フィクション","エッセイ"]）
+  const parts = genreRaw.split(/\s*[/／]\s*/).map(s => s.trim().toLowerCase()).filter(Boolean);
 
-  // エッセイ系は genre に他のキーワードが混在していてもノンフィクション優先
-  if (['エッセイ', '随筆', 'コラム', 'essay'].some(kw => genreLow.includes(kw))) return 'ノンフィクション';
+  // エッセイ系はサブジャンルに含まれていてもノンフィクション最優先
+  const essayKws = ['エッセイ', '随筆', 'コラム', 'essay'];
+  if (parts.some(p => essayKws.some(kw => p.includes(kw))) ||
+      essayKws.some(kw => genreLow.includes(kw))) return 'ノンフィクション';
 
-  // GENRE_TO_CATEGORY で直接マッピング（長いキーワードを先に判定）
+  // GENRE_TO_CATEGORY で直接マッピング（サブジャンルの各パートでも照合）
   for (const [genre, cat] of Object.entries(GENRE_TO_CATEGORY)) {
-    if (genreLow.includes(genre.toLowerCase())) return cat;
+    const g = genre.toLowerCase();
+    if (parts.some(p => p === g || p.includes(g) || g.includes(p)) ||
+        genreLow.includes(g)) return cat;
   }
 
   // フォールバック: キーワード推定
