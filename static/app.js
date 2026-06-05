@@ -761,6 +761,7 @@ function updateMainTabVisibility() {
   else if (activeMainTab === 'yomu' && yomu) {
     yomu.style.display = 'block';
     renderBookSearchResults();
+    renderTagAnalytics();
   } else if (activeMainTab === 'oshi' && oshi) {
     oshi.style.display = 'block';
     initAiRecommendIfNeeded();
@@ -3308,6 +3309,280 @@ document.getElementById('recommendRefreshBtn')?.addEventListener('click', () => 
   if (activeBookTab === 'recommend') renderYondaRecommend();
 });
 document.getElementById('messagesRefreshBtn')?.addEventListener('click', loadMessages);
+
+/* ============================================================
+   タグ傾向分析
+   ============================================================ */
+
+let _tagAnalyticsFilter = 'all'; // 'all' | 'read' | 'unread'
+let _tagAnalyticsSort   = 'total'; // 'total' | 'recent' | 'unread'
+let _tagChartInstance   = null;
+
+/** book の insight key を返す (bookInsightsCache のキーと一致) */
+function _bookInsightKey(book) {
+  const src = (book.source || '').trim();
+  const cat = (book.catalog_number || '').trim();
+  if (src && cat) return `${src}:${cat}`;
+  return null;
+}
+
+/** 1冊分のタグ配列を生成 (genre + insight headings) */
+function generateBookTags(book) {
+  const tags = new Set();
+  genreTags(book.genre).forEach(g => { if (g) tags.add(g); });
+  const key = _bookInsightKey(book);
+  if (key) {
+    const insight = bookInsightsCache[key];
+    if (insight?.points) {
+      insight.points.forEach(p => {
+        const h = (p.heading || '').trim();
+        if (h && h.length <= 25) tags.add(h);
+      });
+    }
+  }
+  return [...tags];
+}
+
+/** 全書籍からタグ集計を作成 */
+function computeTagAnalytics() {
+  const tagMap = {};
+  for (const book of allBooks) {
+    const tags = generateBookTags(book);
+    for (const tag of tags) {
+      if (!tagMap[tag]) tagMap[tag] = { total: 0, read: 0, unread: 0, lastRead: '', books: [] };
+      tagMap[tag].total++;
+      if (book.completed) {
+        tagMap[tag].read++;
+        const d = book.completed_date || '';
+        if (d > tagMap[tag].lastRead) tagMap[tag].lastRead = d;
+      } else {
+        tagMap[tag].unread++;
+      }
+      tagMap[tag].books.push(book);
+    }
+  }
+  return tagMap;
+}
+
+/** タグ配列をソートして上位N件返す */
+function sortedTags(tagMap, sort, filter, limit = 25) {
+  let entries = Object.entries(tagMap);
+  if (filter === 'read')   entries = entries.filter(([, d]) => d.read > 0);
+  if (filter === 'unread') entries = entries.filter(([, d]) => d.unread > 0);
+  if (sort === 'total')  entries.sort((a, b) => b[1].total  - a[1].total);
+  if (sort === 'recent') entries.sort((a, b) => (b[1].lastRead || '').localeCompare(a[1].lastRead || ''));
+  if (sort === 'unread') entries.sort((a, b) => b[1].unread - a[1].unread);
+  return entries.slice(0, limit);
+}
+
+/** 横棒グラフを描画 */
+async function renderTagChart(topTags) {
+  await loadChartJs();
+  const canvas = document.getElementById('tagFrequencyChart');
+  if (!canvas) return;
+  if (_tagChartInstance) { _tagChartInstance.destroy(); _tagChartInstance = null; }
+  const labels = topTags.map(([tag]) => tag.length > 14 ? tag.slice(0, 13) + '…' : tag);
+  const readData   = topTags.map(([, d]) => d.read);
+  const unreadData = topTags.map(([, d]) => d.unread);
+  const H = Math.max(200, topTags.length * 26);
+  canvas.style.height = H + 'px';
+  canvas.height = H;
+  _tagChartInstance = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: '読了', data: readData,   backgroundColor: 'rgba(76,175,80,0.75)', borderRadius: 3 },
+        { label: '未読', data: unreadData, backgroundColor: 'rgba(189,189,189,0.6)', borderRadius: 3 },
+      ],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'top' }, tooltip: { mode: 'index', intersect: false } },
+      scales: {
+        x: { stacked: true, ticks: { precision: 0 } },
+        y: { stacked: true, ticks: { font: { size: 11 } } },
+      },
+    },
+  });
+}
+
+/** タグクラウドを描画 */
+function renderTagCloud(topTags) {
+  const wrap = document.getElementById('tagCloudWrap');
+  if (!wrap) return;
+  const max = topTags.reduce((m, [, d]) => Math.max(m, d.total), 1);
+  wrap.innerHTML = topTags.map(([tag, d]) => {
+    const size = 0.75 + (d.total / max) * 1.1;
+    const opacity = 0.55 + (d.total / max) * 0.45;
+    const pct = d.read > 0 ? Math.round((d.read / d.total) * 100) : 0;
+    return `<span class="tag-chip" data-tag="${escapeAttr(tag)}" style="font-size:${size.toFixed(2)}rem;opacity:${opacity.toFixed(2)}" title="${escapeHtml(tag)}: 計${d.total}冊（読了${d.read} / 未読${d.unread}）">${escapeHtml(tag)}<span class="tag-chip-pct">${pct}%</span></span>`;
+  }).join('');
+  wrap.querySelectorAll('.tag-chip').forEach(el => {
+    el.addEventListener('click', () => {
+      const tag = el.getAttribute('data-tag');
+      showTagDetail(tag);
+    });
+  });
+}
+
+/** トレンドセクション（直近3ヶ月 vs それ以前）を描画 */
+function renderTagTrend(tagMap) {
+  const wrap = document.getElementById('tagTrendSection');
+  if (!wrap) return;
+  const today = new Date();
+  const threeMonthsAgo = new Date(today); threeMonthsAgo.setMonth(today.getMonth() - 3);
+  const threeMonthsStr = threeMonthsAgo.toISOString().slice(0, 10);
+
+  const recentTags = {}, unreadTop = [];
+  for (const [tag, d] of Object.entries(tagMap)) {
+    const recentRead = d.books.filter(b => b.completed && (b.completed_date || '') >= threeMonthsStr).length;
+    if (recentRead > 0) recentTags[tag] = recentRead;
+    if (d.unread > 0) unreadTop.push({ tag, unread: d.unread, total: d.total });
+  }
+  const topRecent = Object.entries(recentTags).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const topUnread = unreadTop.sort((a, b) => b.unread - a.unread).slice(0, 8);
+
+  wrap.innerHTML = `
+    <div class="tag-trend-grid">
+      <div class="tag-trend-block">
+        <h4 class="tag-trend-title">📈 直近3ヶ月で多く読んだテーマ</h4>
+        <div class="tag-trend-chips">
+          ${topRecent.length
+            ? topRecent.map(([tag, cnt]) => `<span class="tag-trend-chip tag-trend-read" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)} <em>${cnt}冊</em></span>`).join('')
+            : '<span class="tag-trend-empty">データなし</span>'}
+        </div>
+      </div>
+      <div class="tag-trend-block">
+        <h4 class="tag-trend-title">📚 まだ読んでいない本が多いテーマ</h4>
+        <div class="tag-trend-chips">
+          ${topUnread.length
+            ? topUnread.map(({ tag, unread }) => `<span class="tag-trend-chip tag-trend-unread" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)} <em>${unread}冊</em></span>`).join('')
+            : '<span class="tag-trend-empty">データなし</span>'}
+        </div>
+      </div>
+    </div>
+  `;
+  wrap.querySelectorAll('[data-tag]').forEach(el => {
+    el.addEventListener('click', () => showTagDetail(el.getAttribute('data-tag')));
+  });
+}
+
+/** タグ一覧テーブルを描画 */
+function renderTagTable(allTagsSorted) {
+  const wrap = document.getElementById('tagAnalyticsTableWrap');
+  if (!wrap) return;
+  const rows = allTagsSorted.map(([tag, d]) => {
+    const pct = d.total > 0 ? Math.round((d.read / d.total) * 100) : 0;
+    const lastReadStr = d.lastRead ? d.lastRead.slice(0, 7) : '—';
+    return `<tr class="tag-table-row" data-tag="${escapeAttr(tag)}">
+      <td class="tag-table-name">${escapeHtml(tag)}</td>
+      <td class="tag-table-num">${d.total}</td>
+      <td class="tag-table-num tag-table-read">${d.read}</td>
+      <td class="tag-table-num tag-table-unread">${d.unread}</td>
+      <td class="tag-table-pct"><div class="tag-table-bar" style="width:${pct}%"></div><span>${pct}%</span></td>
+      <td class="tag-table-date">${lastReadStr}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML = `
+    <table class="tag-analytics-table">
+      <thead><tr>
+        <th>タグ</th><th>計</th><th>読了</th><th>未読</th><th>読了率</th><th>最終読了</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+  wrap.querySelectorAll('.tag-table-row').forEach(row => {
+    row.addEventListener('click', () => showTagDetail(row.getAttribute('data-tag')));
+  });
+}
+
+/** タグクリック時: 該当書籍リストをモーダルではなくインラインに表示 */
+function showTagDetail(tag) {
+  const tagMap = computeTagAnalytics();
+  const d = tagMap[tag];
+  if (!d) return;
+  const books = d.books.slice().sort((a, b) => {
+    const da = a.completed_date || '', db = b.completed_date || '';
+    if (a.completed && !b.completed) return -1;
+    if (!a.completed && b.completed) return 1;
+    return db.localeCompare(da);
+  });
+  const html = books.map(b => {
+    const status = b.completed
+      ? `<span class="tag-detail-read">読了 ${(b.completed_date || '').slice(0, 7)}</span>`
+      : `<span class="tag-detail-unread">未読</span>`;
+    return `<div class="tag-detail-book">
+      ${b.cover_url ? `<img class="tag-detail-cover" src="${escapeHtml(b.cover_url)}" alt="">` : ''}
+      <div class="tag-detail-info"><strong>${escapeHtml(b.title || '—')}</strong><br><small>${escapeHtml(b.author || '')}</small><br>${status}</div>
+    </div>`;
+  }).join('');
+  const panel = document.getElementById('tagDetailPanel');
+  if (panel) {
+    panel.innerHTML = `<div class="tag-detail-header"><strong>「${escapeHtml(tag)}」の本 ${books.length}冊</strong><button class="tag-detail-close" id="tagDetailClose">✕</button></div><div class="tag-detail-list">${html}</div>`;
+    panel.style.display = 'block';
+    document.getElementById('tagDetailClose')?.addEventListener('click', () => { panel.style.display = 'none'; });
+  }
+}
+
+/** メインのレンダリング関数 */
+async function renderTagAnalytics() {
+  if (!allBooks.length) return;
+  const section = document.getElementById('tagAnalyticsSection');
+  if (!section) return;
+
+  // details要素が閉じている場合は計算のみスキップ（開いた時に計算）
+  if (!section.open) {
+    section.addEventListener('toggle', function onToggle() {
+      if (section.open) {
+        section.removeEventListener('toggle', onToggle);
+        _doRenderTagAnalytics();
+      }
+    }, { once: false });
+    return;
+  }
+  _doRenderTagAnalytics();
+}
+
+async function _doRenderTagAnalytics() {
+  const tagMap = computeTagAnalytics();
+  if (!Object.keys(tagMap).length) return;
+  const top = sortedTags(tagMap, _tagAnalyticsSort, _tagAnalyticsFilter, 25);
+  await renderTagChart(top);
+  renderTagCloud(top);
+  renderTagTrend(tagMap);
+  const allSorted = sortedTags(tagMap, _tagAnalyticsSort, _tagAnalyticsFilter, 999);
+  renderTagTable(allSorted);
+
+  // タグ詳細パネルがなければ追加
+  if (!document.getElementById('tagDetailPanel')) {
+    const panel = document.createElement('div');
+    panel.id = 'tagDetailPanel';
+    panel.className = 'tag-detail-panel';
+    panel.style.display = 'none';
+    document.getElementById('tagAnalyticsSection')?.appendChild(panel);
+  }
+
+  // フィルター/ソートボタンのイベント
+  document.querySelectorAll('.tag-filter-btn').forEach(btn => {
+    btn.onclick = () => {
+      _tagAnalyticsFilter = btn.dataset.filter;
+      document.querySelectorAll('.tag-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _doRenderTagAnalytics();
+    };
+  });
+  document.querySelectorAll('.tag-sort-btn').forEach(btn => {
+    btn.onclick = () => {
+      _tagAnalyticsSort = btn.dataset.sort;
+      document.querySelectorAll('.tag-sort-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _doRenderTagAnalytics();
+    };
+  });
+}
 
 function openMessagesFromMenu() {
   activeMainTab = 'yonda';

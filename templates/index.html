@@ -236,6 +236,28 @@
           </div>
           <div id="amazonListItems" class="amazon-list-items"></div>
         </div>
+
+        <!-- タグ傾向分析 -->
+        <details class="tag-analytics-section" id="tagAnalyticsSection">
+          <summary class="tag-analytics-toggle">📊 本の傾向・タグ分析</summary>
+          <div class="tag-analytics-body">
+            <div class="tag-analytics-filters">
+              <button type="button" class="tag-filter-btn active" data-filter="all">すべて</button>
+              <button type="button" class="tag-filter-btn" data-filter="read">読了のみ</button>
+              <button type="button" class="tag-filter-btn" data-filter="unread">未読のみ</button>
+              <span class="tag-analytics-sort-label">並び替え:</span>
+              <button type="button" class="tag-sort-btn active" data-sort="total">多い順</button>
+              <button type="button" class="tag-sort-btn" data-sort="recent">最近読んだ順</button>
+              <button type="button" class="tag-sort-btn" data-sort="unread">未読多い順</button>
+            </div>
+            <div class="tag-analytics-chart-wrap">
+              <canvas id="tagFrequencyChart"></canvas>
+            </div>
+            <div class="tag-cloud-wrap" id="tagCloudWrap"></div>
+            <div class="tag-trend-section" id="tagTrendSection"></div>
+            <div class="tag-analytics-table-wrap" id="tagAnalyticsTableWrap"></div>
+          </div>
+        </details>
       </div>
 
       <!-- Oshi: AI推し -->
