@@ -14,7 +14,7 @@ import requests
 from adapters import get_adapter, list_libraries
 from adapters.base import LibraryCredentials, BookRecord
 
-from config_paths import get_credentials_path, ensure_config_dir
+from config_paths import get_credentials_path, get_ai_config_path, ensure_config_dir
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,24 @@ logger = logging.getLogger(__name__)
 GOOGLE_BOOKS_VOLUMES = "https://www.googleapis.com/books/v1/volumes"
 OPENLIBRARY_SEARCH = "https://openlibrary.org/search.json"
 OPENLIBRARY_BOOKS = "https://openlibrary.org/api/books"
+
+
+def _get_google_api_key() -> Optional[str]:
+    """Google Books API キーを環境変数→AI設定ファイルの順で取得する。"""
+    key = os.environ.get("GOOGLE_BOOKS_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if key:
+        return key
+    # AI設定ファイル（gemini プロバイダーのキーは Google Books でも有効）
+    try:
+        config_path = get_ai_config_path()
+        if config_path.exists():
+            with open(config_path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            if cfg.get("provider") == "gemini" and cfg.get("api_key"):
+                return cfg["api_key"]
+    except Exception:
+        pass
+    return None
 
 APP_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get(
@@ -617,54 +635,76 @@ def _book_title_author_match(
 
 
 def _fetch_summary_and_genre_from_google_books(
-    title: str, author: str
+    title: str, author: str, isbn: Optional[str] = None, api_key: Optional[str] = None
 ) -> tuple[Optional[str], Optional[str]]:
-    """Google Books API で概要とジャンルを取得。戻り値は (summary, genre)。"""
-    if not title:
+    """Google Books API で概要とジャンルを取得。戻り値は (summary, genre)。
+    ISBN がある場合は ISBN 検索を優先する。api_key は呼び出し元から渡す。"""
+    if not title and not isbn:
         return None, None
-    queries = []
-    if author:
-        queries.append(f"intitle:{title} inauthor:{author}")
-    queries.append(title if not author else f"{title} {author}")
-    queries.append(f"intitle:{title}")
+
+    key = api_key or _get_google_api_key()
+
+    def _search(params: dict) -> tuple[Optional[str], Optional[str]]:
+        if key:
+            params["key"] = key
+        params.setdefault("maxResults", 5)
+        params.setdefault("printType", "books")
+        try:
+            r = requests.get(GOOGLE_BOOKS_VOLUMES, params=params, timeout=10)
+            if r.status_code == 429:
+                logger.warning("Google Books API レート制限 (429)。10秒待機後リトライ")
+                time.sleep(10)
+                r = requests.get(GOOGLE_BOOKS_VOLUMES, params=params, timeout=10)
+            r.raise_for_status()
+        except requests.RequestException as e:
+            logger.warning("Google Books 取得失敗: %s", e)
+            return None, None
+        fallback: tuple[Optional[str], Optional[str]] = (None, None)
+        for item in r.json().get("items", []) or []:
+            info = item.get("volumeInfo", {}) or {}
+            result_title = info.get("title") or ""
+            result_authors = info.get("authors") or []
+            summary = _clean_book_text(info.get("description") or "")
+            categories = info.get("categories") or []
+            genre = categories[0] if categories else None
+            if (summary or genre) and not fallback[0] and not fallback[1]:
+                fallback = (summary or None, genre)
+            if not _book_title_author_match(title or "", author, result_title, result_authors):
+                continue
+            if summary or genre:
+                return summary or None, genre
+        return fallback
 
     try:
-        for q in queries:
-            params = {
-                "q": q[:120],
-                "maxResults": 5,
-                "langRestrict": "ja",
-                "printType": "books",
-            }
-            api_key = os.environ.get("GOOGLE_BOOKS_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-            if api_key:
-                params["key"] = api_key
-            r = requests.get(
-                GOOGLE_BOOKS_VOLUMES,
-                params=params,
-                timeout=8,
-            )
-            r.raise_for_status()
-            fallback: tuple[Optional[str], Optional[str]] = (None, None)
-            for item in r.json().get("items", []) or []:
-                info = item.get("volumeInfo", {}) or {}
-                result_title = info.get("title") or ""
-                result_authors = info.get("authors") or []
-                summary = _clean_book_text(info.get("description") or "")
-                categories = info.get("categories") or []
-                genre = categories[0] if categories else None
-                if (summary or genre) and not fallback[0] and not fallback[1]:
-                    fallback = (summary or None, genre)
-                if not _book_title_author_match(title, author, result_title, result_authors):
-                    continue
-                if summary or genre:
-                    return summary or None, genre
-            if fallback[0] or fallback[1]:
-                return fallback
-    except requests.RequestException as e:
-        logger.debug("Google Books 取得失敗: %s", e)
+        # 1. ISBN 検索（最も精度が高い）
+        if isbn:
+            isbn_clean = re.sub(r"\D", "", isbn)
+            if len(isbn_clean) >= 10:
+                result = _search({"q": f"isbn:{isbn_clean}"})
+                if result[0] or result[1]:
+                    return result
+
+        # 2. タイトル+著者で日本語限定検索
+        if title:
+            queries = []
+            if author:
+                queries.append(f"intitle:{title} inauthor:{author}")
+            queries.append(title if not author else f"{title} {author}")
+            queries.append(f"intitle:{title}")
+
+            for q in queries:
+                result = _search({"q": q[:120], "langRestrict": "ja"})
+                if result[0] or result[1]:
+                    return result
+
+            # 3. langRestrict なしでフォールバック（外国語版が先にヒットする場合対策）
+            for q in queries[:2]:
+                result = _search({"q": q[:120]})
+                if result[0] or result[1]:
+                    return result
+
     except Exception as e:
-        logger.debug("Google Books 取得エラー: %s", e)
+        logger.warning("Google Books 取得エラー: %s", e)
     return None, None
 
 
@@ -744,6 +784,11 @@ def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
         return
     base = "https://libweb.city.setagaya.tokyo.jp"
     summary_count = genre_count = 0
+    google_api_key = _get_google_api_key()
+    if google_api_key:
+        logger.info("%s: Google Books API キーを使用してエンリッチ", library_id)
+    else:
+        logger.warning("%s: Google Books API キー未設定。レート制限に注意", library_id)
     existing_by_key: dict[str, dict] = {}
     existing_by_title_author: dict[str, dict] = {}
     try:
@@ -787,12 +832,17 @@ def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
         needs_summary = not (book.full_summary or book.summary or "").strip()
         needs_genre = not (book.genre or "").strip()
         if needs_summary or needs_genre:
+            # catalog_number が ISBN 形式であれば ISBN 検索に活用
+            isbn = None
+            catalog = (book.catalog_number or "").strip()
+            if re.match(r"^\d{10,13}$", catalog):
+                isbn = catalog
             summary, genre = _fetch_summary_and_genre_from_google_books(
-                book.title, book.author or ""
+                book.title, book.author or "", isbn=isbn, api_key=google_api_key
             )
             if (needs_summary and not summary) or (needs_genre and not genre):
                 ol_summary, ol_genre = _fetch_summary_and_genre_from_open_library(
-                    book.title, book.author or ""
+                    book.title, book.author or "", isbn=isbn
                 )
                 summary = summary or ol_summary
                 genre = genre or ol_genre
@@ -803,8 +853,10 @@ def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
             if genre and needs_genre:
                 book.genre = genre
                 genre_count += 1
-        if (i + 1) % 5 == 0:
-            time.sleep(0.3)
+            # API キーあり: 0.5秒/件、なし: 1秒/件 のスロットル（レート制限対策）
+            time.sleep(0.5 if google_api_key else 1.0)
+        elif (i + 1) % 10 == 0:
+            time.sleep(0.1)
     if summary_count or genre_count:
         logger.info(
             "%s: Google Books/Open Library から概要 %d 件、ジャンル %d 件を取得",
@@ -812,6 +864,8 @@ def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
             summary_count,
             genre_count,
         )
+    else:
+        logger.info("%s: エンリッチ対象なし（全件既取得済み）", library_id)
 
 
 # ------------------------------------------------------------------
