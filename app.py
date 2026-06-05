@@ -2008,6 +2008,22 @@ def api_enrich():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/enrich-library-genre", methods=["POST"])
+def api_enrich_library_genre():
+    """図書館本のジャンル・概要が未設定の直近N冊を補完する。"""
+    try:
+        body = request.get_json(silent=True) or {}
+        library_id = body.get("library_id", "setagaya")
+        max_books = int(body.get("max_books", 10))
+        result = library_service.enrich_library_books_missing_genre(
+            library_id=library_id, max_books=max_books
+        )
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        logger.warning("api_enrich_library_genre エラー: %s", e, exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/messages", methods=["GET"])
 def api_messages():
     """Yonda内メッセージ一覧を返す。同期のタイミングで古いメッセージを自動アーカイブ。"""

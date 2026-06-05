@@ -890,6 +890,91 @@ def _save_json(library_id: str, payload: dict) -> None:
     logger.info("JSON 保存: %s (%d 冊)", path, payload["total"])
 
 
+def enrich_library_books_missing_genre(
+    library_id: str = "setagaya",
+    max_books: int = 10,
+) -> dict:
+    """ジャンル・概要が未設定の図書館本を最大 max_books 件補完して保存する。
+    直近登録順（loan_date 降順）で対象を選択。"""
+    path = _json_path_for(library_id)
+    if not path.exists():
+        return {"error": f"{library_id} のデータファイルが見つかりません"}
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
+
+    books: list[dict] = payload.get("books", [])
+    # loan_date 降順（直近登録が先頭）に並び替え
+    books.sort(key=lambda b: b.get("loan_date", ""), reverse=True)
+
+    google_api_key = _get_google_api_key()
+    updated = 0
+    skipped = 0
+    errors = 0
+    targets = []
+    for book in books:
+        if updated + len(targets) >= max_books:
+            break
+        needs = not (book.get("genre") or "").strip() or not (book.get("summary") or book.get("full_summary") or "").strip()
+        if needs:
+            targets.append(book)
+
+    for book in targets:
+        title = (book.get("title") or "").strip()
+        author = (book.get("author") or "").strip()
+        if not title:
+            skipped += 1
+            continue
+        isbn = None
+        catalog = (book.get("catalog_number") or "").strip()
+        if re.match(r"^\d{10,13}$", catalog):
+            isbn = catalog
+        try:
+            needs_summary = not (book.get("full_summary") or book.get("summary") or "").strip()
+            needs_genre = not (book.get("genre") or "").strip()
+            summary, genre = _fetch_summary_and_genre_from_google_books(
+                title, author, isbn=isbn, api_key=google_api_key
+            )
+            if (needs_summary and not summary) or (needs_genre and not genre):
+                ol_s, ol_g = _fetch_summary_and_genre_from_open_library(title, author, isbn=isbn)
+                summary = summary or ol_s
+                genre = genre or ol_g
+            if summary and needs_summary:
+                book["full_summary"] = summary
+                book["summary"] = summary[:100] + "…" if len(summary) > 100 else summary
+            if genre and needs_genre:
+                book["genre"] = genre
+            if (summary and needs_summary) or (genre and needs_genre):
+                updated += 1
+                logger.info("ジャンル/概要補完: %s → genre=%s", title[:30], genre)
+            else:
+                skipped += 1
+                logger.warning("ジャンル/概要取得できず: %s", title[:30])
+        except Exception as e:
+            errors += 1
+            logger.warning("エンリッチエラー [%s]: %s", title[:30], e)
+        time.sleep(0.6 if google_api_key else 1.2)
+
+    if updated:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        logger.info("%s: ジャンル/概要補完 %d 件保存完了", library_id, updated)
+
+    return {
+        "library_id": library_id,
+        "updated": updated,
+        "skipped": skipped,
+        "errors": errors,
+        "books": [
+            {
+                "title": b.get("title", ""),
+                "genre": b.get("genre", ""),
+                "summary": (b.get("summary") or "")[:60],
+            }
+            for b in targets
+        ],
+    }
+
+
 def _save_markdown(adapter, records: list[BookRecord]) -> None:
     md_path = DATA_DIR / f"{adapter.library_name.replace(' ', '_')}.md"
     completed_count = sum(1 for r in records if r.completed)
