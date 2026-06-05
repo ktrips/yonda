@@ -2010,18 +2010,92 @@ def api_enrich():
 
 @app.route("/api/enrich-library-genre", methods=["POST"])
 def api_enrich_library_genre():
-    """図書館本のジャンル・概要が未設定の直近N冊を補完する。"""
+    """図書館本のジャンル・概要が未設定の直近N冊を補完する。
+    Open Library / Google Books API 取得後、取れなかった本は AI で推定する。"""
     try:
         body = request.get_json(silent=True) or {}
         library_id = body.get("library_id", "setagaya")
         max_books = int(body.get("max_books", 10))
+
         result = library_service.enrich_library_books_missing_genre(
             library_id=library_id, max_books=max_books
         )
+
+        # 外部 API で取得できなかった本を AI で補完
+        still_missing = [b for b in result.get("books", []) if not b.get("genre")]
+        if still_missing:
+            ai_updated = _enrich_missing_books_with_ai(library_id, still_missing)
+            result["ai_updated"] = ai_updated
+            result["updated"] = result.get("updated", 0) + ai_updated
+
         return jsonify({"success": True, **result})
     except Exception as e:
         logger.warning("api_enrich_library_genre エラー: %s", e, exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+def _enrich_missing_books_with_ai(library_id: str, books_summary: list[dict]) -> int:
+    """タイトルリストを受け取り、AI でジャンル・概要を推定して JSON ファイルに書き戻す。"""
+    path = library_service._json_path_for(library_id)
+    if not path.exists():
+        return 0
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
+
+    books_data: list[dict] = payload.get("books", [])
+    title_index = {b.get("title", ""): b for b in books_data}
+
+    cfg = _load_ai_config()
+    api_key = (cfg.get("api_key") or "").strip()
+    if not api_key:
+        logger.warning("AI設定が未設定のためジャンル推定をスキップ")
+        return 0
+
+    updated = 0
+    for summary_book in books_summary:
+        title = summary_book.get("title", "")
+        book = title_index.get(title)
+        if not book:
+            continue
+        author = (book.get("author") or "").strip()
+        needs_summary = not (book.get("full_summary") or book.get("summary") or "").strip()
+        needs_genre = not (book.get("genre") or "").strip()
+        if not needs_genre and not needs_summary:
+            continue
+
+        prompt = f"""次の本のジャンルと概要を日本語で推定してください。
+
+書名: {title}
+著者: {author or "不明"}
+
+JSONのみ出力してください。前置きや説明は不要です。
+
+{{
+  "genre": "ジャンル（例: 科学・工学 / 一般向け科学 など）",
+  "summary": "200字以内の概要"
+}}"""
+        try:
+            text, _, _ = _call_text_ai(prompt, max_tokens=512, json_mode=True)
+            data = _extract_json_object(text)
+            if not isinstance(data, dict):
+                continue
+            if needs_genre and data.get("genre"):
+                book["genre"] = data["genre"].strip()
+            if needs_summary and data.get("summary"):
+                s = data["summary"].strip()
+                book["full_summary"] = s
+                book["summary"] = s[:100] + "…" if len(s) > 100 else s
+            updated += 1
+            logger.info("AI ジャンル推定: %s → %s", title[:30], book.get("genre"))
+        except Exception as e:
+            logger.warning("AI ジャンル推定エラー [%s]: %s", title[:30], e)
+
+    if updated:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        logger.info("AI 補完 %d 件保存: %s", updated, library_id)
+
+    return updated
 
 
 @app.route("/api/messages", methods=["GET"])
