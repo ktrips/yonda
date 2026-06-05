@@ -3317,7 +3317,6 @@ document.getElementById('messagesRefreshBtn')?.addEventListener('click', loadMes
 const TAG_MAIN_CATEGORIES = [
   '現代文学',
   'ジャンル小説',
-  '文学・その他小説',
   'ノンフィクション',
   'ビジネス',
   '自己啓発',
@@ -3532,16 +3531,22 @@ function _bookInsightKey(book) {
 /** book を5大カテゴリに分類 */
 function classifyBookToMainCategory(book) {
   const genreRaw = (book.genre || '').toLowerCase();
-  // エッセイ系は他のジャンルキーワードより優先してノンフィクションへ
+  // エッセイ系 → ノンフィクション優先
   const essayKws = ['エッセイ', '随筆', 'コラム', 'essay', 'エッセイ・紀行', 'エッセイ・随筆'];
   if (essayKws.some(kw => genreRaw.includes(kw))) return 'ノンフィクション';
-  // ジャンル小説の明確なジャンルマーカー（現代文学より先に判定）
+  // 現代文学を明示 → ジャンル小説より優先
+  const gendaiKws = ['現代文学', '現代小説', '一般小説', '国内小説'];
+  if (gendaiKws.some(kw => genreRaw.includes(kw))) return '現代文学';
+  // 明確なジャンル小説マーカー
   const genreKws = ['ミステリー', '推理', 'サスペンス', 'スリラー', 'ホラー', 'sf', 'ファンタジー',
     '異世界', 'ロマンス', '恋愛小説', '時代小説', '大衆小説', 'ライトノベル', 'コミック', '漫画', '絵本', '児童書'];
   if (genreKws.some(kw => genreRaw.includes(kw))) return 'ジャンル小説';
   for (const [cat, keywords] of Object.entries(TAG_CATEGORY_GENRE_KEYWORDS)) {
     for (const kw of keywords) {
-      if (genreRaw.includes(kw)) return cat;
+      if (genreRaw.includes(kw)) {
+        // 文学・その他小説はテクノロジー・科学へリダイレクト
+        return cat === '文学・その他小説' ? 'テクノロジー・科学' : cat;
+      }
     }
   }
   return 'その他';
@@ -3592,22 +3597,53 @@ function computeCategoryTagAnalytics() {
 }
 
 /** カテゴリ分布バーを描画 */
+const CAT_COLORS = {
+  '現代文学':       { read: '#6d9eeb', unread: '#bdd3f5' },
+  'ジャンル小説':   { read: '#e06666', unread: '#f5b8b8' },
+  'ノンフィクション':{ read: '#93c47d', unread: '#c9e6ba' },
+  'ビジネス':       { read: '#f6b26b', unread: '#fad9b5' },
+  '自己啓発':       { read: '#ffd966', unread: '#fff0b0' },
+  '政治・経済':     { read: '#8e7cc3', unread: '#c9bfe5' },
+  '社会・ライフ':   { read: '#76a5af', unread: '#b8d5db' },
+  'テクノロジー・科学': { read: '#45818e', unread: '#9ec5cb' },
+  'その他':         { read: '#b7b7b7', unread: '#dedede' },
+};
+
 function renderCategoryOverview(catData) {
   const el = document.getElementById('tagCatOverview');
   if (!el) return;
   const total = allBooks.length || 1;
+  const maxN = Math.max(...TAG_MAIN_CATEGORIES.map(c => catData[c]?.books.length || 0), 1);
+
   const bars = TAG_MAIN_CATEGORIES.map(cat => {
-    const n = catData[cat].books.length;
-    const pct = Math.round((n / total) * 100);
-    const read = catData[cat].books.filter(b => b.completed).length;
+    const info = catData[cat] || { books: [] };
+    const n = info.books.length;
+    const read = info.books.filter(b => b.completed).length;
+    const unread = n - read;
+    const barPct = Math.round((n / maxN) * 100);
+    const readPct = n > 0 ? Math.round((read / n) * 100) : 0;
+    const unreadPct = 100 - readPct;
+    const col = CAT_COLORS[cat] || CAT_COLORS['その他'];
     const isActive = cat === _tagActiveCat ? ' tag-overview-bar-active' : '';
     return `<div class="tag-overview-bar-item${isActive}" data-cat="${escapeAttr(cat)}">
       <div class="tag-overview-bar-label">${escapeHtml(cat)}</div>
-      <div class="tag-overview-bar-bg"><div class="tag-overview-bar-fill" style="width:${pct}%"></div></div>
-      <div class="tag-overview-bar-stats">${n}冊 / 読了${read}</div>
+      <div class="tag-overview-bar-track">
+        <div class="tag-overview-bar-bg" style="width:${barPct}%">
+          <div class="tag-overview-bar-read"  style="width:${readPct}%;background:${col.read}"></div>
+          <div class="tag-overview-bar-unread" style="width:${unreadPct}%;background:${col.unread}"></div>
+        </div>
+      </div>
+      <div class="tag-overview-bar-stats"><strong>${n}</strong>冊 <span class="tob-read">読了${read}</span> <span class="tob-unread">未読${unread}</span></div>
     </div>`;
   }).join('');
-  el.innerHTML = `<div class="tag-overview-bars">${bars}</div>`;
+
+  el.innerHTML = `
+    <div class="tag-overview-legend">
+      <span class="tob-legend-read">■ 読了</span>
+      <span class="tob-legend-unread">■ 未読</span>
+      <span class="tob-legend-note">（バー長 = カテゴリ最大冊数比）</span>
+    </div>
+    <div class="tag-overview-bars">${bars}</div>`;
   el.querySelectorAll('.tag-overview-bar-item').forEach(item => {
     item.addEventListener('click', () => {
       _tagActiveCat = item.dataset.cat;
