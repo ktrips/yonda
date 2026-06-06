@@ -418,27 +418,135 @@ function primaryGenre(genre) {
   return genre.split(' / ')[0].trim();
 }
 
-/** ランキング用: 特定ジャンルを「ライフ」にまとめる */
-const LIFESTYLE_GENRES = [
-  '絵本・児童書', '教育・学習', 'LGBT', 'ティーン', 'ホーム・ガーデン', 'スポーツ・アウトドア',
-  'コメディー・落語', '旅行・観光', '官能・ロマンス', '衛生・健康', 'エンターテインメント・アート',
-  '宗教・スピリチュアル',
-  'アート・エンタメ', 'アート・エンターテイメント',
+/**
+ * ============================================================
+ * ジャンル正規化 — フィルター・グラフ・ランキング・タグ分析で共通使用
+ * ============================================================
+ */
+
+/** 全セクションで使用する正規化後カテゴリの正式リスト */
+const CANONICAL_GENRES = [
+  '文学・フィクション',
+  'ミステリー・スリラー・サスペンス',
+  '自伝・回顧録',
+  'ビジネス・キャリア',
+  '自己啓発・人間関係・子育て',
+  '政治学・社会科学',
+  '歴史',
+  'ライフ',
+  '科学・テクノロジー',
+  'その他',
 ];
-/** ランキング用: 特定ジャンルを「ビジネス・キャリア」にまとめる */
-const BUSINESS_CAREER_GENRES = ['資産・金融', 'ノンフィクション', '新書'];
-/** ランキング用: 特定ジャンルを「科学・テクノロジー」にまとめる */
-const SCIENCE_TECHNOLOGY_GENRES = ['科学・工学', 'コンピュータ・テクノロジー', 'SF・ファンタジー'];
-function displayGenre(genre) {
-  const pg = primaryGenre(genre) || 'その他';
-  if (LIFESTYLE_GENRES.includes(pg)) return 'ライフ';
-  if (BUSINESS_CAREER_GENRES.includes(pg)) return 'ビジネス・キャリア';
-  if (SCIENCE_TECHNOLOGY_GENRES.includes(pg)) return '科学・テクノロジー';
-  return pg;
+
+/**
+ * メインジャンル文字列 → 正規化カテゴリ マッピング（全ソース共通）
+ * 図書館 / Audible / Kindle のすべてのジャンル文字列をカバーする
+ */
+const GENRE_NORMALIZE_MAP = {
+  // 文学・フィクション
+  '文学・フィクション':              '文学・フィクション',
+  // ミステリー・スリラー・サスペンス
+  'ミステリー・スリラー・サスペンス': 'ミステリー・スリラー・サスペンス',
+  'ミステリー・スリラー':             'ミステリー・スリラー・サスペンス',
+  'ミステリー・サスペンス':           'ミステリー・スリラー・サスペンス',
+  'ミステリー':                       'ミステリー・スリラー・サスペンス',
+  // 自伝・回顧録
+  '自伝・回顧録':                     '自伝・回顧録',
+  // ビジネス・キャリア
+  'ビジネス・キャリア':               'ビジネス・キャリア',
+  'ノンフィクション':                 'ビジネス・キャリア',  // ノンフィクション → ビジネス・キャリア
+  '新書':                             'ビジネス・キャリア',  // 新書 → ビジネス・キャリア
+  '資産・金融':                       'ビジネス・キャリア',
+  'エッセイ':                         'ビジネス・キャリア',  // エッセイ単体 → ビジネス・キャリア
+  // 自己啓発・人間関係・子育て
+  '自己啓発・人間関係・子育て':       '自己啓発・人間関係・子育て',
+  '教育・学習':                       '自己啓発・人間関係・子育て',
+  // 政治学・社会科学
+  '政治学・社会科学':                 '政治学・社会科学',
+  '政治・社会':                       '政治学・社会科学',
+  // 歴史
+  '歴史':                             '歴史',
+  // ライフ
+  'ライフ':                           'ライフ',
+  'アート・エンタメ':                 'ライフ',              // アート・エンタメ → ライフ
+  'アート・エンターテイメント':       'ライフ',
+  '衛生・健康':                       'ライフ',
+  'スポーツ・アウトドア':             'ライフ',
+  '旅行・観光':                       'ライフ',
+  'エンターテインメント・アート':     'ライフ',
+  '宗教・スピリチュアル':             'ライフ',
+  '絵本・児童書':                     'ライフ',
+  'ホーム・ガーデン':                 'ライフ',
+  'ティーン':                         'ライフ',
+  'LGBT':                             'ライフ',
+  'コメディー・落語':                 'ライフ',
+  '官能・ロマンス':                   'ライフ',
+  // 科学・テクノロジー
+  '科学・テクノロジー':               '科学・テクノロジー',
+  '科学・工学':                       '科学・テクノロジー',  // 科学・工学 → 統合
+  'コンピュータ・テクノロジー':       '科学・テクノロジー',
+  'コンピュータ・it':                 '科学・テクノロジー',
+  'サイエンス・テクノロジー':         '科学・テクノロジー',
+  'SF・ファンタジー':                 '科学・テクノロジー',
+};
+
+/**
+ * 全セクション共通のジャンル正規化関数
+ * フィルター・読書グラフ・ランキング・タグ分析のすべてで同一の結果を返す
+ */
+function normalizeGenre(genreStr) {
+  if (!genreStr) return 'その他';
+  const parts = genreStr.split(/\s*[/／]\s*/).map(s => s.trim()).filter(Boolean);
+  const genreLow = genreStr.toLowerCase();
+
+  // 1. メインジャンル（最初のパート）を GENRE_NORMALIZE_MAP で最優先チェック
+  if (parts.length > 0) {
+    const mainLow = parts[0].toLowerCase();
+    for (const [key, cat] of Object.entries(GENRE_NORMALIZE_MAP)) {
+      const k = key.toLowerCase();
+      if (mainLow === k || mainLow.includes(k) || k.includes(mainLow)) return cat;
+    }
+  }
+
+  // 2. サブジャンルにエッセイが含まれる場合はビジネス・キャリア（メインが未マッチ時のみ）
+  const essayKws = ['エッセイ', '随筆', 'コラム', 'essay'];
+  if (parts.some(p => essayKws.some(kw => p.toLowerCase().includes(kw)))) return 'ビジネス・キャリア';
+
+  // 3. 全パートを GENRE_NORMALIZE_MAP で照合
+  for (const [key, cat] of Object.entries(GENRE_NORMALIZE_MAP)) {
+    const k = key.toLowerCase();
+    if (parts.some(p => { const pl = p.toLowerCase(); return pl === k || pl.includes(k) || k.includes(pl); })
+        || genreLow.includes(k)) return cat;
+  }
+
+  // 4. キーワードフォールバック（ジャンル文字列が既知マップにない場合）
+  if (['ミステリー', '推理', 'サスペンス', 'スリラー', 'ホラー'].some(kw => genreLow.includes(kw)))
+    return 'ミステリー・スリラー・サスペンス';
+  if (['sf', 'ファンタジー', 'fantasy', 'sci-fi'].some(kw => genreLow.includes(kw)))
+    return '科学・テクノロジー';
+  if (['文学', '小説', 'フィクション', 'fiction'].some(kw => genreLow.includes(kw)))
+    return '文学・フィクション';
+  if (['ビジネス', '経営', 'マーケティング', 'キャリア', 'business'].some(kw => genreLow.includes(kw)))
+    return 'ビジネス・キャリア';
+  if (['自己啓発', '習慣', 'self-help'].some(kw => genreLow.includes(kw)))
+    return '自己啓発・人間関係・子育て';
+  if (['政治', '社会科学', '哲学', 'politics', 'economics', '経済'].some(kw => genreLow.includes(kw)))
+    return '政治学・社会科学';
+  if (['歴史', 'history'].some(kw => genreLow.includes(kw)))
+    return '歴史';
+  if (['科学', 'テクノロジー', 'it', 'コンピュータ', 'プログラミング', 'science', 'technology'].some(kw => genreLow.includes(kw)))
+    return '科学・テクノロジー';
+  if (['伝記', '自伝', '回顧録', 'memoir', 'biography'].some(kw => genreLow.includes(kw)))
+    return '自伝・回顧録';
+  if (['ライフ', '健康', '料理', '旅行', 'アート', 'life'].some(kw => genreLow.includes(kw)))
+    return 'ライフ';
+
+  return 'その他';
 }
-function rankingGenre(genre) {
-  return displayGenre(genre);
-}
+
+/** フィルター・グラフ・ランキングのジャンル表示（normalizeGenre に委譲） */
+function displayGenre(genre) { return normalizeGenre(genre); }
+function rankingGenre(genre)  { return normalizeGenre(genre); }
 
 function getSetagayaRatingUrl(book) {
   return book.detail_url || SOURCE_LINKS.setagaya.url;
@@ -3315,45 +3423,15 @@ document.getElementById('messagesRefreshBtn')?.addEventListener('click', loadMes
    タグ傾向分析 v2 — カテゴリ別タグクラウド
    ============================================================ */
 
-// 実データのジャンル値をそのまま使用し、マージルールを適用する
-const TAG_MAIN_CATEGORIES = [
-  '文学・フィクション',
-  'ミステリー・スリラー・サスペンス',
-  '自伝・回顧録',
-  'ビジネス・キャリア',
-  '自己啓発・人間関係・子育て',
-  '政治学・社会科学',
-  '歴史',
-  'ライフ',
-  '科学・テクノロジー',
-  'その他',
-];
+
+// タグ分析のカテゴリ一覧は CANONICAL_GENRES と同一（統一定義を参照）
+const TAG_MAIN_CATEGORIES = CANONICAL_GENRES;
+
 
 // 実データのジャンル文字列 → 表示カテゴリへの直接マッピング
 // ※ 部分一致で判定するため、長いキーワードを先に並べる
-const GENRE_TO_CATEGORY = {
-  '文学・フィクション':         '文学・フィクション',
-  'ミステリー・スリラー・サスペンス': 'ミステリー・スリラー・サスペンス',
-  'ミステリー・スリラー':        'ミステリー・スリラー・サスペンス',
-  'ミステリー・サスペンス':      'ミステリー・スリラー・サスペンス',
-  'ノンフィクション':            'ビジネス・キャリア',           // ノンフィクション → ビジネス・キャリア
-  '自伝・回顧録':                '自伝・回顧録',
-  'ビジネス・キャリア':          'ビジネス・キャリア',
-  '自己啓発・人間関係・子育て':  '自己啓発・人間関係・子育て',
-  '新書':                        'ビジネス・キャリア',           // 新書 → ビジネス・キャリア
-  '政治学・社会科学':            '政治学・社会科学',
-  '政治・社会':                  '政治学・社会科学',
-  '歴史':                        '歴史',
-  'ライフ':                      'ライフ',
-  'アート・エンタメ':            'ライフ',                      // アート・エンタメ → ライフ
-  'アート・エンターテイメント':  'ライフ',
-  '科学・テクノロジー':          '科学・テクノロジー',
-  '科学・工学':                  '科学・テクノロジー',           // 科学・工学 + コンピュータ → 統合
-  'コンピュータ・テクノロジー':  '科学・テクノロジー',
-  'コンピュータ・it':            '科学・テクノロジー',
-  'サイエンス・テクノロジー':    '科学・テクノロジー',
-  'エッセイ':                    'ビジネス・キャリア',           // エッセイ単体 → ビジネス・キャリア（ノンフィクション統合）
-};
+// GENRE_TO_CATEGORY は GENRE_NORMALIZE_MAP に統合済み（後方互換エイリアス）
+const GENRE_TO_CATEGORY = GENRE_NORMALIZE_MAP;
 
 // カテゴリ内のノイズタグ（そのカテゴリ内では表示しない自明なタグ）
 const CATEGORY_TAG_BLOCKLIST = {
@@ -3491,57 +3569,9 @@ function _bookInsightKey(book) {
   return null;
 }
 
-/** book の genre 文字列を表示カテゴリに分類する（実データのジャンルを優先） */
+/** book の genre 文字列を表示カテゴリに分類する（normalizeGenre に完全委譲） */
 function classifyBookToMainCategory(book) {
-  const genreRaw = (book.genre || '').trim();
-  const genreLow = genreRaw.toLowerCase();
-  // " / " で分割したサブジャンルリスト（例: "文学・フィクション / エッセイ" → ["文学・フィクション","エッセイ"]）
-  const parts = genreRaw.split(/\s*[/／]\s*/).map(s => s.trim().toLowerCase()).filter(Boolean);
-
-  // メインジャンル（最初のパート）を GENRE_TO_CATEGORY で最優先チェック
-  // → "ライフ / 暮らし・エッセイ" などでメインジャンルが正しく優先される
-  if (parts.length > 0) {
-    for (const [genre, cat] of Object.entries(GENRE_TO_CATEGORY)) {
-      const g = genre.toLowerCase();
-      if (parts[0] === g || parts[0].includes(g) || g.includes(parts[0])) return cat;
-    }
-  }
-
-  // エッセイ系がサブジャンルに含まれる場合はビジネス・キャリア（メインジャンル不明時）
-  const essayKws = ['エッセイ', '随筆', 'コラム', 'essay'];
-  if (parts.some(p => essayKws.some(kw => p.includes(kw))) ||
-      essayKws.some(kw => genreLow.includes(kw))) return 'ビジネス・キャリア';
-
-  // GENRE_TO_CATEGORY で全パートを照合
-  for (const [genre, cat] of Object.entries(GENRE_TO_CATEGORY)) {
-    const g = genre.toLowerCase();
-    if (parts.some(p => p === g || p.includes(g) || g.includes(p)) ||
-        genreLow.includes(g)) return cat;
-  }
-
-  // フォールバック: キーワード推定
-  if (['ミステリー', '推理', 'サスペンス', 'スリラー', 'ホラー'].some(kw => genreLow.includes(kw)))
-    return 'ミステリー・スリラー・サスペンス';
-  if (['文学', '小説', 'フィクション', 'fiction'].some(kw => genreLow.includes(kw)))
-    return '文学・フィクション';
-  if (['ビジネス', '経営', 'マーケティング', 'キャリア', 'business'].some(kw => genreLow.includes(kw)))
-    return 'ビジネス・キャリア';
-  if (['自己啓発', '習慣', '心理', 'self-help'].some(kw => genreLow.includes(kw)))
-    return '自己啓発・人間関係・子育て';
-  if (['政治', '経済', '社会科学', '哲学', 'politics', 'economics'].some(kw => genreLow.includes(kw)))
-    return '政治学・社会科学';
-  if (['歴史', 'history'].some(kw => genreLow.includes(kw)))
-    return '歴史';
-  if (['科学', 'テクノロジー', 'it', 'コンピュータ', 'プログラミング', 'science', 'technology'].some(kw => genreLow.includes(kw)))
-    return '科学・テクノロジー';
-  if (['伝記', '自伝', '回顧録', 'memoir', 'biography'].some(kw => genreLow.includes(kw)))
-    return '自伝・回顧録';
-  if (['ライフ', '健康', '料理', '旅行', 'アート', 'life'].some(kw => genreLow.includes(kw)))
-    return 'ライフ';
-  if (['ノンフィクション', 'nonfiction'].some(kw => genreLow.includes(kw)))
-    return 'ビジネス・キャリア';
-
-  return 'その他';
+  return normalizeGenre(book.genre || '');
 }
 
 /** 1冊の詳細タグを生成（insight headings + genre sub + summary patterns） */
