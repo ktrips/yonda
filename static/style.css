@@ -1154,6 +1154,59 @@ header {
   .genre-tag-label { min-width: unset; max-width: unset; }
 }
 
+/* === タグ分析パネル === */
+.tag-analysis-grid {
+  display: flex; flex-direction: column; gap: 1.2rem; padding: 0.25rem 0;
+}
+.tag-analysis-section {
+  background: var(--bg-card); border-radius: var(--radius);
+  border: 1px solid var(--border); overflow: hidden;
+}
+.tag-analysis-header {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-weight: 700; font-size: 0.85rem;
+  background: color-mix(in srgb, var(--bg-card) 80%, var(--border));
+}
+.tag-analysis-total {
+  margin-left: 0.4rem; font-weight: 400;
+  font-size: 0.75rem; color: var(--text-secondary);
+}
+.tag-analysis-items {
+  display: flex; flex-direction: column; padding: 0.4rem 0.75rem 0.6rem;
+  gap: 0.28rem;
+}
+.tag-analysis-item {
+  display: grid;
+  grid-template-columns: 9rem 1fr 3rem 2.2rem;
+  align-items: center; gap: 0.4rem;
+  font-size: 0.78rem;
+}
+.tag-analysis-label {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text-primary); font-size: 0.8rem;
+}
+.tag-analysis-bar-wrap {
+  background: var(--border); border-radius: 99px;
+  height: 7px; overflow: hidden; flex: 1;
+}
+.tag-analysis-bar {
+  height: 100%; border-radius: 99px;
+  transition: width 0.3s ease;
+}
+.tag-analysis-pct {
+  text-align: right; font-weight: 700; font-size: 0.8rem; white-space: nowrap;
+}
+.tag-analysis-cnt {
+  text-align: right; font-size: 0.72rem; color: var(--text-secondary);
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .tag-analysis-item {
+    grid-template-columns: 7rem 1fr 2.6rem 1.8rem;
+  }
+}
+
 /* === Loading === */
 #loading { text-align: center; padding: 3rem 1rem; }
 .spinner {

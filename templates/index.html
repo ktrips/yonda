@@ -4,6 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Yonda 最近何読んだ?</title>
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  <meta name="theme-color" content="#1a2744">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
@@ -135,6 +140,7 @@
             <div class="chart-tabs">
               <button type="button" class="chart-tab active" data-tab="monthly">月別</button>
               <button type="button" class="chart-tab" data-tab="genre">ジャンル別</button>
+              <button type="button" class="chart-tab" data-tab="tag">タグ別</button>
               <button type="button" class="chart-tab" data-tab="relation">関連性</button>
             </div>
             <div class="chart-canvas-wrap" id="chartMonthlyWrap">
@@ -143,14 +149,16 @@
             <div class="chart-canvas-wrap" id="chartGenreWrap" style="display:none;">
               <canvas id="genreChart"></canvas>
             </div>
+            <div class="chart-canvas-wrap chart-tag-wrap" id="chartTagWrap" style="display:none;">
+              <div id="tagPanel" class="genre-tag-grid"></div>
+              <div id="genreTagResult" class="genre-tag-result" style="display:none;"></div>
+            </div>
             <div class="chart-canvas-wrap chart-relation-wrap" id="chartRelationWrap" style="display:none;">
               <div class="relation-heatmap-mode">
                 <button type="button" class="chart-mode-btn relation-mode-btn active" data-relation-mode="genre_rating">ジャンル×評価</button>
                 <button type="button" class="chart-mode-btn relation-mode-btn" data-relation-mode="author_genre">著者×ジャンル</button>
-                <button type="button" class="chart-mode-btn relation-mode-btn" data-relation-mode="genre_tag">ジャンル×タグ</button>
               </div>
               <div id="relationHeatmap" class="relation-heatmap"></div>
-              <div id="genreTagResult" class="genre-tag-result" style="display:none;"></div>
               <p class="relation-heatmap-legend" id="relationHeatmapLegend">ジャンル × 評価の分布（色が濃いほど冊数が多い）</p>
             </div>
           </div>

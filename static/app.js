@@ -428,11 +428,12 @@ function primaryGenre(genre) {
 const CANONICAL_GENRES = [
   '文学・フィクション',
   'ミステリー・スリラー・サスペンス',
+  'エッセイ',
   '自伝・ノンフィクション',
   'ビジネス・キャリア',
-  '自己啓発・人間関係・子育て',
-  '政治学・社会科学',
-  '歴史',
+  '自己啓発',
+  '人間関係・教育',
+  '政治・社会・歴史',
   'ライフ',
   '科学・テクノロジー',
   'その他',
@@ -458,15 +459,19 @@ const GENRE_NORMALIZE_MAP = {
   'ノンフィクション':                 '自伝・ノンフィクション', // ノンフィクション → 自伝・ノンフィクション
   '新書':                             'ライフ',                 // 新書 → ライフ
   '資産・金融':                       'ビジネス・キャリア',
-  'エッセイ':                         'ビジネス・キャリア',  // エッセイ単体 → ビジネス・キャリア
-  // 自己啓発・人間関係・子育て
-  '自己啓発・人間関係・子育て':       '自己啓発・人間関係・子育て',
-  '教育・学習':                       '自己啓発・人間関係・子育て',
-  // 政治学・社会科学
-  '政治学・社会科学':                 '政治学・社会科学',
-  '政治・社会':                       '政治学・社会科学',
-  // 歴史
-  '歴史':                             '歴史',
+  // 自己啓発（サブジャンル依存で normalizeGenre が動的に分岐）
+  '自己啓発':                         '自己啓発',
+  // 人間関係・教育（旧 教育・学習 もここへ）
+  '人間関係・教育':                   '人間関係・教育',
+  // エッセイ
+  'エッセイ':                         'エッセイ',
+  '随筆':                             'エッセイ',
+  // 政治・社会・歴史（旧: 政治学・社会科学 + 歴史 を統合）
+  '政治学・社会科学':                 '政治・社会・歴史',
+  '政治・社会':                       '政治・社会・歴史',
+  '政治・社会・歴史':                 '政治・社会・歴史',
+  // 歴史 → 政治・社会・歴史 に統合
+  '歴史':                             '政治・社会・歴史',
   // ライフ
   'ライフ':                           'ライフ',
   'アート・エンタメ':                 'ライフ',              // アート・エンタメ → ライフ
@@ -497,30 +502,48 @@ const GENRE_NORMALIZE_MAP = {
  */
 function normalizeGenre(genreStr) {
   if (!genreStr) return 'その他';
-  const parts = genreStr.split(/\s*[/／]\s*/).map(s => s.trim()).filter(Boolean);
+  const parts    = genreStr.split(/\s*[/／]\s*/).map(s => s.trim()).filter(Boolean);
   const genreLow = genreStr.toLowerCase();
+  const mainLow  = (parts[0] || '').toLowerCase();
+  const subParts = parts.slice(1);                                // サブジャンル配列
+  const sub1Low  = (subParts[0] || '').toLowerCase();            // 第2階層
 
-  // 1. メインジャンル（最初のパート）を GENRE_NORMALIZE_MAP で最優先チェック
-  if (parts.length > 0) {
-    const mainLow = parts[0].toLowerCase();
-    for (const [key, cat] of Object.entries(GENRE_NORMALIZE_MAP)) {
-      const k = key.toLowerCase();
-      if (mainLow === k || mainLow.includes(k) || k.includes(mainLow)) return cat;
-    }
+  // ── エッセイ判定（メインが文学/自伝/ノンフィクション系 かつ エッセイ/体験記を含む）──
+  const essayWords    = ['エッセイ', '随筆', '体験記'];
+  const essayMains    = ['文学', 'ノンフィクション', '自伝'];
+  const hasEssaySub   = parts.slice(1).some(p => essayWords.some(kw => p.includes(kw)));
+  if (essayMains.some(kw => mainLow.includes(kw)) && hasEssaySub) return 'エッセイ';
+  // エッセイ/随筆 が主ジャンル（単体）の場合
+  if (essayWords.some(kw => mainLow.includes(kw))) return 'エッセイ';
+
+  // ── 自己啓発・人間関係・子育て → サブジャンルで 自己啓発 or 人間関係・教育 に振り分け ──
+  if (mainLow.includes('自己啓発')) {
+    // メンタル・マインドフルネス・スピリチュアル・コミュニケーション・人間関係系 → 人間関係・教育
+    const relKws = ['人間関係', '子育て', 'parenting', 'relationship', 'コミュニケーション',
+                    'メンタル', 'マインドフルネス', 'スピリチュアル'];
+    if (subParts.some(s => relKws.some(kw => s.includes(kw)))) return '人間関係・教育';
+    return '自己啓発';  // 自己啓発サブ or サブなし → 自己啓発
+  }
+  // 教育・学習 → 人間関係・教育
+  if (mainLow.includes('教育')) return '人間関係・教育';
+
+  // ── メインジャンルを GENRE_NORMALIZE_MAP で直接マッピング ──
+  for (const [key, cat] of Object.entries(GENRE_NORMALIZE_MAP)) {
+    const k = key.toLowerCase();
+    if (mainLow === k || mainLow.includes(k) || k.includes(mainLow)) return cat;
   }
 
-  // 2. サブジャンルにエッセイが含まれる場合はビジネス・キャリア（メインが未マッチ時のみ）
-  const essayKws = ['エッセイ', '随筆', 'コラム', 'essay'];
-  if (parts.some(p => essayKws.some(kw => p.toLowerCase().includes(kw)))) return 'ビジネス・キャリア';
+  // ── 残りのエッセイ（メインが既知カテゴリ外でエッセイを含む場合はエッセイへ）──
+  if (parts.some(p => essayWords.some(kw => p.includes(kw)))) return 'エッセイ';
 
-  // 3. 全パートを GENRE_NORMALIZE_MAP で照合
+  // ── 全パートを GENRE_NORMALIZE_MAP で照合 ──
   for (const [key, cat] of Object.entries(GENRE_NORMALIZE_MAP)) {
     const k = key.toLowerCase();
     if (parts.some(p => { const pl = p.toLowerCase(); return pl === k || pl.includes(k) || k.includes(pl); })
         || genreLow.includes(k)) return cat;
   }
 
-  // 4. キーワードフォールバック（ジャンル文字列が既知マップにない場合）
+  // ── キーワードフォールバック ──
   if (['ミステリー', '推理', 'サスペンス', 'スリラー', 'ホラー'].some(kw => genreLow.includes(kw)))
     return 'ミステリー・スリラー・サスペンス';
   if (['sf', 'ファンタジー', 'fantasy', 'sci-fi'].some(kw => genreLow.includes(kw)))
@@ -530,11 +553,13 @@ function normalizeGenre(genreStr) {
   if (['ビジネス', '経営', 'マーケティング', 'キャリア', 'business'].some(kw => genreLow.includes(kw)))
     return 'ビジネス・キャリア';
   if (['自己啓発', '習慣', 'self-help'].some(kw => genreLow.includes(kw)))
-    return '自己啓発・人間関係・子育て';
+    return '自己啓発';
+  if (['人間関係', '子育て', 'コミュニケーション', 'parenting', 'relationship'].some(kw => genreLow.includes(kw)))
+    return '人間関係・教育';
   if (['政治', '社会科学', '哲学', 'politics', 'economics', '経済'].some(kw => genreLow.includes(kw)))
-    return '政治学・社会科学';
+    return '政治・社会・歴史';
   if (['歴史', 'history'].some(kw => genreLow.includes(kw)))
-    return '歴史';
+    return '政治・社会・歴史';
   if (['科学', 'テクノロジー', 'it', 'コンピュータ', 'プログラミング', 'science', 'technology'].some(kw => genreLow.includes(kw)))
     return '科学・テクノロジー';
   if (['伝記', '自伝', '回顧録', 'memoir', 'biography'].some(kw => genreLow.includes(kw)))
@@ -2368,13 +2393,6 @@ function renderRelationChart() {
   const books = getBooksForChart();
   const heatmapEl = document.getElementById('relationHeatmap');
   const legendEl = document.getElementById('relationHeatmapLegend');
-  const resultEl = document.getElementById('genreTagResult');
-  if (resultEl) resultEl.style.display = 'none';
-
-  if (relationChartMode === 'genre_tag') {
-    renderGenreTagPanel(books, heatmapEl, legendEl);
-    return;
-  }
 
   if (relationChartMode === 'genre_rating') {
     const genreCount = {};
@@ -2471,10 +2489,19 @@ function renderRelationChart() {
 }
 
 /** ジャンル×タグ パネルを描画 */
-function renderGenreTagPanel(books, heatmapEl, legendEl) {
-  // ジャンルごとにタグを集計
-  const genreBooks  = {};   // genre → book[]
-  const genreTagMap = {};   // genre → { tag: count }
+/**
+ * タグ別タブ: ジャンルごとにトップタグをパーセント表示のチップで並べる
+ * チップをクリックすると該当ジャンル×タグの本を下に表示する
+ */
+function renderTagTab() {
+  const books    = getBooksForChart();
+  const panelEl  = document.getElementById('tagPanel');
+  const resultEl = document.getElementById('genreTagResult');
+  if (!panelEl) return;
+  if (resultEl) resultEl.style.display = 'none';
+
+  const genreBooks  = {};
+  const genreTagMap = {};
   for (const cat of CANONICAL_GENRES) { genreBooks[cat] = []; genreTagMap[cat] = {}; }
 
   for (const b of books) {
@@ -2486,7 +2513,7 @@ function renderGenreTagPanel(books, heatmapEl, legendEl) {
     }
   }
 
-  let html = '<div class="genre-tag-grid">';
+  let html = '';
   for (const cat of CANONICAL_GENRES) {
     const catBooks = genreBooks[cat] || [];
     if (catBooks.length === 0) continue;
@@ -2502,24 +2529,19 @@ function renderGenreTagPanel(books, heatmapEl, legendEl) {
       html += `<span class="genre-tag-empty-hint">タグなし</span>`;
     } else {
       for (const [tag, cnt] of topTags) {
-        html += `<button type="button" class="genre-tag-chip" data-genre="${escapeAttr(cat)}" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}<span class="genre-tag-chip-cnt">${cnt}</span></button>`;
+        const pct = Math.round(cnt / catBooks.length * 100);
+        html += `<button type="button" class="genre-tag-chip" data-genre="${escapeAttr(cat)}" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}<span class="genre-tag-chip-cnt">${pct}%</span></button>`;
       }
     }
     html += `</div></div>`;
   }
-  html += '</div>';
-  heatmapEl.innerHTML = html;
-  if (legendEl) legendEl.textContent = 'ジャンル × タグ（タグを押すと該当する本を表示）';
+  panelEl.innerHTML = html;
 
-  // タグクリック → 本一覧表示
-  heatmapEl.querySelectorAll('.genre-tag-chip').forEach(chip => {
+  panelEl.querySelectorAll('.genre-tag-chip').forEach(chip => {
     chip.addEventListener('click', () => {
-      // 選択状態の見た目
-      heatmapEl.querySelectorAll('.genre-tag-chip').forEach(c => c.classList.remove('selected'));
+      panelEl.querySelectorAll('.genre-tag-chip').forEach(c => c.classList.remove('selected'));
       chip.classList.add('selected');
-      const genre = chip.dataset.genre;
-      const tag   = chip.dataset.tag;
-      _showGenreTagBooks(genre, tag, books);
+      _showGenreTagBooks(chip.dataset.genre, chip.dataset.tag, books);
     });
   });
 }
@@ -3488,9 +3510,11 @@ document.querySelectorAll('.chart-tab').forEach(tab => {
     document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
     const target = tab.dataset.tab;
-    document.getElementById('chartMonthlyWrap').style.display = target === 'monthly' ? '' : 'none';
-    document.getElementById('chartGenreWrap').style.display = target === 'genre' ? '' : 'none';
+    document.getElementById('chartMonthlyWrap').style.display  = target === 'monthly'  ? '' : 'none';
+    document.getElementById('chartGenreWrap').style.display    = target === 'genre'    ? '' : 'none';
+    document.getElementById('chartTagWrap').style.display      = target === 'tag'      ? '' : 'none';
     document.getElementById('chartRelationWrap').style.display = target === 'relation' ? '' : 'none';
+    if (target === 'tag') renderTagTab();
   });
 });
 
@@ -3555,11 +3579,12 @@ const GENRE_TO_CATEGORY = GENRE_NORMALIZE_MAP;
 const CATEGORY_TAG_BLOCKLIST = {
   '文学・フィクション':          new Set(['文学', '小説', 'フィクション', 'fiction', '文学・フィクション', '文芸', 'ドラマ', 'drama']),
   'ミステリー・スリラー・サスペンス': new Set(['ミステリー', 'スリラー', 'サスペンス', 'ホラー', 'フィクション', 'fiction', '小説', 'エンタメ']),
+  'エッセイ':                    new Set(['エッセイ', '随筆', '体験記', 'essay', '文学', 'フィクション', 'ノンフィクション']),
   '自伝・ノンフィクション':          new Set(['自伝', '回顧録', '伝記', 'memoir', 'biography', '自伝・回顧録', '自伝・ノンフィクション', 'ノンフィクション', 'nonfiction', '新書']),
-  'ビジネス・キャリア':          new Set(['ビジネス', 'business', 'ビジネス・キャリア', 'キャリア', 'エッセイ', 'essay', '随筆', 'ドキュメンタリー']),
-  '自己啓発・人間関係・子育て':  new Set(['自己啓発', 'self-help', '人間関係', '子育て', 'マインドフルネス']),
-  '政治学・社会科学':            new Set(['政治', '社会', '政治学', '社会科学', '政治学・社会科学']),
-  '歴史':                        new Set(['歴史', 'history', '歴史学']),
+  'ビジネス・キャリア':          new Set(['ビジネス', 'business', 'ビジネス・キャリア', 'キャリア', 'ドキュメンタリー']),
+  '自己啓発':                    new Set(['自己啓発', 'self-help', 'セルフヘルプ']),
+  '人間関係・教育':              new Set(['人間関係', '子育て', '教育', '教育・学習', 'コミュニケーション', 'relationship', 'parenting', 'マインドフルネス', 'スピリチュアル', 'メンタル']),
+  '政治・社会・歴史':            new Set(['政治', '社会', '政治学', '社会科学', '政治学・社会科学', '歴史', 'history', '歴史学']),
   'ライフ':                      new Set(['ライフ', 'ライフスタイル', 'life', 'lifestyle', 'アート・エンタメ', 'アート', 'エンタメ']),
   '科学・テクノロジー':          new Set(['テクノロジー', 'it', 'science', 'technology', '科学', '工学', '科学・工学', 'コンピュータ', 'コンピュータ・テクノロジー', '科学・テクノロジー']),
 };
@@ -3618,18 +3643,34 @@ const DETAIL_TAG_PATTERNS = {
     { tag: 'エンタメビジネス',     words: ['エンタメ', 'コンテンツ', 'アニメ', 'ゲーム', '映画', '音楽', 'ip', 'エンターテインメント', 'プロデューサー', 'オタク', '推し'] },
     { tag: 'プレゼン・説明力',     words: ['プレゼン', '説明', 'プレゼンテーション', 'ファシリテーション', '伝え方'] },
   ],
-  '自己啓発・人間関係・子育て': [
+  'エッセイ': [
+    { tag: '日常・生活',          words: ['日常', '生活', '暮らし', '日記', '日々', 'くらし'] },
+    { tag: '旅・体験',            words: ['旅', '旅行', '体験', '冒険', '留学', '旅先', '道中'] },
+    { tag: '文化・芸術',          words: ['文化', '芸術', '映画', '音楽', '読書', '本', '美術', '演劇'] },
+    { tag: '家族・人間関係',      words: ['家族', '夫婦', '親子', '友人', '恋愛', '結婚', '子ども'] },
+    { tag: '仕事・生き方',        words: ['仕事', '働く', '生き方', 'キャリア', '人生', '働き方'] },
+    { tag: 'ユーモア・笑い',      words: ['笑い', 'ユーモア', 'コメディ', '面白い', 'おかしい', '滑稽', '笑える'] },
+    { tag: '社会・時代',          words: ['社会', '時代', '世の中', '現代', '昭和', '平成'] },
+    { tag: '思索・随想',          words: ['思い', '考え', '哲学', '思索', '随想', '問い', '内省'] },
+  ],
+  '自己啓発': [
     { tag: '習慣・生産性',         words: ['習慣', '生産性', '目標', '朝活', '時間管理', 'habit', 'productivity'] },
-    { tag: 'マインドフルネス',     words: ['マインドフルネス', '瞑想', '呼吸', '気づき', 'mindfulness', 'meditation'] },
     { tag: '心理学・行動科学',     words: ['心理', '行動', '認知', '意思決定', 'バイアス', '脳', 'ナッジ', 'psychology'] },
     { tag: '思考法・学習',         words: ['思考法', '考え方', '学習法', '記憶', 'ロジカル', 'クリティカル', 'thinking'] },
     { tag: '成功・自己成長',       words: ['成功', '成長', '自己実現', '可能性', 'ポジティブ', 'self-help', 'growth'] },
-    { tag: 'メンタル・幸福',       words: ['メンタル', '幸福', '充実', '満足', 'ウェルビーイング', 'happiness', 'wellness'] },
-    { tag: '人間関係',             words: ['人間関係', '対人', '共感', '感謝', '信頼', 'relationship'] },
-    { tag: '子育て・教育',         words: ['子育て', '育児', '子ども', '親', '保育', '教育', '学習', 'parenting'] },
-    { tag: 'スピリチュアル',       words: ['スピリチュアル', '引き寄せ', '宇宙の法則', '潜在意識', 'spiritual'] },
   ],
-  '政治学・社会科学': [
+  '人間関係・教育': [
+    { tag: 'メンタル・幸福',       words: ['メンタル', '幸福', '充実', '満足', 'ウェルビーイング', 'happiness', 'wellness'] },
+    { tag: 'マインドフルネス',     words: ['マインドフルネス', '瞑想', '呼吸', '気づき', 'mindfulness', 'meditation'] },
+    { tag: 'スピリチュアル',       words: ['スピリチュアル', '引き寄せ', '宇宙の法則', '潜在意識', 'spiritual'] },
+    { tag: '人間関係',             words: ['人間関係', '対人', '共感', '感謝', '信頼', 'relationship'] },
+    { tag: 'コミュニケーション',   words: ['コミュニケーション', '対話', '交渉', '説得', '話し方', 'communication'] },
+    { tag: '子育て・育児',         words: ['子育て', '育児', '子ども', '親', '保育', '幼児', 'parenting'] },
+    { tag: '教育・学習',           words: ['教育', '学習', '学校', '教師', '授業', '塾', '入試', '受験', 'education'] },
+    { tag: '恋愛・結婚',           words: ['恋愛', '結婚', 'パートナー', '夫婦', '恋人', '婚活', 'romance'] },
+    { tag: '語学・言語',           words: ['語学', '英語', '言語', '外国語', '翻訳', '英会話', 'language'] },
+  ],
+  '政治・社会・歴史': [
     { tag: '投資・資産形成',         words: ['投資', '資産', '株', '資産形成', '節約', '節税', 'お金', 'ファイナンス', 'investment'] },
     { tag: '経済・金融',             words: ['経済', '金融', 'gdp', '景気', '貿易', 'economics', 'finance', '資本主義'] },
     { tag: '政治・行政',             words: ['政治', '政策', '選挙', '行政', '議会', '政府', 'politics'] },
@@ -3640,15 +3681,11 @@ const DETAIL_TAG_PATTERNS = {
     { tag: '社会問題・格差',         words: ['格差', '貧困', '差別', '不平等', '少子化', '高齢化', '社会問題', '容姿', '外見'] },
     { tag: '宗教・文化',             words: ['宗教', '信仰', '文化', '文明', '価値観', '精神', 'religion'] },
     { tag: 'メディア・情報',         words: ['メディア', 'ジャーナリズム', '新聞', 'テレビ', '報道', '情報', 'media'] },
-  ],
-  '歴史': [
-    { tag: '日本史・近現代',   words: ['明治', '大正', '昭和', '幕末', '江戸', '平安', '鎌倉', '戦国', '室町', '日本史'] },
-    { tag: '世界史・国際史',   words: ['世界史', '世界大戦', 'ヨーロッパ', 'アジア', '中国', 'アメリカ', '植民地', '帝国'] },
-    { tag: '古代文明',         words: ['古代', 'インカ', 'マヤ', 'アステカ', 'エジプト', 'メソポタミア', 'アンデス', 'ローマ', 'ギリシャ', '遺跡', '発掘', '文明', '古代史'] },
-    { tag: '戦争・軍事史',     words: ['戦争', '軍事', '兵器', '戦闘', '太平洋戦争', '第二次世界大戦', '冷戦'] },
-    { tag: '政治・外交史',     words: ['政治史', '外交', '条約', '外交史', '歴史的転換', '革命'] },
-    { tag: '文化・社会史',     words: ['文化史', '生活史', '民俗', '風俗', '習慣', '文化'] },
-    { tag: '歴史的人物',       words: ['偉人', '英雄', '武将', '将軍', '王', '皇帝', '革命家'] },
+    { tag: '日本史・近現代',         words: ['明治', '大正', '昭和', '幕末', '江戸', '平安', '鎌倉', '戦国', '室町', '日本史'] },
+    { tag: '世界史・国際史',         words: ['世界史', '世界大戦', 'ヨーロッパ', 'アジア', '植民地', '帝国'] },
+    { tag: '古代文明',               words: ['古代', 'インカ', 'マヤ', 'アステカ', 'エジプト', 'メソポタミア', 'アンデス', 'ローマ', 'ギリシャ', '遺跡', '発掘', '文明', '古代史'] },
+    { tag: '戦争・軍事史',           words: ['戦争', '軍事', '兵器', '戦闘', '太平洋戦争', '第二次世界大戦', '冷戦'] },
+    { tag: '歴史的人物',             words: ['偉人', '英雄', '武将', '将軍', '王', '皇帝', '革命家', '歴史', '伝説', '昭和'] },
   ],
   'ライフ': [
     { tag: '料理・グルメ',           words: ['料理', 'レシピ', '食', 'グルメ', '食べ物', '食材', 'レストラン', 'シェフ', 'cooking'] },
@@ -3743,11 +3780,12 @@ function computeCategoryTagAnalytics() {
 const CAT_COLORS = {
   '文学・フィクション':          { read: '#6d9eeb', unread: '#bdd3f5' },
   'ミステリー・スリラー・サスペンス': { read: '#e06666', unread: '#f5b8b8' },
+  'エッセイ':                    { read: '#93c47d', unread: '#c6e2b7' },
   '自伝・ノンフィクション':        { read: '#8e7cc3', unread: '#c9bfe5' },
   'ビジネス・キャリア':          { read: '#f6b26b', unread: '#fad9b5' },
-  '自己啓発・人間関係・子育て':  { read: '#ffd966', unread: '#fff0b0' },
-  '政治学・社会科学':            { read: '#c27ba0', unread: '#e8b4cf' },
-  '歴史':                        { read: '#a0522d', unread: '#d4a090' },
+  '自己啓発':                    { read: '#ffd966', unread: '#fff0b0' },
+  '人間関係・教育':              { read: '#e699a8', unread: '#f5cad5' },
+  '政治・社会・歴史':            { read: '#b07ab8', unread: '#ddb8e4' },
   'ライフ':                      { read: '#76a5af', unread: '#b8d5db' },
   '科学・テクノロジー':          { read: '#45818e', unread: '#9ec5cb' },
   'その他':                      { read: '#b7b7b7', unread: '#dedede' },
