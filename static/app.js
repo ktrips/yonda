@@ -2368,6 +2368,13 @@ function renderRelationChart() {
   const books = getBooksForChart();
   const heatmapEl = document.getElementById('relationHeatmap');
   const legendEl = document.getElementById('relationHeatmapLegend');
+  const resultEl = document.getElementById('genreTagResult');
+  if (resultEl) resultEl.style.display = 'none';
+
+  if (relationChartMode === 'genre_tag') {
+    renderGenreTagPanel(books, heatmapEl, legendEl);
+    return;
+  }
 
   if (relationChartMode === 'genre_rating') {
     const genreCount = {};
@@ -2461,6 +2468,116 @@ function renderRelationChart() {
     heatmapEl.innerHTML = html;
     if (legendEl) legendEl.textContent = '著者 × ジャンルの分布（色が濃いほど冊数が多い）';
   }
+}
+
+/** ジャンル×タグ パネルを描画 */
+function renderGenreTagPanel(books, heatmapEl, legendEl) {
+  // ジャンルごとにタグを集計
+  const genreBooks  = {};   // genre → book[]
+  const genreTagMap = {};   // genre → { tag: count }
+  for (const cat of CANONICAL_GENRES) { genreBooks[cat] = []; genreTagMap[cat] = {}; }
+
+  for (const b of books) {
+    const cat = normalizeGenre(b.genre);
+    if (!genreBooks[cat]) { genreBooks[cat] = []; genreTagMap[cat] = {}; }
+    genreBooks[cat].push(b);
+    for (const tag of generateDetailedTagsForBook(b, cat)) {
+      genreTagMap[cat][tag] = (genreTagMap[cat][tag] || 0) + 1;
+    }
+  }
+
+  let html = '<div class="genre-tag-grid">';
+  for (const cat of CANONICAL_GENRES) {
+    const catBooks = genreBooks[cat] || [];
+    if (catBooks.length === 0) continue;
+    const topTags = Object.entries(genreTagMap[cat] || {})
+      .sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const col = (CAT_COLORS[cat] || CAT_COLORS['その他']).read;
+    html += `<div class="genre-tag-row">`;
+    html += `<div class="genre-tag-label" style="border-left:3px solid ${col}">
+               ${escapeHtml(cat)}<span class="genre-tag-total">${catBooks.length}冊</span>
+             </div>`;
+    html += `<div class="genre-tag-chips">`;
+    if (topTags.length === 0) {
+      html += `<span class="genre-tag-empty-hint">タグなし</span>`;
+    } else {
+      for (const [tag, cnt] of topTags) {
+        html += `<button type="button" class="genre-tag-chip" data-genre="${escapeAttr(cat)}" data-tag="${escapeAttr(tag)}">${escapeHtml(tag)}<span class="genre-tag-chip-cnt">${cnt}</span></button>`;
+      }
+    }
+    html += `</div></div>`;
+  }
+  html += '</div>';
+  heatmapEl.innerHTML = html;
+  if (legendEl) legendEl.textContent = 'ジャンル × タグ（タグを押すと該当する本を表示）';
+
+  // タグクリック → 本一覧表示
+  heatmapEl.querySelectorAll('.genre-tag-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      // 選択状態の見た目
+      heatmapEl.querySelectorAll('.genre-tag-chip').forEach(c => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      const genre = chip.dataset.genre;
+      const tag   = chip.dataset.tag;
+      _showGenreTagBooks(genre, tag, books);
+    });
+  });
+}
+
+/** ジャンル×タグ: タグクリック時に本一覧をパネルに表示 */
+function _showGenreTagBooks(genre, tag, books) {
+  const resultEl = document.getElementById('genreTagResult');
+  if (!resultEl) return;
+
+  const matched = books
+    .filter(b => normalizeGenre(b.genre) === genre)
+    .filter(b => generateDetailedTagsForBook(b, genre).includes(tag))
+    .sort((a, b) => {
+      if (a.completed && !b.completed) return -1;
+      if (!a.completed && b.completed) return 1;
+      return (b.completed_date || '').localeCompare(a.completed_date || '');
+    });
+
+  if (matched.length === 0) {
+    resultEl.innerHTML = `<div class="genre-tag-result-header"><strong>「${escapeHtml(tag)}」</strong>（${escapeHtml(genre)}）— 該当する本はありません<button class="tag-detail-close" id="genreTagClose">✕</button></div>`;
+    resultEl.style.display = '';
+  } else {
+    const items = matched.map(b => {
+      const idx = allBooks.indexOf(b);
+      const status = b.completed
+        ? `<span class="tag-detail-read">読了 ${(b.completed_date || '').slice(0, 7)}</span>`
+        : `<span class="tag-detail-unread">未読</span>`;
+      const stars = b.rating ? '★'.repeat(Math.round(b.rating)) + '<span style="opacity:.3">' + '★'.repeat(5 - Math.round(b.rating)) + '</span>' : '';
+      return `<div class="tag-detail-book genre-tag-book-item" ${idx >= 0 ? `data-book-idx="${idx}"` : ''} style="cursor:pointer">
+        ${b.cover_url ? `<img class="tag-detail-cover" src="${escapeHtml(b.cover_url)}" alt="" loading="lazy">` : '<div class="tag-detail-cover tag-detail-cover-placeholder"></div>'}
+        <div class="tag-detail-info">
+          <strong>${escapeHtml(b.title || '—')}</strong><br>
+          <small>${escapeHtml(b.author || '')}</small><br>
+          ${status}${stars ? `<span class="genre-tag-stars">${stars}</span>` : ''}
+          ${b.summary ? `<p class="genre-tag-book-summary">${escapeHtml(b.summary.slice(0, 90))}…</p>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    resultEl.innerHTML = `
+      <div class="tag-detail-header genre-tag-result-header">
+        <strong>「${escapeHtml(tag)}」</strong>&ensp;${escapeHtml(genre)}&ensp;— ${matched.length}冊
+        <button class="tag-detail-close" id="genreTagClose">✕</button>
+      </div>
+      <div class="tag-detail-list">${items}</div>`;
+    resultEl.style.display = '';
+  }
+
+  resultEl.querySelector('#genreTagClose')?.addEventListener('click', () => {
+    resultEl.style.display = 'none';
+  });
+  resultEl.querySelectorAll('.genre-tag-book-item[data-book-idx]').forEach(item => {
+    item.addEventListener('click', () => {
+      const idx = parseInt(item.dataset.bookIdx);
+      if (!isNaN(idx) && allBooks[idx]) openBookDetail(allBooks[idx]);
+    });
+  });
+  resultEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 /* --- Rendering --- */

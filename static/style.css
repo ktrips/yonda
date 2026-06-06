@@ -1097,6 +1097,63 @@ header {
   padding: 2rem; text-align: center; color: var(--text-secondary);
 }
 
+/* === ジャンル×タグ パネル === */
+.genre-tag-grid {
+  display: flex; flex-direction: column; gap: 0.6rem; padding: 0.25rem 0;
+}
+.genre-tag-row {
+  display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.5rem;
+  padding: 0.5rem 0.6rem; background: var(--bg-card);
+  border-radius: var(--radius); border: 1px solid var(--border);
+}
+.genre-tag-label {
+  min-width: 9rem; max-width: 12rem; flex-shrink: 0;
+  font-size: 0.8rem; font-weight: 700; color: var(--text);
+  padding-left: 0.55rem; line-height: 1.5;
+  display: flex; flex-direction: column;
+}
+.genre-tag-total {
+  font-size: 0.7rem; font-weight: 400; color: var(--text-secondary);
+}
+.genre-tag-chips {
+  display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; flex: 1;
+}
+.genre-tag-chip {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  padding: 0.22rem 0.55rem; font-size: 0.75rem;
+  background: var(--accent-light); color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 20px;
+  cursor: pointer; transition: background 0.15s, color 0.15s, transform 0.1s;
+  font-family: var(--font-body);
+}
+.genre-tag-chip:hover { background: var(--accent); color: #fff; transform: scale(1.05); }
+.genre-tag-chip.selected { background: var(--accent); color: #fff; font-weight: 700; }
+.genre-tag-chip-cnt {
+  font-size: 0.68rem; opacity: 0.8;
+  background: rgba(0,0,0,0.08); border-radius: 8px; padding: 0 0.3rem;
+}
+.genre-tag-empty-hint {
+  font-size: 0.72rem; color: var(--text-secondary); font-style: italic;
+}
+.genre-tag-result {
+  margin-top: 0.75rem; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--bg-card); overflow: hidden;
+}
+.genre-tag-result-header {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+}
+.genre-tag-book-summary {
+  margin: 0.2rem 0 0; font-size: 0.72rem; color: var(--text-secondary);
+  line-height: 1.4;
+}
+.genre-tag-stars {
+  margin-left: 0.4rem; font-size: 0.75rem; color: var(--accent);
+}
+@media (max-width: 600px) {
+  .genre-tag-row { flex-direction: column; }
+  .genre-tag-label { min-width: unset; max-width: unset; }
+}
+
 /* === Loading === */
 #loading { text-align: center; padding: 3rem 1rem; }
 .spinner {
