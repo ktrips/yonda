@@ -1340,6 +1340,12 @@ def api_fetch():
                 daemon=False,
                 name="insights-backfill",
             ).start()
+            # 図書館本のジャンル・概要未設定を自動補完（最大5冊/回）
+            threading.Thread(
+                target=_backfill_library_genre,
+                daemon=False,
+                name="library-genre-backfill",
+            ).start()
             return jsonify(result)
         previous_audible = (
             library_service.load_saved_for(library_id)
@@ -1353,6 +1359,13 @@ def api_fetch():
             message = _create_completed_books_message({library_id: previous_audible}, {library_id: payload})
             if message:
                 result["message"] = message
+        if library_id == "setagaya":
+            import threading
+            threading.Thread(
+                target=_backfill_library_genre,
+                daemon=False,
+                name="library-genre-backfill",
+            ).start()
         return jsonify(result)
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 400
@@ -1746,7 +1759,7 @@ def _call_text_ai(prompt: str, max_tokens: int = 2200, temperature: float = 0.2,
 
     if provider == "openai":
         payload = {
-            "model": "gpt-5-nano",
+            "model": "gpt-4o-mini",
             "messages": [{"role": "user", "content": prompt}],
             "max_completion_tokens": max_tokens,
         }
@@ -1760,7 +1773,7 @@ def _call_text_ai(prompt: str, max_tokens: int = 2200, temperature: float = 0.2,
         )
         r.raise_for_status()
         text = (r.json().get("choices", [{}])[0].get("message", {}).get("content") or "").strip()
-        return text, provider, "gpt-5-nano"
+        return text, provider, "gpt-4o-mini"
 
     models_to_try = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-2.5-flash"]
     last_err = None
@@ -1992,6 +2005,27 @@ def _backfill_missing_insights(max_books: int = 10) -> dict:
                 processed, skipped, errors, "1+" if remaining else "0")
     return {"processed": processed, "skipped": skipped, "errors": errors,
             "has_remaining": bool(remaining)}
+
+
+def _backfill_library_genre(library_id: str = "setagaya", max_books: int = 5) -> None:
+    """fetchの後バックグラウンドで呼ばれ、ジャンル・概要未設定の図書館本を補完する。"""
+    try:
+        result = library_service.enrich_library_books_missing_genre(
+            library_id=library_id, max_books=max_books
+        )
+        still_missing = [b for b in result.get("books", []) if not b.get("genre")]
+        ai_updated = 0
+        if still_missing:
+            ai_updated = _enrich_missing_books_with_ai(library_id, still_missing)
+        logger.info(
+            "library-genre-backfill: updated=%d ai_updated=%d skipped=%d errors=%d",
+            result.get("updated", 0),
+            ai_updated,
+            result.get("skipped", 0),
+            result.get("errors", 0),
+        )
+    except Exception as e:
+        logger.warning("library-genre-backfill エラー: %s", e, exc_info=True)
 
 
 @app.route("/api/enrich", methods=["POST"])
