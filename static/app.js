@@ -522,6 +522,10 @@ function normalizeGenre(genreStr) {
   if (parts.some(p => ['ミステリー', 'サスペンス', 'スリラー', 'ホラー', '推理'].some(kw => p.includes(kw))))
     return 'ミステリー・サスペンス';
 
+  // ── SF・ファンタジー系は科学・テクノロジー優先（"文学・フィクション / SF" 等を考慮）──
+  if (parts.some(p => ['SF', 'Sf', 'sf', 'サイエンスフィクション', 'ファンタジー', 'ファンタジー・マジック'].some(kw => p.includes(kw))))
+    return '科学・テクノロジー';
+
   // ── GENRE_NORMALIZE_MAP で直接マッピング（メイン完全一致優先）──
   if (GENRE_NORMALIZE_MAP[main]) return GENRE_NORMALIZE_MAP[main];
 
