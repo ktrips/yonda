@@ -1873,6 +1873,7 @@ JSON形式:
             continue
         heading = _trim_text(point.get("heading") or "ポイント", 40)
         body = _trim_text(point.get("text") or "", 220)
+        body = re.sub(r'^(本書[はでにを]、?|この本[はでにを]、?|著者[はが]、?)', '', body).strip()
         if len(body) > 200:
             body = body[:200]
         if body:
@@ -2103,6 +2104,7 @@ def _enrich_missing_books_with_ai(library_id: str, books_summary: list[dict]) ->
 著者: {author or "不明"}
 
 JSONのみ出力してください。前置きや説明は不要です。
+概要は「本書は」「本書では」「この本は」などの書き出しを使わず、内容を直接述べてください。
 
 {{
   "genre": "ジャンル（例: 科学・工学 / 一般向け科学 など）",
@@ -2117,6 +2119,7 @@ JSONのみ出力してください。前置きや説明は不要です。
                 book["genre"] = data["genre"].strip()
             if needs_summary and data.get("summary"):
                 s = data["summary"].strip()
+                s = re.sub(r'^(本書[はでにを]、?|この本[はでにを]、?|著者[はが]、?)', '', s).strip()
                 book["full_summary"] = s
                 book["summary"] = s[:100] + "…" if len(s) > 100 else s
             updated += 1

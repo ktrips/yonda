@@ -2896,10 +2896,18 @@ function renderMessageBookItem(item) {
   const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
   const summary = (book.summary || '').trim();
   const summaryCell = summary ? escapeHtml(summary.length > 80 ? summary.substring(0, 80) + '…' : summary) : '—';
-  const genre = book.genre ? escapeHtml(book.genre.length > 30 ? book.genre.substring(0, 30) + '…' : book.genre) : '—';
+  const genre = book.genre ? genreBadgeHtml(book, true) : '—';
   const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span>` : '';
   const tsundoku = getTsundokuDays(book);
   const tsundokuStr = tsundoku != null ? tsundoku + '日' : '—';
+  const supplementHtml = titleSupplementHtml(book);
+  const hasRating = (displayRating(book) || 0) > 0;
+  const hasComment = !!ratingCommentText(book);
+  const reviewUrl = reviewUrlForBook(book);
+  const unratedBtn = book.completed && !hasRating && !hasComment && reviewUrl
+    ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener"
+          class="btn-unrated" title="評価を入力" onclick="event.stopPropagation()">未評価</a>`
+    : '';
   return `
     <tr class="message-book-row">
       <td class="col-cover"><img src="${escapeHtml(book.cover_url || NO_COVER)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'"></td>
@@ -2907,6 +2915,8 @@ function renderMessageBookItem(item) {
         <button type="button" class="message-book-title-link message-detail-open" data-message-book-index="${refIndex}">
           ${completedBadge}${favoriteBadge}${escapeHtml(book.title || '不明なタイトル')}
         </button>
+        ${supplementHtml ? `<div class="title-supplement-cell">${supplementHtml}</div>` : ''}
+        ${unratedBtn}
       </td>
       <td class="col-author" title="${escapeHtml(book.author || '')}">${escapeHtml(book.author || '')}</td>
       <td class="col-summary" title="${summary ? escapeHtml(summary) : ''}">${summaryCell}</td>
@@ -3417,6 +3427,13 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
     const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
     const genre = book.genre ? genreBadgeHtml(book, true) : '—';
     const supplementHtml = titleSupplementHtml(book);
+    const hasRating = (displayRating(book) || 0) > 0;
+    const hasComment = !!ratingCommentText(book);
+    const reviewUrl = reviewUrlForBook(book);
+    const unratedBtn = book.completed && !hasRating && !hasComment && reviewUrl
+      ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener"
+            class="btn-unrated" title="評価を入力" onclick="event.stopPropagation()">未評価</a>`
+      : '';
     const summary = (book.summary || '').trim();
     const summaryCell = summary ? escapeHtml(summary.length > 80 ? summary.substring(0, 80) + '…' : summary) : '—';
     const tsundoku = getTsundokuDays(book);
@@ -3428,6 +3445,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
         <td class="col-title">
           <div>${completedBadge}${favoriteBadge}${escapeHtml(book.title)}</div>
           ${supplementHtml ? `<div class="title-supplement-cell">${supplementHtml}</div>` : ''}
+          ${unratedBtn}
         </td>
         <td class="col-author" title="${escapeHtml(book.author || '')}">${escapeHtml(book.author || '')}</td>
         <td class="col-summary" title="${summary ? escapeHtml(summary) : ''}">${summaryCell}</td>

@@ -1859,7 +1859,23 @@ header {
 .book-table .my-rating-under-title-cell .stars { color: var(--star); letter-spacing: -1px; }
 .book-table .my-rating-under-title-cell .my-rating-comment { margin-left: 0.25rem; }
 .book-table .col-author { max-width: 100px; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.book-table .col-genre { max-width: 180px; }
+.book-table .col-genre { max-width: 120px; }
+.genre-badge { font-size: 0.6rem; }
+.genre-original { font-size: 0.56rem; }
+
+.btn-unrated {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.6rem; font-weight: 600;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-unrated:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 .book-table .col-summary { min-width: 180px; max-width: 320px; font-size: 0.72rem; color: var(--text-secondary); line-height: 1.3; }
 .book-table .col-asin { font-size: 0.7rem; font-family: monospace; color: var(--text-muted); }
 .book-table .col-runtime { min-width: 5em; font-size: 0.8rem; color: var(--text-secondary); }
