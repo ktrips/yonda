@@ -1008,13 +1008,16 @@ function populateRankingFilters() {
 }
 
 /** ランキング得点: 表示評価 > お気に入り > コメント文字数 > カタログ評価 の優先順
- *  優先度: 星(100000) > ♥(10000) > コメント1文字(10) > カタログ評価(0〜5) */
+ *  優先度: 星(100000) > ♥(10000) > コメント最大9999文字(1pt/文字) > カタログ評価(/100) */
 function rankingScore(book) {
   const stars      = displayRating(book) || 0;
   const favorite   = book.favorite ? 1 : 0;
-  const commentLen = ((book.source === 'audible_jp' ? book.review_headline : book.comment) || '').trim().length;
-  const catalog    = book.catalog_rating || 0;
-  return stars * 100000 + favorite * 10000 + commentLen * 10 + catalog;
+  const commentLen = Math.min(
+    ((book.source === 'audible_jp' ? book.review_headline : book.comment) || '').trim().length,
+    9999  // 最大9999pt → ♥の10000ptを絶対に超えない
+  );
+  const catalog = (book.catalog_rating || 0) / 100; // 最大0.05pt → コメント1文字(1pt)を超えない
+  return stars * 100000 + favorite * 10000 + commentLen + catalog;
 }
 
 function getRankingByGenre() {
