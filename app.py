@@ -1346,6 +1346,13 @@ def api_fetch():
                 daemon=False,
                 name="library-genre-backfill",
             ).start()
+            # Kindle本のジャンル・概要未設定を自動補完（最大5冊/回）
+            threading.Thread(
+                target=_backfill_library_genre,
+                kwargs={"library_id": "kindle"},
+                daemon=False,
+                name="kindle-genre-backfill",
+            ).start()
             return jsonify(result)
         previous_audible = (
             library_service.load_saved_for(library_id)
@@ -1383,6 +1390,13 @@ def _api_fetch_kindle(session_id: str, otp: str):
     if not creds or not creds.get("user_id") or not creds.get("password"):
         library_service.fetch_and_save("kindle")
         combined = library_service.load_saved()
+        import threading
+        threading.Thread(
+            target=_backfill_library_genre,
+            kwargs={"library_id": "kindle"},
+            daemon=False,
+            name="kindle-genre-backfill",
+        ).start()
         return jsonify({"success": True, **(combined or {})})
 
     if session_id and otp:
@@ -1406,6 +1420,13 @@ def _api_fetch_kindle(session_id: str, otp: str):
         # OTP認証成功後もセッションを保存（次回自動取得時に再利用）
         adapter.save_session(session)
         combined = library_service.save_kindle_records_and_load(records)
+        import threading
+        threading.Thread(
+            target=_backfill_library_genre,
+            kwargs={"library_id": "kindle"},
+            daemon=False,
+            name="kindle-genre-backfill",
+        ).start()
         return jsonify({"success": True, **combined})
 
     # 初回: セッション再利用を試してからログイン
@@ -1431,6 +1452,13 @@ def _api_fetch_kindle(session_id: str, otp: str):
         logger.info("保存済みセッションを使用してデータ取得")
         records = adapter.fetch_history(session)
         combined = library_service.save_kindle_records_and_load(records)
+        import threading
+        threading.Thread(
+            target=_backfill_library_genre,
+            kwargs={"library_id": "kindle"},
+            daemon=False,
+            name="kindle-genre-backfill",
+        ).start()
         return jsonify({"success": True, **combined})
 
     # 3. セッションが無効なら再ログイン
@@ -1442,6 +1470,13 @@ def _api_fetch_kindle(session_id: str, otp: str):
         # ログイン成功時もセッションを保存（次回自動取得時に再利用）
         adapter.save_session(session)
         combined = library_service.save_kindle_records_and_load(records)
+        import threading
+        threading.Thread(
+            target=_backfill_library_genre,
+            kwargs={"library_id": "kindle"},
+            daemon=False,
+            name="kindle-genre-backfill",
+        ).start()
         return jsonify({"success": True, **combined})
     if needs_otp and otp_page_html:
         sid = str(uuid.uuid4())

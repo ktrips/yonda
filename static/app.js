@@ -2904,7 +2904,7 @@ function renderMessageBookItem(item) {
   const hasRating = (displayRating(book) || 0) > 0;
   const hasComment = !!ratingCommentText(book);
   const reviewUrl = reviewUrlForBook(book);
-  const unratedBtn = book.completed && !hasRating && !hasComment && reviewUrl
+  const unratedBtn = book.completed && !hasComment && reviewUrl
     ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener"
           class="btn-unrated" title="評価を入力" onclick="event.stopPropagation()">未評価</a>`
     : '';
@@ -3430,7 +3430,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
     const hasRating = (displayRating(book) || 0) > 0;
     const hasComment = !!ratingCommentText(book);
     const reviewUrl = reviewUrlForBook(book);
-    const unratedBtn = book.completed && !hasRating && !hasComment && reviewUrl
+    const unratedBtn = book.completed && !hasComment && reviewUrl
       ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener"
             class="btn-unrated" title="評価を入力" onclick="event.stopPropagation()">未評価</a>`
       : '';
