@@ -1003,14 +1003,12 @@ function populateRankingFilters() {
   if ([...yearSel.options].some(o => o.value === yearCurrent)) yearSel.value = yearCurrent;
 }
 
-/** ランキング得点: Audibleのカタログ評価を最優先し、お気に入りを加点 */
+/** ランキング得点: 自分の星評価 > お気に入り > カタログ評価 の優先順 */
 function rankingScore(book) {
-  const favoriteBonus = book.favorite ? 10 : 0;
-  if (book.source === 'audible_jp' && (book.catalog_rating || 0) > 0) {
-    return 1000 + (book.catalog_rating * 10) + favoriteBonus;
-  }
-  const stars = displayRating(book) || 0;
-  return stars * 10 + favoriteBonus;
+  const myRating     = (book.rating || 0);          // 自分の星（1〜5）
+  const favorite     = book.favorite ? 1 : 0;       // お気に入り
+  const catalogRate  = (book.catalog_rating || 0);  // カタログ評価（同値時の補助）
+  return myRating * 1000 + favorite * 100 + catalogRate;
 }
 
 function getRankingByGenre() {
