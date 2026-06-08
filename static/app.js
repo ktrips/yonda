@@ -500,6 +500,9 @@ const GENRE_NORMALIZE_MAP = {
   'コメディー・落語':                  'ライフ',
   '官能・ロマンス':                    'ライフ',
   '新書':                              'ライフ',
+  '教育・学習':                        'ライフ',
+  '語学学習':                          'ライフ',
+  '単語・言語・文法':                  'ライフ',
 };
 
 /**
@@ -546,7 +549,7 @@ function normalizeGenre(genreStr) {
     return '科学・テクノロジー';
   if (['歴史', 'history', '文化史', '宗教', '文明', '文化', '哲学'].some(kw => genreLow.includes(kw)))
     return '歴史・文化';
-  if (['ライフ', '健康', '料理', '旅行', 'アート', 'life'].some(kw => genreLow.includes(kw)))
+  if (['ライフ', '健康', '料理', '旅行', 'アート', 'life', '教育', '学習', '語学'].some(kw => genreLow.includes(kw)))
     return 'ライフ';
 
   return 'その他';
@@ -2906,7 +2909,7 @@ function renderMessageBookItem(item) {
   const reviewUrl = reviewUrlForBook(book);
   const unratedBtn = book.completed && !hasComment && reviewUrl
     ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener"
-          class="btn-unrated" title="評価を入力" onclick="event.stopPropagation()">未評価</a>`
+          class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`
     : '';
   return `
     <tr class="message-book-row">
@@ -3387,6 +3390,12 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
 
     const genreHtml = book.genre ? `<div class="book-card-genre">${genreBadgeHtml(book)}</div>` : '';
     const supplementHtml = titleSupplementHtml(book);
+    const hasComment = !!ratingCommentText(book);
+    const reviewUrl = reviewUrlForBook(book);
+    const unratedBtn = book.completed && !hasComment && reviewUrl
+      ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener"
+            class="btn-unrated btn-unrated-card" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`
+      : '';
     const summaryHtml = book.summary ? `<div class="book-card-summary">${escapeHtml(book.summary)}</div>` : '';
     const progressBarHtml = book.source === 'kindle' && (book.percent_complete || 0) > 0 ? renderProgressBar(book) : '';
 
@@ -3396,7 +3405,7 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
              onerror="this.src='${NO_COVER}'">
         <div class="book-card-body">
           <div class="book-card-title">${completedBadge}${favoriteBadge}${srcBadge}${escapeHtml(book.title)}</div>
-          ${supplementHtml ? `<div class="book-card-title-supplement">${supplementHtml}</div>` : ''}
+          ${supplementHtml ? `<div class="book-card-title-supplement">${supplementHtml}${unratedBtn}</div>` : unratedBtn}
           <div class="book-card-author">${escapeHtml(book.author || '')}${(book.runtime_length_min || 0) > 0 ? ` · ${formatRuntime(book.runtime_length_min)}` : ''}${book.completed && book.completed_date ? ` · 読了: ${formatDateOnly(book.completed_date)}` : ''}</div>
           ${genreHtml}
           ${progressBarHtml}
@@ -3432,7 +3441,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
     const reviewUrl = reviewUrlForBook(book);
     const unratedBtn = book.completed && !hasComment && reviewUrl
       ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener"
-            class="btn-unrated" title="評価を入力" onclick="event.stopPropagation()">未評価</a>`
+            class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`
       : '';
     const summary = (book.summary || '').trim();
     const summaryCell = summary ? escapeHtml(summary.length > 80 ? summary.substring(0, 80) + '…' : summary) : '—';
@@ -3693,6 +3702,7 @@ const DETAIL_TAG_PATTERNS = {
     { tag: '読書・本',           words: ['読書', '本', '書籍', '図書館', '名著', '読み方', '文章'] },
     { tag: 'フィットネス・スポーツ', words: ['運動', 'フィットネス', 'スポーツ', 'トレーニング', 'ランニング'] },
     { tag: '環境・サステナブル', words: ['環境', 'サステナブル', 'エコ', '気候変動', 'sustainable'] },
+    { tag: '教育・学習',         words: ['教育', '学習', '語学', '英語', '言語', '読書法', '思考法', '勉強', 'learning'] },
   ],
 };
 
