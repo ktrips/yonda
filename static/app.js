@@ -1003,11 +1003,12 @@ function populateRankingFilters() {
   if ([...yearSel.options].some(o => o.value === yearCurrent)) yearSel.value = yearCurrent;
 }
 
-/** ランキング得点: 自分の星評価 > お気に入り > カタログ評価 の優先順 */
+/** ランキング得点: 表示評価 > お気に入り > カタログ評価 の優先順
+ *  Audible は catalog_rating を表示評価として使用（book.rating が未設定のため）*/
 function rankingScore(book) {
-  const myRating     = (book.rating || 0);          // 自分の星（1〜5）
-  const favorite     = book.favorite ? 1 : 0;       // お気に入り
-  const catalogRate  = (book.catalog_rating || 0);  // カタログ評価（同値時の補助）
+  const myRating    = displayRating(book) || 0;   // 表示星（Audible: catalog_rating, 他: book.rating）
+  const favorite    = book.favorite ? 1 : 0;      // お気に入り
+  const catalogRate = book.catalog_rating || 0;   // 同値時の補助（小数点以下で差をつける）
   return myRating * 1000 + favorite * 100 + catalogRate;
 }
 
