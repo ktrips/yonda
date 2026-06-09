@@ -607,7 +607,10 @@ LIBRARY_COVER_URL = "/static/book.png"
 
 def _clean_book_text(text: str) -> str:
     text = re.sub(r"<[^>]+>", " ", text or "")
-    return re.sub(r"\s+", " ", text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
+    # 「本書は」「本書では」「この本は」等の書き出しを除去
+    text = re.sub(r"^(本書[はでにをも]、?|この本[はでにをも]、?|著者[はが]、?)", "", text).strip()
+    return text
 
 
 def _normalize_book_key(text: str) -> str:
