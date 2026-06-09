@@ -3391,8 +3391,9 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
 
     const cover = book.cover_url || NO_COVER;
     const srcClass = book.source === 'audible_jp' ? ' source-audible' : '';
-    const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span> ` : '';
-    const completedBadge = book.completed ? '<span class="badge-completed">読了</span> ' : '';
+    const srcShort = { setagaya: '図', audible_jp: 'A', kindle: 'K' }[book.source] || '';
+    const srcBadge = srcShort ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short" title="${escapeHtml(sourceLabel(book.source))}">${srcShort}</span> ` : '';
+    const completedBadge = book.completed ? '<span class="badge-completed badge-short" title="読了">了</span> ' : '';
     const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
 
     const genreHtml = book.genre ? `<div class="book-card-genre">${genreBadgeHtml(book)}</div>` : '';

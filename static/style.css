@@ -1808,7 +1808,16 @@ header {
 }
 .badge-setagaya { background: var(--accent-light); color: var(--accent); }
 .badge-audible_jp { background: var(--audible-light); color: var(--audible-accent); }
+.badge-kindle { background: #ddeeff; color: #3366aa; }
 .badge-favorite { color: #c45c6a; font-size: 0.75rem; }
+.badge-short {
+  padding: 0.06rem 0.25rem;
+  font-size: 0.6rem;
+  min-width: 1.2em;
+  text-align: center;
+  border-radius: 3px;
+  letter-spacing: 0;
+}
 
 .book-card.completed { border-left: 3px solid var(--completed); }
 .book-card-clickable, .book-row-clickable { cursor: pointer; }
@@ -2396,7 +2405,7 @@ header {
   .book-card .book-cover {
     width: 53px; height: 74px;
   }
-  .book-card .badge-source { display: none; }
+  .book-card .badge-source:not(.badge-short) { display: none; }
   .book-card .book-card-genre,
   .book-card .book-card-summary,
   .book-card .book-card-comment,
