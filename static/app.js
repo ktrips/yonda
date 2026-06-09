@@ -17,6 +17,7 @@ const API = {
   amazonList: '/api/amazon-list',
   bookInsights: '/api/book-insights',
   messages: '/api/messages',
+  addPaperBook: '/api/add-paper-book',
 };
 
 let allBooks = [];
@@ -562,6 +563,52 @@ function normalizeGenre(genreStr) {
 /** フィルター・グラフ・ランキングのジャンル表示（normalizeGenre に委譲） */
 function displayGenre(genre) { return normalizeGenre(genre); }
 function rankingGenre(genre)  { return normalizeGenre(genre); }
+
+/** 紙の本として既読登録 */
+async function addPaperBook(title, author, coverUrl, summary, genre) {
+  if (!title) return;
+  const today = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const jstOffset = '+09:00';
+  const completedDate = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}T${pad(today.getHours())}:${pad(today.getMinutes())}:${pad(today.getSeconds())}${jstOffset}`;
+  try {
+    const res = await fetch(API.addPaperBook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, author, cover_url: coverUrl, summary, genre, completed_date: completedDate }),
+    });
+    const data = await res.json();
+    if (data.duplicate) {
+      showToast(`「${title}」はすでに登録済みです`, 'info');
+      return;
+    }
+    if (!data.success) {
+      showToast(`登録失敗: ${data.error || '不明なエラー'}`, 'error');
+      return;
+    }
+    showToast(`「${title}」を紙の本として登録しました`, 'success');
+    if (data.books) {
+      allBooks = data.books;
+      applyFilters();
+    }
+  } catch (e) {
+    showToast('登録中にエラーが発生しました', 'error');
+  }
+}
+
+/** トースト通知 */
+function showToast(message, type = 'success') {
+  let toast = document.getElementById('yondaToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'yondaToast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.className = `yonda-toast yonda-toast-${type} show`;
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
 
 /**
  * 正規化ジャンルの色付きバッジ HTML を返す
@@ -1455,6 +1502,9 @@ function renderBookSearchResults() {
           <a href="${urls.bookoff}" target="_blank" rel="noopener" class="book-search-link book-search-link-bookoff">ブックオフ</a>
           <a href="${urls.setagaya}" target="_blank" rel="noopener" class="book-search-link book-search-link-setagaya book-search-link-library">図書館</a>
           <button class="book-search-link btn-amazon-list-add" data-book='${escapeHtml(bookData)}'>+ Amazonリスト</button>
+          <button class="book-search-link btn-add-paper-book"
+            data-title="${escapeAttr(query)}" data-author=""
+            onclick="addPaperBook(this.dataset.title, this.dataset.author, '', '', '')">＋紙の本</button>
         </div>
       </div>
     `;
@@ -1477,6 +1527,9 @@ function renderBookSearchResults() {
             <a href="${u.bookoff}" target="_blank" rel="noopener" class="book-search-link book-search-link-bookoff">ブックオフ</a>
             <a href="${u.setagaya}" target="_blank" rel="noopener" class="book-search-link book-search-link-setagaya book-search-link-library">図書館</a>
             <button class="book-search-link btn-amazon-list-add" data-book='${escapeHtml(bookData)}'>+ Amazonリスト</button>
+            <button class="book-search-link btn-add-paper-book"
+              data-title="${escapeAttr(book.title || '')}" data-author="${escapeAttr(book.author || '')}"
+              onclick="addPaperBook(this.dataset.title, this.dataset.author, '${escapeAttr(book.cover_url || '')}', '${escapeAttr((book.full_summary || book.summary || ''))}', '${escapeAttr(book.genre || '')}')">＋紙の本</button>
           </div>
         </div>
       `;
@@ -1972,6 +2025,15 @@ function renderAiRecommendBookCards(books) {
             <a href="${urls.bookoff}" target="_blank" rel="noopener">ブックオフ</a>
             <a href="${urls.setagaya}" target="_blank" rel="noopener">図書館</a>
           </div>
+          <button class="btn-add-paper-book"
+            data-title="${escapeAttr(book.title)}"
+            data-author="${escapeAttr(book.author || '')}"
+            onclick="event.stopPropagation();(async()=>{
+              const btn=this;
+              const img=btn.closest('.ai-recommend-book-card')?.querySelector('.ai-recommend-book-cover img');
+              const sumEl=btn.closest('.ai-recommend-book-card')?.querySelector('.ai-recommend-book-summary');
+              await addPaperBook(btn.dataset.title, btn.dataset.author, img?.src||'', sumEl?.textContent||'', '');
+            })()">＋紙の本</button>
         </div>
       </div>
     `;
@@ -3412,10 +3474,10 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
         <img class="book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
              onerror="this.src='${NO_COVER}'">
         <div class="book-card-body">
-          <div class="book-card-title">${completedBadge}${favoriteBadge}${srcBadge}${escapeHtml(book.title)}</div>
+          <div class="book-card-title">${favoriteBadge}${escapeHtml(book.title)}</div>
           ${supplementHtml ? `<div class="book-card-title-supplement">${supplementHtml}${unratedBtn}</div>` : unratedBtn}
           <div class="book-card-author">${escapeHtml(book.author || '')}${(book.runtime_length_min || 0) > 0 ? ` · ${formatRuntime(book.runtime_length_min)}` : ''}${book.completed && book.completed_date ? ` · 読了: ${formatDateOnly(book.completed_date)}` : ''}</div>
-          ${genreHtml}
+          <div class="book-card-genre-row">${completedBadge}${srcBadge}${genreHtml}</div>
           ${progressBarHtml}
           ${!book.completed ? `<div class="book-card-meta">${formatProgress(book) ? `<span>進捗: ${formatProgress(book)}</span>` : `<span>${formatDate(book.loan_date)}</span>`}</div>` : ''}
           ${summaryHtml}

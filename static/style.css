@@ -432,6 +432,38 @@ header {
   background: #e67e22;
   color: #fff;
 }
+.btn-add-paper-book {
+  background: #5a8a5a;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.btn-add-paper-book:hover { background: #3d6b3d; }
+
+/* === 紙の本 AI推薦カード内ボタン === */
+.ai-recommend-book-card .btn-add-paper-book {
+  margin-top: 0.5rem;
+  display: inline-block;
+  padding: 0.3rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  border: none; cursor: pointer;
+}
+
+/* === トースト通知 === */
+.yonda-toast {
+  position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(2rem);
+  background: #333; color: #fff;
+  padding: 0.6rem 1.25rem; border-radius: 6px;
+  font-size: 0.85rem; white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  z-index: 9999;
+}
+.yonda-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.yonda-toast.yonda-toast-success { background: #2d7a2d; }
+.yonda-toast.yonda-toast-error   { background: #a33; }
+.yonda-toast.yonda-toast-info    { background: #555; }
 
 /* === Amazon ほしいものリスト === */
 .amazon-list-section {
@@ -1739,6 +1771,16 @@ header {
   width: 100%; font-size: 0.68rem; color: var(--text-secondary);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   overflow: hidden; line-height: 1.3;
+}
+.book-card-genre-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin-bottom: 0.25rem;
+}
+.book-card-genre-row .book-card-genre {
+  margin-bottom: 0;
 }
 .book-card-genre {
   display: block;

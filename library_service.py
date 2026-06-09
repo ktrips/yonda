@@ -52,6 +52,7 @@ _JSON_MAP: dict[str, Path] = {
     "setagaya": DATA_DIR / "library_books.json",
     "audible_jp": DATA_DIR / "audible_books.json",
     "kindle": DATA_DIR / "kindle_books.json",
+    "paper": DATA_DIR / "paper_books.json",
 }
 
 AMAZON_LIST_PATH = DATA_DIR / "amazon_list.json"
@@ -310,8 +311,8 @@ def load_saved() -> Optional[dict]:
     all_books: list[dict] = []
     sources: list[dict] = []
 
-    # デフォルトのライブラリデータ: setagaya, audible_jp を優先（kindle はあれば追加）
-    load_order = ("setagaya", "audible_jp", "kindle")
+    # デフォルトのライブラリデータ: setagaya, audible_jp を優先（kindle, paper はあれば追加）
+    load_order = ("setagaya", "audible_jp", "kindle", "paper")
     for lid in load_order:
         path = _JSON_MAP.get(lid)
         if not path or not path.exists():
@@ -354,6 +355,38 @@ def load_saved_for(library_id: str) -> Optional[dict]:
         return None
     with open(path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def add_paper_book(book_data: dict) -> dict:
+    """紙の本を paper_books.json に追記して保存する。重複（タイトル+著者）はスキップ。"""
+    path = _JSON_MAP["paper"]
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            payload = json.load(f)
+    else:
+        payload = {
+            "library_id": "paper",
+            "library_name": "紙の本",
+            "books": [],
+        }
+
+    books: list[dict] = payload.get("books", [])
+    title_norm = (book_data.get("title") or "").strip().lower()
+    author_norm = (book_data.get("author") or "").strip().lower()
+    for existing in books:
+        if (existing.get("title") or "").strip().lower() == title_norm and \
+           (existing.get("author") or "").strip().lower() == author_norm:
+            return {"duplicate": True, "book": existing}
+
+    books.append(book_data)
+    payload["books"] = books
+    payload["fetch_date"] = book_data.get("completed_date", "")[:10]
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    return {"duplicate": False, "book": book_data}
 
 
 def get_available_libraries() -> list[dict]:

@@ -2064,6 +2064,109 @@ def _backfill_library_genre(library_id: str = "setagaya", max_books: int = 5) ->
         logger.warning("library-genre-backfill エラー: %s", e, exc_info=True)
 
 
+@app.route("/api/add-paper-book", methods=["POST"])
+def api_add_paper_book():
+    """紙の本を既読として登録する。ジャンル・概要が未設定なら Google Books / AI で補完。"""
+    try:
+        body = request.get_json(silent=True) or {}
+        title = (body.get("title") or "").strip()
+        if not title:
+            return jsonify({"success": False, "error": "タイトルは必須です"}), 400
+
+        author   = (body.get("author") or "").strip()
+        cover_url = (body.get("cover_url") or "").strip()
+        summary  = (body.get("summary") or "").strip()
+        genre    = (body.get("genre") or "").strip()
+        completed_date = (body.get("completed_date") or "").strip()
+        if not completed_date:
+            import pytz
+            jst = pytz.timezone("Asia/Tokyo")
+            completed_date = datetime.now(jst).strftime("%Y-%m-%dT%H:%M:%S+09:00")
+
+        # ── Google Books で表紙・概要・ジャンル補完 ──
+        needs_cover   = not cover_url
+        needs_summary = not summary
+        needs_genre   = not genre
+        if needs_cover or needs_summary or needs_genre:
+            q = f"{title} {author}".strip()
+            gb_result = _fetch_book_info_with_genre(q, want_title=title, want_author=author)
+            if gb_result:
+                if needs_cover and gb_result.get("cover_url"):
+                    cover_url = gb_result["cover_url"]
+                if needs_summary and gb_result.get("summary"):
+                    raw = gb_result["summary"].strip()
+                    raw = re.sub(r"^(本書[はでにをも]、?|この本[はでにをも]、?|著者[はが]、?)", "", raw).strip()
+                    summary = raw
+                if needs_genre and gb_result.get("genre"):
+                    genre = gb_result["genre"]
+
+        # ── まだ不足なら AI で補完 ──
+        if (not genre or not summary) and title:
+            tmp_book = {"title": title, "author": author, "genre": genre, "summary": summary}
+            ai_result = _enrich_missing_books_with_ai("paper", [tmp_book])
+            # ai_result は件数(int)なのでファイルから再取得
+            paper_path = library_service._json_path_for("paper")
+            if paper_path.exists():
+                import json as _json
+                pd = _json.load(open(paper_path, encoding="utf-8"))
+                for b in pd.get("books", []):
+                    if b.get("title") == title:
+                        genre   = genre   or b.get("genre", "")
+                        summary = summary or b.get("full_summary") or b.get("summary", "")
+                        break
+
+        book_record = {
+            "title":          title,
+            "author":         author,
+            "cover_url":      cover_url,
+            "summary":        (summary[:100] + "…" if len(summary) > 100 else summary) if summary else "",
+            "full_summary":   summary,
+            "genre":          genre,
+            "source":         "paper",
+            "completed":      True,
+            "completed_date": completed_date,
+            "loan_date":      completed_date[:10],
+            "rating":         0,
+            "comment":        "",
+            "favorite":       False,
+        }
+
+        result = library_service.add_paper_book(book_record)
+        if result.get("duplicate"):
+            return jsonify({"success": False, "duplicate": True, "error": "同じ本がすでに登録されています", "book": result["book"]})
+
+        combined = library_service.load_saved()
+        return jsonify({"success": True, "book": result["book"], **(combined or {})})
+    except Exception as e:
+        logger.warning("api_add_paper_book エラー: %s", e, exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def _fetch_book_info_with_genre(q: str, want_title: str = "", want_author: str = "") -> dict | None:
+    """Google Books から表紙URL・概要・ジャンルを一括取得"""
+    try:
+        params = {"q": q[:100], "maxResults": 5}
+        google_api_key = library_service._get_google_api_key()
+        if google_api_key:
+            params["key"] = google_api_key
+        r = requests.get("https://www.googleapis.com/books/v1/volumes", params=params, timeout=8)
+        r.raise_for_status()
+        data = r.json()
+        for item in data.get("items", []):
+            vi = item.get("volumeInfo", {})
+            links = vi.get("imageLinks", {})
+            cover = links.get("thumbnail") or links.get("smallThumbnail") or ""
+            if cover:
+                cover = cover.replace("http://", "https://")
+            desc = vi.get("description", "")
+            cats = vi.get("categories", [])
+            genre = " / ".join(cats) if cats else ""
+            return {"cover_url": cover, "summary": desc[:300] if desc else "", "genre": genre}
+    except Exception as e:
+        logger.debug("_fetch_book_info_with_genre エラー: %s", e)
+    return None
+
+
 @app.route("/api/enrich", methods=["POST"])
 def api_enrich():
     """書籍データ一括エンリッチ: insights/genre/summary 補完。
