@@ -568,7 +568,7 @@ function displayGenre(genre) { return normalizeGenre(genre); }
 function rankingGenre(genre)  { return normalizeGenre(genre); }
 
 /** 紙の本として既読登録 */
-async function addPaperBook(title, author, coverUrl, summary, genre) {
+async function addPaperBook(title, author, coverUrl, summary, genre, detailUrl = '') {
   if (!title) return;
 
   // フロントエンドで事前重複チェック（タイトルの正規化一致）
@@ -580,6 +580,9 @@ async function addPaperBook(title, author, coverUrl, summary, genre) {
     return;
   }
 
+  // カバー画像：指定があればそれを使い、なければ撮影写真（圧縮済み）を使用
+  const effectiveCover = coverUrl || window._lastBookPhotoCover || '';
+
   const today = new Date();
   const pad = n => String(n).padStart(2, '0');
   const jstOffset = '+09:00';
@@ -588,7 +591,13 @@ async function addPaperBook(title, author, coverUrl, summary, genre) {
     const res = await fetch(API.addPaperBook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, author, cover_url: coverUrl, summary, genre, completed_date: completedDate }),
+      body: JSON.stringify({
+        title, author,
+        cover_url: effectiveCover,
+        summary, genre,
+        completed_date: completedDate,
+        detail_url: detailUrl || '',
+      }),
     });
     const data = await res.json();
     if (data.duplicate) {
@@ -600,9 +609,13 @@ async function addPaperBook(title, author, coverUrl, summary, genre) {
       return;
     }
     showToast(`「${title}」を紙の本として登録しました`, 'success');
+    window._lastBookPhotoCover = null; // 撮影写真をクリア
     if (data.books) {
       allBooks = data.books;
+      for (const b of allBooks) b._normalizedGenre = normalizeGenre(b.genre || '');
       applyFilters();
+      // Yomuタブの検索結果を更新して登録した本を表示
+      if (activeMainTab === 'yomu') renderBookSearchResults();
     }
   } catch (e) {
     showToast('登録中にエラーが発生しました', 'error');
@@ -1607,6 +1620,12 @@ async function processBookPhoto(file) {
   }
 
   if (searchText) {
+    // 撮影した写真を表紙用に圧縮保存（200×280px / JPEG 75%）
+    try {
+      window._lastBookPhotoCover = await _compressImageToBase64(file, 200, 280);
+    } catch (_) {
+      window._lastBookPhotoCover = null;
+    }
     inputEl.value = searchText;
     const modelLabel = window._lastAiExtractModel || (window._lastAiExtractProvider === 'gemini' ? 'Gemini' : (window._lastAiExtractProvider === 'openai' ? 'OpenAI' : ''));
     const statusSuffix = modelLabel ? ` (${modelLabel})` : '';
@@ -1655,7 +1674,8 @@ function renderBookSearchResults() {
           <button class="book-search-link btn-amazon-list-add" data-book='${escapeHtml(bookData)}'>+ Amazonリスト</button>
           <button class="book-search-link btn-add-paper-book"
             data-title="${escapeAttr(query)}" data-author=""
-            onclick="addPaperBook(this.dataset.title, this.dataset.author, '', '', '')">＋紙の本</button>
+            data-detail-url="${escapeAttr(urls.amazon)}"
+            onclick="addPaperBook(this.dataset.title, this.dataset.author, '', '', '', this.dataset.detailUrl)">＋紙の本</button>
         </div>
       </div>
     `;
@@ -1680,7 +1700,8 @@ function renderBookSearchResults() {
             <button class="book-search-link btn-amazon-list-add" data-book='${escapeHtml(bookData)}'>+ Amazonリスト</button>
             <button class="book-search-link btn-add-paper-book"
               data-title="${escapeAttr(book.title || '')}" data-author="${escapeAttr(book.author || '')}"
-              onclick="addPaperBook(this.dataset.title, this.dataset.author, '${escapeAttr(book.cover_url || '')}', '${escapeAttr((book.full_summary || book.summary || ''))}', '${escapeAttr(book.genre || '')}')">＋紙の本</button>
+              data-detail-url="${escapeAttr(u.amazon)}"
+              onclick="addPaperBook(this.dataset.title, this.dataset.author, '${escapeAttr(book.cover_url || '')}', '${escapeAttr((book.full_summary || book.summary || ''))}', '${escapeAttr(book.genre || '')}', this.dataset.detailUrl)">＋紙の本</button>
           </div>
         </div>
       `;
@@ -2179,11 +2200,12 @@ function renderAiRecommendBookCards(books) {
           <button class="btn-add-paper-book"
             data-title="${escapeAttr(book.title)}"
             data-author="${escapeAttr(book.author || '')}"
+            data-detail-url="${escapeAttr(urls.amazon)}"
             onclick="event.stopPropagation();(async()=>{
               const btn=this;
               const img=btn.closest('.ai-recommend-book-card')?.querySelector('.ai-recommend-book-cover img');
               const sumEl=btn.closest('.ai-recommend-book-card')?.querySelector('.ai-recommend-book-summary');
-              await addPaperBook(btn.dataset.title, btn.dataset.author, img?.src||'', sumEl?.textContent||'', '');
+              await addPaperBook(btn.dataset.title, btn.dataset.author, img?.src||'', sumEl?.textContent||'', '', btn.dataset.detailUrl||'');
             })()">＋紙の本</button>
         </div>
       </div>
@@ -2836,18 +2858,40 @@ function updateSearchNoResultsPanel(query) {
   if (!panel) return;
   if (!query) {
     panel.style.display = 'none';
+    panel.innerHTML = '';
     return;
   }
   const urls = getBookSearchUrls(query, { bookTitle: query });
-  const kindleEl = document.getElementById('searchLinkKindle');
-  const amazonEl = document.getElementById('searchLinkAmazon');
-  const mercariEl = document.getElementById('searchLinkMercari');
-  const bookoffEl = document.getElementById('searchLinkBookoff');
-  if (kindleEl) kindleEl.href = urls.kindle;
-  if (amazonEl) amazonEl.href = urls.amazon;
-  if (mercariEl) mercariEl.href = urls.mercari;
-  if (bookoffEl) bookoffEl.href = urls.bookoff;
+  panel.innerHTML = `
+    <div class="snr-label">「${escapeHtml(query)}」の記録なし — 外部で探す</div>
+    <div class="snr-ext-row">
+      <a href="${escapeHtml(urls.amazon)}" target="_blank" rel="noopener" class="snr-btn snr-amazon">Amazon</a>
+      <a href="${escapeHtml(urls.audible)}" target="_blank" rel="noopener" class="snr-btn snr-audible">Audible</a>
+      <a href="${escapeHtml(urls.mercari)}" target="_blank" rel="noopener" class="snr-btn snr-mercari">メルカリ</a>
+      <a href="${escapeHtml(urls.bookoff)}" target="_blank" rel="noopener" class="snr-btn snr-bookoff">ブックオフ</a>
+      <a href="${escapeHtml(urls.setagaya)}" target="_blank" rel="noopener" class="snr-btn snr-library">図書館</a>
+    </div>
+    <div class="snr-paper-row">
+      <button type="button" class="snr-btn snr-paper" id="snrAddPaperBtn">＋ 紙の本として保存</button>
+    </div>
+  `;
   panel.style.display = 'block';
+
+  // +紙の本ボタン
+  document.getElementById('snrAddPaperBtn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('snrAddPaperBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '保存中…'; }
+    await addPaperBook(query, '', '', '', '', urls.amazon);
+    // 保存成功時はパネルを閉じる
+    const stillExists = allBooks.some(b => (b.title || '').trim().toLowerCase() === query.trim().toLowerCase());
+    if (stillExists) {
+      panel.style.display = 'none';
+      panel.innerHTML = '';
+    } else if (btn) {
+      btn.disabled = false;
+      btn.textContent = '＋ 紙の本として保存';
+    }
+  });
 }
 
 /* --- Rendering --- */

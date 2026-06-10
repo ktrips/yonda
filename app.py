@@ -2092,11 +2092,12 @@ def api_add_paper_book():
         now_iso = now_jst.strftime("%Y-%m-%dT%H:%M:%S+09:00")
         today = now_jst.strftime("%Y-%m-%d")
 
-        author    = (body.get("author") or "").strip()
-        cover_url = (body.get("cover_url") or "").strip()
-        summary   = (body.get("summary") or "").strip()
-        genre     = (body.get("genre") or "").strip()
-        status    = (body.get("status") or "unread").strip()   # unread / in_progress / completed
+        author     = (body.get("author") or "").strip()
+        cover_url  = (body.get("cover_url") or "").strip()
+        summary    = (body.get("summary") or "").strip()
+        genre      = (body.get("genre") or "").strip()
+        detail_url = (body.get("detail_url") or "").strip()
+        status     = (body.get("status") or "unread").strip()   # unread / in_progress / completed
         added_date = today
         completed_date = (body.get("completed_date") or "").strip()
         if status == "completed" and not completed_date:
@@ -2141,6 +2142,7 @@ def api_add_paper_book():
             "summary":        (summary[:100] + "…" if len(summary) > 100 else summary) if summary else "",
             "full_summary":   summary,
             "genre":          genre,
+            "detail_url":     detail_url,
             "source":         "paper",
             "status":         status,
             "completed":      status == "completed",

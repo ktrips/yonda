@@ -145,37 +145,59 @@ header {
 .header-search { flex: 1; min-width: 120px; max-width: 280px; margin-left: 1rem; position: relative; }
 .search-no-results {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   left: 0; right: 0;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 0.5rem 0.65rem;
+  padding: 0.75rem 0.8rem;
   z-index: 200;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+  min-width: 280px;
 }
-.search-no-results-label {
-  font-size: 0.72rem;
+.snr-label {
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  margin-bottom: 0.4rem;
+  margin-bottom: 0.6rem;
+  font-weight: 500;
 }
-.search-no-results-links {
+.snr-ext-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.45rem;
+  margin-bottom: 0.7rem;
 }
-.search-ext-link {
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.2rem 0.55rem;
-  border-radius: 99px;
+.snr-paper-row {
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+}
+.snr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius);
   text-decoration: none;
   white-space: nowrap;
+  border: none;
+  cursor: pointer;
+  letter-spacing: 0.01em;
 }
-.search-ext-kindle  { background: #f90; color: #111; }
-.search-ext-amazon  { background: #146eb4; color: #fff; }
-.search-ext-mercari { background: #ff0211; color: #fff; }
-.search-ext-bookoff { background: #e75; color: #fff; }
+.snr-amazon  { background: #146eb4; color: #fff; }
+.snr-audible { background: #f90; color: #111; }
+.snr-mercari { background: #ff0211; color: #fff; }
+.snr-bookoff { background: #e07050; color: #fff; }
+.snr-library { background: #5a7a5a; color: #fff; }
+.snr-paper {
+  width: 100%;
+  background: linear-gradient(135deg, #4a7c4a, #5a9a5a);
+  color: #fff;
+  font-size: 0.88rem;
+  padding: 0.55rem 1rem;
+}
+.snr-paper:hover { background: linear-gradient(135deg, #3a6a3a, #4a8a4a); }
 .header-search-input {
   width: 100%; padding: 0.4rem 0.75rem;
   font-size: 0.9rem; border-radius: var(--radius);
