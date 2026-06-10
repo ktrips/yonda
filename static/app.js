@@ -570,6 +570,16 @@ function rankingGenre(genre)  { return normalizeGenre(genre); }
 /** 紙の本として既読登録 */
 async function addPaperBook(title, author, coverUrl, summary, genre) {
   if (!title) return;
+
+  // フロントエンドで事前重複チェック（タイトルの正規化一致）
+  const titleNorm = title.trim().toLowerCase();
+  const existing = allBooks.find(b => (b.title || '').trim().toLowerCase() === titleNorm);
+  if (existing) {
+    const confirmed = window.confirm(`「${title}」はすでに記録されています。\n（${existing.source === 'paper' ? '紙の本' : existing.source}）\n\n詳細を開きますか？`);
+    if (confirmed) openBookDetail(existing);
+    return;
+  }
+
   const today = new Date();
   const pad = n => String(n).padStart(2, '0');
   const jstOffset = '+09:00';
@@ -1239,7 +1249,15 @@ async function renderHistoryRecommend() {
       listEl.innerHTML = '<p class="recommend-empty">おすすめが見つかりませんでした。</p>';
       return;
     }
-    listEl.innerHTML = renderAiRecommendBookCards(recs.map(r => r.book || r));
+    listEl.innerHTML = recs.map((rec, i) => {
+      const book = rec.book || rec;
+      const reason = rec.reason || '';
+      const cardHtml = renderAiRecommendBookCards([book]);
+      const reasonHtml = reason
+        ? `<div class="history-recommend-reason"><span class="history-recommend-reason-label">推薦理由</span>${escapeHtml(reason)}</div>`
+        : '';
+      return `<div class="history-recommend-item">${cardHtml}${reasonHtml}</div>`;
+    }).join('');
     if (refreshBtn) refreshBtn.style.display = 'block';
   } catch (e) {
     if (loadingEl) loadingEl.style.display = 'none';
@@ -2811,6 +2829,27 @@ function _showGenreTagBooks(genre, tag, books) {
   resultEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
+/* --- 外部検索パネル --- */
+
+function updateSearchNoResultsPanel(query) {
+  const panel = document.getElementById('searchNoResults');
+  if (!panel) return;
+  if (!query) {
+    panel.style.display = 'none';
+    return;
+  }
+  const urls = getBookSearchUrls(query, { bookTitle: query });
+  const kindleEl = document.getElementById('searchLinkKindle');
+  const amazonEl = document.getElementById('searchLinkAmazon');
+  const mercariEl = document.getElementById('searchLinkMercari');
+  const bookoffEl = document.getElementById('searchLinkBookoff');
+  if (kindleEl) kindleEl.href = urls.kindle;
+  if (amazonEl) amazonEl.href = urls.amazon;
+  if (mercariEl) mercariEl.href = urls.mercari;
+  if (bookoffEl) bookoffEl.href = urls.bookoff;
+  panel.style.display = 'block';
+}
+
 /* --- Rendering --- */
 
 function renderBooks() {
@@ -2824,10 +2863,14 @@ function renderBooks() {
     pag.style.display = 'none';
     empty.style.display = 'block';
     empty.innerHTML = '<p>該当する本がありません</p>';
+    // 検索クエリがある場合は外部検索パネルを表示
+    const searchRaw = (document.getElementById('searchInputYonda')?.value || '').trim();
+    updateSearchNoResultsPanel(searchRaw);
     return;
   }
 
   empty.style.display = 'none';
+  updateSearchNoResultsPanel(''); // 結果があれば外部検索パネルを隠す
   const start = currentPage * PAGE_SIZE;
   const pageBooks = filteredBooks.slice(start, start + PAGE_SIZE);
   const prevBook = start > 0 ? filteredBooks[start - 1] : null;
@@ -4832,6 +4875,8 @@ if (searchInputYondaEl) {
       clearTimeout(yondaDebounce);
       yondaDebounce = setTimeout(applyFilters, 200);
     }
+    // 検索が空になったら即座にパネルを閉じる
+    if (!searchInputYondaEl.value.trim()) updateSearchNoResultsPanel('');
   });
 }
 document.getElementById('bookPhotoBtn')?.addEventListener('click', () => {

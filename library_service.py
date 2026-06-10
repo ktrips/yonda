@@ -375,8 +375,12 @@ def add_paper_book(book_data: dict) -> dict:
     title_norm = (book_data.get("title") or "").strip().lower()
     author_norm = (book_data.get("author") or "").strip().lower()
     for existing in books:
-        if (existing.get("title") or "").strip().lower() == title_norm and \
-           (existing.get("author") or "").strip().lower() == author_norm:
+        ex_title = (existing.get("title") or "").strip().lower()
+        ex_author = (existing.get("author") or "").strip().lower()
+        if ex_title != title_norm:
+            continue
+        # タイトルが一致し、著者が両方ある場合は著者も照合、どちらかが空なら タイトルのみで重複判定
+        if not author_norm or not ex_author or ex_author == author_norm:
             return {"duplicate": True, "book": existing}
 
     if not book_data.get("book_id"):

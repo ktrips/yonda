@@ -24,6 +24,15 @@
       </div>
       <div class="header-search">
         <input type="text" id="searchInputYonda" class="header-search-input" placeholder="タイトル・著者…" aria-label="検索">
+        <div id="searchNoResults" class="search-no-results" style="display:none;">
+          <div class="search-no-results-label">記録なし — 外部で探す：</div>
+          <div class="search-no-results-links">
+            <a id="searchLinkKindle" href="#" target="_blank" rel="noopener" class="search-ext-link search-ext-kindle">Kindle</a>
+            <a id="searchLinkAmazon" href="#" target="_blank" rel="noopener" class="search-ext-link search-ext-amazon">Amazon</a>
+            <a id="searchLinkMercari" href="#" target="_blank" rel="noopener" class="search-ext-link search-ext-mercari">メルカリ</a>
+            <a id="searchLinkBookoff" href="#" target="_blank" rel="noopener" class="search-ext-link search-ext-bookoff">ブックオフ</a>
+          </div>
+        </div>
       </div>
       <div class="header-stats" id="headerStats">
         <a href="#" class="header-stat" id="statRated" title="読了リスト">
@@ -321,8 +330,11 @@
           </div>
           <!-- 読書履歴推し結果（Oshiタブ内） -->
           <div id="historyRecommendSection" style="display:none; margin-top:1rem;">
+            <div class="history-recommend-intro">
+              <p>あなたの読書履歴から最適な本を探します。<br>API Key に AI キーを入れてください。</p>
+            </div>
             <div id="historyRecommendLoading" class="recommend-loading" style="display:none;">AIでおすすめを生成中…</div>
-            <div id="historyRecommendList" class="recommend-list"></div>
+            <div id="historyRecommendList" class="recommend-list history-recommend-list"></div>
             <button type="button" class="btn btn-secondary" id="historyRecommendRefreshBtn" style="display:none; margin-top:1rem;">もう一度おすすめを生成</button>
           </div>
         </div>
