@@ -175,16 +175,15 @@
         <div id="bookTabs" class="book-tabs" style="display:none;">
           <button type="button" class="book-tab active" id="tabRead" data-tab="read">読んだ</button>
           <button type="button" class="book-tab" id="tabRanking" data-tab="ranking">ランキング</button>
-          <button type="button" class="book-tab" id="tabRecommend" data-tab="recommend">オススメ</button>
+          <button type="button" class="book-tab" id="tabCommunity" data-tab="community">みんなのYonda</button>
         </div>
-        <div id="recommendSection" class="recommend-section" style="display:none;">
-          <div id="recommendInitial" class="recommend-initial">
-            <button type="button" class="btn btn-primary" id="recommendGenerateBtn">読書履歴からオススメを生成</button>
-            <span class="recommend-initial-hint">設定からあなたのAPI Keyを入れると生成できます。</span>
+        <div id="communitySection" class="recommend-section" style="display:none;">
+          <div class="community-header">
+            <span class="community-title">📚 最近のみんなの読書</span>
+            <button type="button" class="btn btn-secondary btn-sm" id="communityRefreshBtn">更新</button>
           </div>
-          <div id="recommendLoading" class="recommend-loading" style="display:none;">AIでおすすめを生成中…</div>
-          <div id="recommendList" class="recommend-list"></div>
-          <button type="button" class="btn btn-secondary" id="recommendRefreshBtn" style="display:none; margin-top:1rem;">もう一度おすすめを生成</button>
+          <div id="communityLoading" class="recommend-loading" style="display:none;">読み込み中…</div>
+          <div id="communityMessageList"></div>
         </div>
         <div id="rankingSection" class="ranking-section" style="display:none;">
           <div class="ranking-filters">
@@ -215,21 +214,10 @@
           <p class="book-search-description">読みたい本の名前か著者を入れて下さい。<br>本の写真を撮るだけで、情報を収集して、一番お得に手に入る方法を探してくれます。<br>（Amazon、Kindle、Audible、メルカリ、ブックオフ、図書館）</p>
           <div class="book-search-input-row">
             <input type="text" id="searchInput" class="book-search-input" placeholder="タイトル・著者で検索…">
-            <div class="book-photo-btn-wrap">
-              <button type="button" class="btn btn-secondary" id="bookPhotoBtn">
-                <span class="book-photo-btn-icon">📷</span> 写真を撮る
-              </button>
-              <div class="book-photo-dropdown" id="bookPhotoDropdown">
-                <button type="button" class="book-photo-dropdown-item" id="bookPhotoCameraBtn">
-                  📷 カメラで撮る
-                </button>
-                <button type="button" class="book-photo-dropdown-item" id="bookPhotoAlbumBtn">
-                  🖼 アルバムから選ぶ
-                </button>
-              </div>
-            </div>
+            <button type="button" class="btn btn-secondary" id="bookPhotoBtn">
+              <span class="book-photo-btn-icon">📷</span> 写真を撮る
+            </button>
           </div>
-          <input type="file" id="bookPhotoInput" accept="image/*" capture="environment" style="display:none">
           <input type="file" id="bookPhotoAlbumInput" accept="image/*" style="display:none">
           <div id="bookSearchPhotoStatus" class="book-search-photo-status"></div>
           <div id="bookSearchResults" class="book-search-results"></div>
@@ -277,6 +265,7 @@
             <button type="button" class="ai-recommend-mode-btn active" data-mode="5questions">簡単質問推し</button>
             <button type="button" class="ai-recommend-mode-btn" data-mode="mbti">MBTI推し</button>
             <button type="button" class="ai-recommend-mode-btn" data-mode="strength">強み診断推し</button>
+            <button type="button" class="ai-recommend-mode-btn btn-history-recommend" data-mode="history" id="historyRecommendBtn">読書履歴推し</button>
           </div>
           <p class="ai-recommend-description" id="aiRecommendDescription">会話するうちに、あなたにぴったりな推し本を探します。まずはあなたの基本的な事を教えて下さい。<span id="aiRecommendProvider" class="ai-recommend-provider"></span></p>
           <div class="ai-recommend-form" id="aiRecommendForm">
@@ -331,6 +320,12 @@
           <div class="ai-recommend-input-row">
             <input type="text" id="aiRecommendInput" class="ai-recommend-input" placeholder="メッセージを入力…" autocomplete="off">
             <button type="button" class="btn btn-primary" id="aiRecommendSendBtn">送信</button>
+          </div>
+          <!-- 読書履歴推し結果（Oshiタブ内） -->
+          <div id="historyRecommendSection" style="display:none; margin-top:1rem;">
+            <div id="historyRecommendLoading" class="recommend-loading" style="display:none;">AIでおすすめを生成中…</div>
+            <div id="historyRecommendList" class="recommend-list"></div>
+            <button type="button" class="btn btn-secondary" id="historyRecommendRefreshBtn" style="display:none; margin-top:1rem;">もう一度おすすめを生成</button>
           </div>
         </div>
       </div>

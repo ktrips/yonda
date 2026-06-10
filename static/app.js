@@ -26,7 +26,7 @@ let allBooks = [];
 let filteredBooks = [];
 let currentPage = 0;
 let activeMainTab = 'yonda'; // 'yonda' | 'yomu' | 'oshi'
-let activeBookTab = 'read'; // 'read' = 読んだ/途中, 'ranking' = ランキング, 'recommend' = オススメ, 'messages' = メッセージ
+let activeBookTab = 'read'; // 'read' = 読んだ/途中, 'ranking' = ランキング, 'community' = みんなのYonda, 'messages' = メッセージ
 let monthlyChart = null;
 let genreChart = null;
 let currentDetailBook = null;
@@ -923,7 +923,8 @@ function updateBookTabLabels() {
     tabRead.textContent = label;
   }
   if (tabRanking) tabRanking.textContent = 'ランキング';
-  if (tabRecommend) tabRecommend.textContent = 'オススメ';
+  const tabCommunity = document.getElementById('tabCommunity');
+  if (tabCommunity) tabCommunity.textContent = 'みんなのYonda';
   const messageUnreadCount = unreadMessageCount();
   if (menuMessages) menuMessages.textContent = `メッセージ${messageUnreadCount ? `（${messageUnreadCount}）` : ''}`;
 }
@@ -968,38 +969,38 @@ function updateTabContentVisibility() {
   const bookList = document.getElementById('bookList');
   const pagination = document.getElementById('pagination');
   const rankingSection = document.getElementById('rankingSection');
-  const recommendSection = document.getElementById('recommendSection');
+  const communitySection = document.getElementById('communitySection');
   const messagesSection = document.getElementById('messagesSection');
   if (activeBookTab === 'ranking') {
     if (bookList) bookList.style.display = 'none';
     if (pagination) pagination.style.display = 'none';
-    if (recommendSection) recommendSection.style.display = 'none';
+    if (communitySection) communitySection.style.display = 'none';
     if (messagesSection) messagesSection.style.display = 'none';
     if (rankingSection) {
       rankingSection.style.display = 'block';
       renderRanking();
     }
-  } else if (activeBookTab === 'recommend') {
+  } else if (activeBookTab === 'community') {
     if (bookList) bookList.style.display = 'none';
     if (pagination) pagination.style.display = 'none';
     if (rankingSection) rankingSection.style.display = 'none';
     if (messagesSection) messagesSection.style.display = 'none';
-    if (recommendSection) {
-      recommendSection.style.display = 'block';
-      showRecommendInitialState();
+    if (communitySection) {
+      communitySection.style.display = 'block';
+      renderCommunitySection();
     }
   } else if (activeBookTab === 'messages') {
     if (bookList) bookList.style.display = 'none';
     if (pagination) pagination.style.display = 'none';
     if (rankingSection) rankingSection.style.display = 'none';
-    if (recommendSection) recommendSection.style.display = 'none';
+    if (communitySection) communitySection.style.display = 'none';
     if (messagesSection) {
       messagesSection.style.display = 'block';
       renderMessages();
     }
   } else {
     if (rankingSection) rankingSection.style.display = 'none';
-    if (recommendSection) recommendSection.style.display = 'none';
+    if (communitySection) communitySection.style.display = 'none';
     if (messagesSection) messagesSection.style.display = 'none';
     // bookList / pagination は renderBooks で表示制御
   }
@@ -1194,6 +1195,101 @@ function showRecommendInitialState() {
   if (refreshBtn) refreshBtn.style.display = 'none';
 }
 
+/** Oshiタブ内で読書履歴ベース推薦を実行 */
+async function renderHistoryRecommend() {
+  const listEl = document.getElementById('historyRecommendList');
+  const loadingEl = document.getElementById('historyRecommendLoading');
+  const refreshBtn = document.getElementById('historyRecommendRefreshBtn');
+  if (!listEl) return;
+
+  const completed = allBooks.filter(b => b.completed).slice(0, 20);
+  const unread = allBooks.filter(b => !b.completed);
+  if (completed.length === 0 || unread.length === 0) {
+    listEl.innerHTML = '<p class="recommend-empty">読了本と未読本の両方が必要です。読書記録を取込んでください。</p>';
+    if (loadingEl) loadingEl.style.display = 'none';
+    return;
+  }
+
+  if (loadingEl) loadingEl.style.display = 'block';
+  listEl.innerHTML = '';
+  if (refreshBtn) refreshBtn.style.display = 'none';
+
+  try {
+    const res = await fetch(API.yondaRecommend, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        completed_books: completed.map(b => ({ title: b.title, author: b.author, genre: b.genre })),
+        unread_books: unread.map(b => ({ title: b.title, author: b.author, genre: b.genre })),
+      }),
+    });
+    const data = await res.json();
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (!data.success) {
+      listEl.innerHTML = `<p class="recommend-error">${escapeHtml(data.error || 'エラー')}</p>`;
+      return;
+    }
+    const recs = data.recommendations || [];
+    if (recs.length === 0) {
+      listEl.innerHTML = '<p class="recommend-empty">おすすめが見つかりませんでした。</p>';
+      return;
+    }
+    listEl.innerHTML = renderAiRecommendBookCards(recs.map(r => r.book || r));
+    if (refreshBtn) refreshBtn.style.display = 'block';
+  } catch (e) {
+    if (loadingEl) loadingEl.style.display = 'none';
+    listEl.innerHTML = `<p class="recommend-error">エラー: ${escapeHtml(e.message)}</p>`;
+  }
+}
+document.getElementById('historyRecommendRefreshBtn')?.addEventListener('click', renderHistoryRecommend);
+
+/** みんなのYonda タブ: 直近メッセージをシンプル表示 */
+function renderCommunitySection() {
+  const listEl = document.getElementById('communityMessageList');
+  const loadingEl = document.getElementById('communityLoading');
+  if (!listEl) return;
+  if (loadingEl) loadingEl.style.display = 'block';
+  listEl.innerHTML = '';
+
+  fetch(API.messages)
+    .then(r => r.json())
+    .then(data => {
+      if (loadingEl) loadingEl.style.display = 'none';
+      const messages = (data.messages || []).slice(0, 10);
+      if (messages.length === 0) {
+        listEl.innerHTML = '<p class="recommend-empty">メッセージがまだありません。</p>';
+        return;
+      }
+      listEl.innerHTML = messages.map((msg, idx) => {
+        const dateText = msg.created_at ? formatSyncDate(msg.created_at) : '日時不明';
+        const books = (msg.books || []).slice(0, 5);
+        const bookItems = books.map(item => {
+          const book = item.book || item;
+          const cover = book.cover_url || NO_COVER;
+          const srcShort = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' }[book.source] || '';
+          const srcBadge = srcShort ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short">${srcShort}</span> ` : '';
+          return `<div class="community-book-item">
+            <img src="${escapeHtml(cover)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'" class="community-book-cover">
+            <div class="community-book-info">
+              <div class="community-book-title">${srcBadge}${escapeHtml(book.title || '—')}</div>
+              <div class="community-book-author">${escapeHtml(book.author || '')}</div>
+            </div>
+          </div>`;
+        }).join('');
+        const more = (msg.books || []).length > 5 ? `<div class="community-more">他 ${(msg.books || []).length - 5} 冊</div>` : '';
+        return `<div class="community-message-card">
+          <div class="community-message-date">${escapeHtml(dateText)}</div>
+          <div class="community-books-row">${bookItems}${more}</div>
+        </div>`;
+      }).join('');
+    })
+    .catch(e => {
+      if (loadingEl) loadingEl.style.display = 'none';
+      listEl.innerHTML = `<p class="recommend-error">取得エラー: ${escapeHtml(e.message)}</p>`;
+    });
+}
+document.getElementById('communityRefreshBtn')?.addEventListener('click', renderCommunitySection);
+
 async function renderYondaRecommend() {
   const listEl = document.getElementById('recommendList');
   const loadingEl = document.getElementById('recommendLoading');
@@ -1289,7 +1385,7 @@ function applyFilters() {
     updateTabContentVisibility();
     return;
   }
-  if (activeBookTab === 'recommend') {
+  if (activeBookTab === 'community') {
     updateTabContentVisibility();
     return;
   }
@@ -3920,7 +4016,7 @@ document.querySelectorAll('.book-tab').forEach(tab => {
     activeBookTab = tabVal;
     document.querySelectorAll('.book-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
-    if (tabVal === 'ranking' || tabVal === 'recommend' || tabVal === 'messages') {
+    if (tabVal === 'ranking' || tabVal === 'community' || tabVal === 'messages') {
       updateTabContentVisibility();
     } else {
       const sortSel = document.getElementById('sortSelect');
@@ -3943,6 +4039,11 @@ document.getElementById('recommendGenerateBtn')?.addEventListener('click', () =>
 });
 document.getElementById('recommendRefreshBtn')?.addEventListener('click', () => {
   if (activeBookTab === 'recommend') renderYondaRecommend();
+});
+document.getElementById('historyRecommendBtn')?.addEventListener('click', () => {
+  const section = document.getElementById('historyRecommendSection');
+  if (section) section.style.display = 'block';
+  renderHistoryRecommend();
 });
 document.getElementById('messagesRefreshBtn')?.addEventListener('click', loadMessages);
 
@@ -4693,28 +4794,8 @@ if (searchInputYondaEl) {
     }
   });
 }
-document.getElementById('bookPhotoBtn')?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  const dropdown = document.getElementById('bookPhotoDropdown');
-  if (dropdown) dropdown.classList.toggle('open');
-});
-document.getElementById('bookPhotoCameraBtn')?.addEventListener('click', () => {
-  document.getElementById('bookPhotoDropdown')?.classList.remove('open');
-  document.getElementById('bookPhotoInput')?.click();
-});
-document.getElementById('bookPhotoAlbumBtn')?.addEventListener('click', () => {
-  document.getElementById('bookPhotoDropdown')?.classList.remove('open');
+document.getElementById('bookPhotoBtn')?.addEventListener('click', () => {
   document.getElementById('bookPhotoAlbumInput')?.click();
-});
-document.addEventListener('click', () => {
-  document.getElementById('bookPhotoDropdown')?.classList.remove('open');
-});
-document.getElementById('bookPhotoInput')?.addEventListener('change', (e) => {
-  const file = e.target.files?.[0];
-  if (file && file.type.startsWith('image/')) {
-    processBookPhoto(file);
-  }
-  e.target.value = '';
 });
 document.getElementById('bookPhotoAlbumInput')?.addEventListener('change', (e) => {
   const file = e.target.files?.[0];
