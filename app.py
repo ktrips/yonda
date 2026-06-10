@@ -2073,15 +2073,21 @@ def api_add_paper_book():
         if not title:
             return jsonify({"success": False, "error": "タイトルは必須です"}), 400
 
-        author   = (body.get("author") or "").strip()
+        import pytz as _pytz
+        _jst = _pytz.timezone("Asia/Tokyo")
+        now_jst = datetime.now(_jst)
+        now_iso = now_jst.strftime("%Y-%m-%dT%H:%M:%S+09:00")
+        today = now_jst.strftime("%Y-%m-%d")
+
+        author    = (body.get("author") or "").strip()
         cover_url = (body.get("cover_url") or "").strip()
-        summary  = (body.get("summary") or "").strip()
-        genre    = (body.get("genre") or "").strip()
+        summary   = (body.get("summary") or "").strip()
+        genre     = (body.get("genre") or "").strip()
+        status    = (body.get("status") or "unread").strip()   # unread / in_progress / completed
+        added_date = today
         completed_date = (body.get("completed_date") or "").strip()
-        if not completed_date:
-            import pytz
-            jst = pytz.timezone("Asia/Tokyo")
-            completed_date = datetime.now(jst).strftime("%Y-%m-%dT%H:%M:%S+09:00")
+        if status == "completed" and not completed_date:
+            completed_date = now_iso
 
         # ── Google Books で表紙・概要・ジャンル補完 ──
         needs_cover   = not cover_url
@@ -2123,9 +2129,11 @@ def api_add_paper_book():
             "full_summary":   summary,
             "genre":          genre,
             "source":         "paper",
-            "completed":      True,
-            "completed_date": completed_date,
-            "loan_date":      completed_date[:10],
+            "status":         status,
+            "completed":      status == "completed",
+            "completed_date": completed_date if status == "completed" else "",
+            "added_date":     added_date,
+            "loan_date":      added_date,
             "rating":         0,
             "comment":        "",
             "favorite":       False,
@@ -2139,6 +2147,58 @@ def api_add_paper_book():
         return jsonify({"success": True, "book": result["book"], **(combined or {})})
     except Exception as e:
         logger.warning("api_add_paper_book エラー: %s", e, exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/paper-book/<book_id>", methods=["PUT"])
+def api_update_paper_book(book_id: str):
+    """紙の本の表紙・ジャンル・概要などを更新する。"""
+    try:
+        body = request.get_json(silent=True) or {}
+        updates: dict = {}
+        if "title" in body:
+            updates["title"] = (body["title"] or "").strip()
+        if "author" in body:
+            updates["author"] = (body["author"] or "").strip()
+        if "cover_url" in body:
+            updates["cover_url"] = (body["cover_url"] or "").strip()
+        if "genre" in body:
+            updates["genre"] = (body["genre"] or "").strip()
+        if "summary" in body:
+            raw = (body["summary"] or "").strip()
+            raw = re.sub(r"^(本書[はでにをも]、?|この本[はでにをも]、?|著者[はが]、?)", "", raw).strip()
+            updates["summary"] = raw[:100] + "…" if len(raw) > 100 else raw
+            updates["full_summary"] = raw
+        if "status" in body:
+            status = (body["status"] or "unread").strip()
+            updates["status"] = status
+            updates["completed"] = (status == "completed")
+        if "completed_date" in body:
+            updates["completed_date"] = (body["completed_date"] or "").strip()
+        # 旧データ（book_id 未設定）の title+author フォールバック用
+        updates["_title"] = body.get("_title", "")
+        updates["_author"] = body.get("_author", "")
+        result = library_service.update_paper_book(book_id, updates)
+        if not result.get("success"):
+            return jsonify(result), 404
+        combined = library_service.load_saved()
+        return jsonify({"success": True, "book": result["book"], **(combined or {})})
+    except Exception as e:
+        logger.warning("api_update_paper_book エラー: %s", e, exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/paper-book/<book_id>", methods=["DELETE"])
+def api_delete_paper_book(book_id: str):
+    """紙の本を削除する。"""
+    try:
+        result = library_service.delete_paper_book(book_id)
+        if not result.get("success"):
+            return jsonify(result), 404
+        combined = library_service.load_saved()
+        return jsonify({"success": True, **(combined or {})})
+    except Exception as e:
+        logger.warning("api_delete_paper_book エラー: %s", e, exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
 

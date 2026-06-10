@@ -18,6 +18,8 @@ const API = {
   bookInsights: '/api/book-insights',
   messages: '/api/messages',
   addPaperBook: '/api/add-paper-book',
+  updatePaperBook: (id) => `/api/paper-book/${id}`,
+  deletePaperBook: (id) => `/api/paper-book/${id}`,
 };
 
 let allBooks = [];
@@ -204,7 +206,7 @@ function getAudibleRatingUrl(book) {
   return AUDIBLE_LIBRARY_URL;
 }
 
-const SOURCE_LABELS = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'Kindle' };
+const SOURCE_LABELS = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'Kindle', paper: 'Paper' };
 function sourceLabel(source) { return SOURCE_LABELS[source] || source || ''; }
 
 function formatSyncDate(isoStr) {
@@ -621,7 +623,7 @@ function genreBadgeHtml(book, showOriginal = false) {
   const colors = CAT_COLORS[canonical] || CAT_COLORS['その他'];
   const bg = book.completed ? colors.read : colors.unread;
   const textColor = book.completed ? '#fff' : '#444';
-  const badge = `<span class="genre-badge" style="background:${bg};color:${textColor}">${escapeHtml(canonical)}</span>`;
+  const badge = `<span class="genre-badge" style="background:${bg};color:${textColor}" data-filter-genre="${escapeHtml(canonical)}">${escapeHtml(canonical)}</span>`;
   if (!showOriginal) return badge;
   const orig = book.genre === canonical ? '' : `<div class="genre-original">${escapeHtml(book.genre)}</div>`;
   return badge + orig;
@@ -2861,6 +2863,10 @@ function reviewUrlForBook(book) {
   if (book.review_url) return book.review_url;
   if (book.source === 'audible_jp') return getAudibleRatingUrl(book);
   if (book.source === 'setagaya') return getSetagayaRatingUrl(book);
+  if (book.source === 'paper') {
+    const q = `${book.title || ''} ${book.author || ''}`.trim();
+    return q ? `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks` : '';
+  }
   return '';
 }
 
@@ -3305,13 +3311,24 @@ function openBookDetail(book) {
     const tag = getAffiliateTag();
     if (tag) detailHref = appendTagToUrl(book.detail_url, tag);
   }
+  // 紙の本はAmazonリンクを自動付与
+  if (book.source === 'paper') {
+    const q = `${book.title || ''} ${book.author || ''}`.trim();
+    if (q) detailHref = `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`;
+  }
 
-  // タイトル: detail URLがあればリンクにする
+  // タイトル: detail URLがあればリンクにする、ソースバッジも付ける
   const titleEl = document.getElementById('bookDetailTitle');
+  const srcShortMap = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' };
+  const srcShortDetail = srcShortMap[book.source] || '';
+  const srcBadgeDetail = srcShortDetail
+    ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short badge-detail-src" title="${escapeHtml(sourceLabel(book.source))}">${srcShortDetail}</span> `
+    : '';
+  const titleText = escapeHtml(book.title || '—');
   if (detailHref) {
-    titleEl.innerHTML = `<a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener" class="book-detail-title-link">${escapeHtml(book.title || '—')}</a>`;
+    titleEl.innerHTML = `${srcBadgeDetail}<a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener" class="book-detail-title-link">${titleText}</a>`;
   } else {
-    titleEl.textContent = book.title || '—';
+    titleEl.innerHTML = `${srcBadgeDetail}${titleText}`;
   }
 
   // 著者: detail URLがあればリンクにする
@@ -3334,6 +3351,11 @@ function openBookDetail(book) {
       ? `総合評価: ${starsHtml(dispRating, { asLink: true, source: book.source, detailUrl: bookUrl })}${(book.catalog_rating || 0) > 0 && (book.catalog_rating || 0) % 1 !== 0 ? ` (${book.catalog_rating})` : ''}`
       : `総合評価: <a href="${escapeHtml(bookUrl)}" target="_blank" rel="noopener" class="rating-link" title="Audibleで評価を入力">— 評価を入力</a>`;
     ratingEl.innerHTML = ratingContent;
+  } else if (book.source === 'paper') {
+    const paperUrl = detailHref;
+    ratingEl.innerHTML = book.rating
+      ? `評価: ${starsHtml(book.rating, { asLink: !!paperUrl, source: book.source, detailUrl: paperUrl })}`
+      : `評価: ${paperUrl ? `<a href="${escapeHtml(paperUrl)}" target="_blank" rel="noopener" class="rating-link" title="Amazonで確認">— Amazon</a>` : '—'}`;
   } else {
     ratingEl.innerHTML = book.rating ? `評価: ${starsHtml(book.rating)}` : '評価: —';
   }
@@ -3347,10 +3369,20 @@ function openBookDetail(book) {
     headlineEl.style.display = 'none';
   }
 
-  document.getElementById('bookDetailLoanDate').textContent = book.loan_date ? `購入・貸出: ${book.loan_date}` : '';
+  document.getElementById('bookDetailLoanDate').textContent =
+    book.added_date ? `追加日: ${book.added_date}` :
+    book.loan_date ? `追加日: ${book.loan_date}` : '';
 
   const compEl = document.getElementById('bookDetailCompleted');
-  if (book.completed) {
+  const statusLabel = { unread: '未読', in_progress: '読書中', completed: '読了' }[book.status] || '';
+  if (book.source === 'paper' && book.status) {
+    if (book.status === 'completed' && book.completed_date) {
+      compEl.textContent = `読了: ${formatDateOnly(book.completed_date)}`;
+    } else {
+      compEl.textContent = statusLabel;
+    }
+    compEl.style.display = '';
+  } else if (book.completed) {
     compEl.textContent = book.completed_date ? `読了: ${formatDateOnly(book.completed_date)}` : '読了';
     compEl.style.display = '';
   } else if (formatProgress(book)) {
@@ -3378,13 +3410,24 @@ function openBookDetail(book) {
     mercariEl.style.display = searchQ ? '' : 'none';
   }
 
-  // 概要: detail URLがあればリンクにする
+  // 概要: detail URLがあればリンクにする + ソースバッジを概要見出しに追加
   const summaryText = book.full_summary || book.summary || '';
   const summaryEl = document.getElementById('bookDetailSummary');
   if (summaryText && detailHref) {
     summaryEl.innerHTML = `<a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener" class="book-detail-summary-link">${escapeHtml(summaryText)}</a>`;
   } else {
     summaryEl.textContent = summaryText || '（概要なし）';
+  }
+  // 概要セクションのヘッダーにソースバッジを追加
+  const summaryWrap = summaryEl.closest('.book-detail-summary-wrap');
+  if (summaryWrap) {
+    let summaryH3 = summaryWrap.querySelector('h3');
+    if (summaryH3) {
+      const srcBadgeSummary = detailHref
+        ? `<a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener" class="badge-source badge-${escapeHtml(book.source)} badge-summary-src" title="${escapeHtml(sourceLabel(book.source))}" style="margin-left:0.5rem;font-size:0.72rem;">${escapeHtml(sourceLabel(book.source))}</a>`
+        : `<span class="badge-source badge-${escapeHtml(book.source)} badge-summary-src" style="margin-left:0.5rem;font-size:0.72rem;">${escapeHtml(sourceLabel(book.source))}</span>`;
+      summaryH3.innerHTML = `概要 ${srcBadgeSummary}`;
+    }
   }
 
   // レビューURL（評価横アイコン＆書評ポイント横ボタン共通）
@@ -3401,12 +3444,206 @@ function openBookDetail(book) {
   }
 
   loadBookInsight(book);
+
+  // 紙の本の場合は編集・削除ボタンを表示
+  let paperEditBar = document.getElementById('bookDetailPaperActions');
+  if (book.source === 'paper') {
+    if (!paperEditBar) {
+      paperEditBar = document.createElement('div');
+      paperEditBar.id = 'bookDetailPaperActions';
+      paperEditBar.className = 'book-detail-paper-actions';
+      modal.querySelector('.modal-body').appendChild(paperEditBar);
+    }
+    paperEditBar.innerHTML = `
+      <button type="button" class="btn btn-secondary" id="paperDetailEditBtn">✏️ 編集</button>
+      <button type="button" class="btn btn-danger" id="paperDetailDeleteBtn">🗑 削除</button>
+    `;
+    document.getElementById('paperDetailEditBtn').onclick = () => { closeBookDetail(); openPaperBookEdit(book); };
+    document.getElementById('paperDetailDeleteBtn').onclick = () => confirmDeletePaperBook(book);
+    paperEditBar.style.display = '';
+  } else if (paperEditBar) {
+    paperEditBar.style.display = 'none';
+  }
+
   modal.classList.add('open');
 }
 
 function closeBookDetail() {
   currentDetailBook = null;
   document.getElementById('bookDetailModal').classList.remove('open');
+}
+
+// ── 紙の本 編集モーダル ──────────────────────────────────────────────────────
+
+let _paperEditBook = null;
+
+function openPaperBookEdit(book) {
+  _paperEditBook = book;
+  const NO_COVER = 'data:image/svg+xml,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="90" viewBox="0 0 64 90">' +
+    '<rect fill="#f0e6d8" width="64" height="90" rx="3"/>' +
+    '<text x="32" y="50" text-anchor="middle" fill="#8a7968" font-size="10" font-family="sans-serif">No Cover</text></svg>'
+  );
+  document.getElementById('paperEditTitle').value   = book.title  || '';
+  document.getElementById('paperEditAuthor').value  = book.author || '';
+
+  // ジャンル select
+  const genreSel = document.getElementById('paperEditGenre');
+  if (genreSel) genreSel.value = book.genre || '';
+
+  document.getElementById('paperEditSummary').value = book.full_summary || book.summary || '';
+
+  // 読書状態
+  const statusSel = document.getElementById('paperEditStatus');
+  const curStatus = book.status || (book.completed ? 'completed' : 'unread');
+  if (statusSel) statusSel.value = curStatus;
+  _toggleCompletedDateField(curStatus);
+
+  // 読了日
+  const cdField = document.getElementById('paperEditCompletedDate');
+  if (cdField && book.completed_date) {
+    cdField.value = (book.completed_date || '').slice(0, 10);
+  } else if (cdField) {
+    cdField.value = '';
+  }
+
+  // 追加日
+  const addedDateEl = document.getElementById('paperEditAddedDate');
+  if (addedDateEl) addedDateEl.textContent = book.added_date || book.loan_date || '—';
+
+  // 表紙
+  const coverUrl = book.cover_url || '';
+  const isDataUrl = coverUrl.startsWith('data:');
+  document.getElementById('paperEditCoverUrl').value = isDataUrl ? '' : coverUrl;
+  document.getElementById('paperEditCoverUrl').style.display = isDataUrl ? 'none' : '';
+  const fileLabel = document.getElementById('paperEditCoverFileLabel');
+  if (fileLabel) fileLabel.style.display = isDataUrl ? '' : 'none';
+  const coverImg = document.getElementById('paperEditCoverImg');
+  coverImg.src = coverUrl || NO_COVER;
+  coverImg.onerror = () => { coverImg.src = NO_COVER; };
+  document.getElementById('paperEditCoverFile').value = '';
+  document.getElementById('paperBookEditModal').classList.add('open');
+}
+
+function _toggleCompletedDateField(status) {
+  const field = document.getElementById('paperEditCompletedDateField');
+  if (field) field.style.display = status === 'completed' ? '' : 'none';
+}
+
+function closePaperBookEdit() {
+  _paperEditBook = null;
+  document.getElementById('paperBookEditModal').classList.remove('open');
+}
+
+async function savePaperBookEdit() {
+  if (!_paperEditBook) return;
+  const saveBtn = document.getElementById('paperEditSaveBtn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = '保存中…';
+
+  const title    = document.getElementById('paperEditTitle').value.trim();
+  const author   = document.getElementById('paperEditAuthor').value.trim();
+  const genre    = document.getElementById('paperEditGenre').value.trim();
+  const summary  = document.getElementById('paperEditSummary').value.trim();
+  const urlInput = document.getElementById('paperEditCoverUrl').value.trim();
+  const fileInput = document.getElementById('paperEditCoverFile');
+  const status = document.getElementById('paperEditStatus')?.value || 'unread';
+  const completedDateRaw = document.getElementById('paperEditCompletedDate')?.value || '';
+  const completedDate = status === 'completed' && completedDateRaw
+    ? `${completedDateRaw}T00:00:00+09:00` : '';
+
+  // 既存のカバーURLを保持（ファイル選択もURL入力もない場合）
+  const existingCover = _paperEditBook.cover_url || '';
+  let coverUrl = urlInput || (existingCover.startsWith('data:') ? existingCover : urlInput);
+
+  // ファイルが選択されていれば canvas で圧縮して base64 に変換
+  if (fileInput.files && fileInput.files[0]) {
+    try {
+      coverUrl = await _compressImageToBase64(fileInput.files[0], 200, 280);
+    } catch (e) {
+      console.warn('画像変換エラー:', e);
+    }
+  } else if (!urlInput && existingCover) {
+    coverUrl = existingCover;
+  }
+
+  const bookId = _paperEditBook.book_id || '';
+  const body = {
+    title, author, genre, summary, cover_url: coverUrl,
+    status, completed_date: completedDate,
+    _title: _paperEditBook.title || '',
+    _author: _paperEditBook.author || '',
+  };
+
+  try {
+    const url = bookId ? API.updatePaperBook(bookId) : API.updatePaperBook('unknown');
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('保存しました', 'success');
+      if (data.books) {
+        allBooks = data.books;
+        applyFilters();
+      }
+      closePaperBookEdit();
+    } else {
+      showToast(data.error || '保存に失敗しました', 'error');
+    }
+  } catch (e) {
+    showToast('保存エラー: ' + e.message, 'error');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = '保存';
+  }
+}
+
+async function confirmDeletePaperBook(book) {
+  if (!confirm(`「${book.title}」を削除しますか？`)) return;
+  const bookId = book.book_id || '';
+  try {
+    const res = await fetch(API.deletePaperBook(bookId), { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      showToast('削除しました', 'success');
+      closeBookDetail();
+      if (data.books) {
+        allBooks = data.books;
+        applyFilters();
+      }
+    } else {
+      showToast(data.error || '削除に失敗しました', 'error');
+    }
+  } catch (e) {
+    showToast('削除エラー: ' + e.message, 'error');
+  }
+}
+
+/** 画像ファイルを指定サイズに圧縮して base64 data URL を返す */
+function _compressImageToBase64(file, maxW, maxH) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+        const w = Math.round(img.width  * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width  = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreCounts = {}) {
@@ -3453,10 +3690,24 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
 
     const cover = book.cover_url || NO_COVER;
     const srcClass = book.source === 'audible_jp' ? ' source-audible' : '';
-    const srcShort = { setagaya: '図', audible_jp: 'A', kindle: 'K' }[book.source] || '';
-    const srcBadge = srcShort ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short" title="${escapeHtml(sourceLabel(book.source))}">${srcShort}</span> ` : '';
-    const completedBadge = book.completed ? '<span class="badge-completed badge-short" title="読了">了</span> ' : '';
+    const srcShort = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' }[book.source] || '';
+    // 詳細URLを解決（外部リンク用）
+    const cardDetailUrl = (() => {
+      if (book.source === 'paper') {
+        const q = `${book.title || ''} ${book.author || ''}`.trim();
+        return q ? `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks` : '';
+      }
+      return book.detail_url || '';
+    })();
+    const srcBadge = srcShort ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short" title="${escapeHtml(sourceLabel(book.source))}" data-filter-source="${escapeHtml(book.source)}">${srcShort}</span> ` : '';
+    const completedBadge = book.completed ? `<span class="badge-completed badge-short" title="読了" data-filter-source="${escapeHtml(book.source || '')}">了</span> ` : '';
     const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
+    // タイトル左のソースバッジ（外部リンク付き）
+    const titleSrcBadge = srcShort && cardDetailUrl
+      ? `<a href="${escapeHtml(cardDetailUrl)}" target="_blank" rel="noopener" class="badge-source badge-${escapeHtml(book.source)} badge-short badge-title-link" title="${escapeHtml(sourceLabel(book.source))}" onclick="event.stopPropagation()">${srcShort}</a> `
+      : srcShort
+        ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short" data-filter-source="${escapeHtml(book.source)}">${srcShort}</span> `
+        : '';
 
     const genreHtml = book.genre ? `<div class="book-card-genre">${genreBadgeHtml(book)}</div>` : '';
     const supplementHtml = titleSupplementHtml(book);
@@ -3474,7 +3725,7 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
         <img class="book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
              onerror="this.src='${NO_COVER}'">
         <div class="book-card-body">
-          <div class="book-card-title">${favoriteBadge}${escapeHtml(book.title)}</div>
+          <div class="book-card-title">${titleSrcBadge}${favoriteBadge}${escapeHtml(book.title)}</div>
           ${supplementHtml ? `<div class="book-card-title-supplement">${supplementHtml}${unratedBtn}</div>` : unratedBtn}
           <div class="book-card-author">${escapeHtml(book.author || '')}${(book.runtime_length_min || 0) > 0 ? ` · ${formatRuntime(book.runtime_length_min)}` : ''}${book.completed && book.completed_date ? ` · 読了: ${formatDateOnly(book.completed_date)}` : ''}</div>
           <div class="book-card-genre-row">${completedBadge}${srcBadge}${genreHtml}</div>
@@ -3501,8 +3752,8 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
         headerRow = `<tr class="rating-group-row"><td colspan="11" class="rating-group-header">${escapeHtml(sg)}（${cnt}冊）</td></tr>`;
       }
     }
-    const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span>` : '';
-    const completedBadge = book.completed ? '<span class="badge-completed">読了</span> ' : '';
+    const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}" data-filter-source="${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span>` : '';
+    const completedBadge = book.completed ? `<span class="badge-completed" data-filter-source="${escapeHtml(book.source || '')}">読了</span> ` : '';
     const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
     const genre = book.genre ? genreBadgeHtml(book, true) : '—';
     const supplementHtml = titleSupplementHtml(book);
@@ -4404,10 +4655,30 @@ if (searchInputYondaEl) {
     }
   });
 }
-document.getElementById('bookPhotoBtn')?.addEventListener('click', () => {
+document.getElementById('bookPhotoBtn')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const dropdown = document.getElementById('bookPhotoDropdown');
+  if (dropdown) dropdown.classList.toggle('open');
+});
+document.getElementById('bookPhotoCameraBtn')?.addEventListener('click', () => {
+  document.getElementById('bookPhotoDropdown')?.classList.remove('open');
   document.getElementById('bookPhotoInput')?.click();
 });
+document.getElementById('bookPhotoAlbumBtn')?.addEventListener('click', () => {
+  document.getElementById('bookPhotoDropdown')?.classList.remove('open');
+  document.getElementById('bookPhotoAlbumInput')?.click();
+});
+document.addEventListener('click', () => {
+  document.getElementById('bookPhotoDropdown')?.classList.remove('open');
+});
 document.getElementById('bookPhotoInput')?.addEventListener('change', (e) => {
+  const file = e.target.files?.[0];
+  if (file && file.type.startsWith('image/')) {
+    processBookPhoto(file);
+  }
+  e.target.value = '';
+});
+document.getElementById('bookPhotoAlbumInput')?.addEventListener('change', (e) => {
   const file = e.target.files?.[0];
   if (file && file.type.startsWith('image/')) {
     processBookPhoto(file);
@@ -4637,6 +4908,43 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('bookDetailModal')?.classList.contains('open')) {
     closeBookDetail();
   }
+  if (e.key === 'Escape' && document.getElementById('paperBookEditModal')?.classList.contains('open')) {
+    closePaperBookEdit();
+  }
+});
+
+// 紙の本 編集モーダル イベントリスナー
+document.getElementById('paperBookEditClose')?.addEventListener('click', closePaperBookEdit);
+document.getElementById('paperBookEditModal')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closePaperBookEdit();
+});
+document.getElementById('paperEditCancelBtn')?.addEventListener('click', closePaperBookEdit);
+document.getElementById('paperEditSaveBtn')?.addEventListener('click', savePaperBookEdit);
+document.getElementById('paperEditDeleteBtn')?.addEventListener('click', () => {
+  if (_paperEditBook) confirmDeletePaperBook(_paperEditBook);
+});
+document.getElementById('paperEditStatus')?.addEventListener('change', function() {
+  _toggleCompletedDateField(this.value);
+});
+// 表紙ファイル選択のプレビュー
+document.getElementById('paperEditCoverFile')?.addEventListener('change', function() {
+  if (this.files && this.files[0]) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      document.getElementById('paperEditCoverImg').src = e.target.result;
+      document.getElementById('paperEditCoverUrl').value = '';
+      document.getElementById('paperEditCoverUrl').style.display = 'none';
+      const lbl = document.getElementById('paperEditCoverFileLabel');
+      if (lbl) lbl.style.display = '';
+    };
+    reader.readAsDataURL(this.files[0]);
+  }
+});
+// URL入力時のプレビュー
+document.getElementById('paperEditCoverUrl')?.addEventListener('blur', function() {
+  if (this.value.trim()) {
+    document.getElementById('paperEditCoverImg').src = this.value.trim();
+  }
 });
 document.getElementById('bookInsightGenerateBtn')?.addEventListener('click', () => generateBookInsight());
 document.getElementById('bookInsightEditBtn')?.addEventListener('click', showBookInsightForm);
@@ -4645,6 +4953,34 @@ document.getElementById('bookList')?.addEventListener('click', (e) => {
   const reviewLink = e.target.closest('.btn-review-insight-table');
   if (reviewLink) {
     e.stopPropagation();
+    return;
+  }
+
+  // ソースバッジクリック → ソースフィルター適用
+  const srcBadgeEl = e.target.closest('[data-filter-source]');
+  if (srcBadgeEl && (srcBadgeEl.classList.contains('badge-source') || srcBadgeEl.classList.contains('badge-completed') || srcBadgeEl.classList.contains('badge-short'))) {
+    e.stopPropagation();
+    e.preventDefault();
+    const src = srcBadgeEl.getAttribute('data-filter-source');
+    const sel = document.getElementById('sourceFilter');
+    if (sel) {
+      sel.value = (sel.value === src) ? 'all' : src;
+      applyFilters();
+    }
+    return;
+  }
+
+  // ジャンルバッジクリック → ジャンルフィルター適用
+  const genreBadgeEl = e.target.closest('[data-filter-genre]');
+  if (genreBadgeEl) {
+    e.stopPropagation();
+    e.preventDefault();
+    const genre = genreBadgeEl.getAttribute('data-filter-genre');
+    const sel = document.getElementById('genreFilter');
+    if (sel) {
+      sel.value = (sel.value === genre) ? 'all' : genre;
+      applyFilters();
+    }
     return;
   }
 

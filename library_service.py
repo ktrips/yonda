@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -378,6 +379,8 @@ def add_paper_book(book_data: dict) -> dict:
            (existing.get("author") or "").strip().lower() == author_norm:
             return {"duplicate": True, "book": existing}
 
+    if not book_data.get("book_id"):
+        book_data["book_id"] = str(uuid.uuid4())
     books.append(book_data)
     payload["books"] = books
     payload["fetch_date"] = book_data.get("completed_date", "")[:10]
@@ -387,6 +390,59 @@ def add_paper_book(book_data: dict) -> dict:
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
     return {"duplicate": False, "book": book_data}
+
+
+def update_paper_book(book_id: str, updates: dict) -> dict:
+    """paper_books.json の指定 book_id の本を更新する。"""
+    path = _JSON_MAP["paper"]
+    if not path.exists():
+        return {"success": False, "error": "paper_books.json が存在しません"}
+
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
+
+    books: list[dict] = payload.get("books", [])
+    allowed = {"title", "author", "cover_url", "summary", "full_summary", "genre",
+               "status", "completed", "completed_date", "added_date"}
+    for book in books:
+        # book_id が無い旧データは title+author でマッチ
+        match_id = book.get("book_id") == book_id
+        if not match_id and not book.get("book_id"):
+            t_match = (book.get("title") or "").strip().lower() == (updates.get("_title") or "").strip().lower()
+            a_match = (book.get("author") or "").strip().lower() == (updates.get("_author") or "").strip().lower()
+            match_id = t_match and a_match
+        if match_id:
+            for key, val in updates.items():
+                if key in allowed:
+                    book[key] = val
+            if "book_id" not in book:
+                book["book_id"] = book_id
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            return {"success": True, "book": book}
+
+    return {"success": False, "error": "本が見つかりません"}
+
+
+def delete_paper_book(book_id: str) -> dict:
+    """paper_books.json から指定 book_id の本を削除する。"""
+    path = _JSON_MAP["paper"]
+    if not path.exists():
+        return {"success": False, "error": "paper_books.json が存在しません"}
+
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
+
+    books: list[dict] = payload.get("books", [])
+    new_books = [b for b in books if b.get("book_id") != book_id]
+    if len(new_books) == len(books):
+        return {"success": False, "error": "本が見つかりません"}
+
+    payload["books"] = new_books
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+    return {"success": True}
 
 
 def get_available_libraries() -> list[dict]:

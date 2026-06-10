@@ -215,11 +215,22 @@
           <p class="book-search-description">読みたい本の名前か著者を入れて下さい。<br>本の写真を撮るだけで、情報を収集して、一番お得に手に入る方法を探してくれます。<br>（Amazon、Kindle、Audible、メルカリ、ブックオフ、図書館）</p>
           <div class="book-search-input-row">
             <input type="text" id="searchInput" class="book-search-input" placeholder="タイトル・著者で検索…">
-            <button type="button" class="btn btn-secondary" id="bookPhotoBtn">
-              <span class="book-photo-btn-icon">📷</span> 写真を撮る
-            </button>
+            <div class="book-photo-btn-wrap">
+              <button type="button" class="btn btn-secondary" id="bookPhotoBtn">
+                <span class="book-photo-btn-icon">📷</span> 写真を撮る
+              </button>
+              <div class="book-photo-dropdown" id="bookPhotoDropdown">
+                <button type="button" class="book-photo-dropdown-item" id="bookPhotoCameraBtn">
+                  📷 カメラで撮る
+                </button>
+                <button type="button" class="book-photo-dropdown-item" id="bookPhotoAlbumBtn">
+                  🖼 アルバムから選ぶ
+                </button>
+              </div>
+            </div>
           </div>
           <input type="file" id="bookPhotoInput" accept="image/*" capture="environment" style="display:none">
+          <input type="file" id="bookPhotoAlbumInput" accept="image/*" style="display:none">
           <div id="bookSearchPhotoStatus" class="book-search-photo-status"></div>
           <div id="bookSearchResults" class="book-search-results"></div>
         </div>
@@ -524,6 +535,86 @@
           <div class="book-detail-insights-status" id="bookDetailInsightStatus"></div>
           <ol class="book-detail-insights" id="bookDetailInsights"></ol>
           <div class="book-detail-insight-form" id="bookDetailInsightForm" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 紙の本 編集モーダル -->
+  <div class="modal-overlay" id="paperBookEditModal">
+    <div class="modal modal-paper-edit">
+      <div class="modal-header">
+        <h2>紙の本を編集</h2>
+        <button type="button" class="modal-close" id="paperBookEditClose" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="paper-edit-layout">
+          <div class="paper-edit-cover-col">
+            <div class="paper-edit-cover-preview">
+              <img id="paperEditCoverImg" src="" alt="表紙">
+            </div>
+            <label class="btn btn-secondary paper-edit-upload-btn" for="paperEditCoverFile">
+              📷 写真を選択
+            </label>
+            <input type="file" id="paperEditCoverFile" accept="image/*" style="display:none;">
+            <div class="paper-edit-cover-url-wrap">
+              <input type="text" id="paperEditCoverUrl" placeholder="または画像URLを入力" class="paper-edit-input">
+              <div id="paperEditCoverFileLabel" class="paper-edit-file-label" style="display:none;">（写真選択済）</div>
+            </div>
+          </div>
+          <div class="paper-edit-fields-col">
+            <div class="paper-edit-field">
+              <label>タイトル</label>
+              <input type="text" id="paperEditTitle" class="paper-edit-input">
+            </div>
+            <div class="paper-edit-field">
+              <label>著者</label>
+              <input type="text" id="paperEditAuthor" class="paper-edit-input">
+            </div>
+            <div class="paper-edit-field">
+              <label>ジャンル</label>
+              <select id="paperEditGenre" class="paper-edit-input">
+                <option value="">-- 選択してください --</option>
+                <option>文学・フィクション</option>
+                <option>ミステリー・サスペンス</option>
+                <option>ビジネス・キャリア</option>
+                <option>自己啓発・人間関係</option>
+                <option>社会・政治</option>
+                <option>科学・テクノロジー</option>
+                <option>ノンフィクション</option>
+                <option>歴史・文化</option>
+                <option>ライフ</option>
+                <option>その他</option>
+              </select>
+            </div>
+            <div class="paper-edit-field">
+              <label>読書状態</label>
+              <select id="paperEditStatus" class="paper-edit-input">
+                <option value="unread">未読</option>
+                <option value="in_progress">読書中</option>
+                <option value="completed">読了</option>
+              </select>
+            </div>
+            <div class="paper-edit-field" id="paperEditCompletedDateField" style="display:none;">
+              <label>読了日</label>
+              <input type="date" id="paperEditCompletedDate" class="paper-edit-input">
+            </div>
+            <div class="paper-edit-field paper-edit-added-date">
+              <label>追加日</label>
+              <span id="paperEditAddedDate" class="paper-edit-meta-text">—</span>
+            </div>
+            <div class="paper-edit-field">
+              <label>概要</label>
+              <textarea id="paperEditSummary" class="paper-edit-input paper-edit-textarea" rows="4" placeholder="本の概要を入力"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="paper-edit-actions">
+          <button type="button" class="btn btn-danger" id="paperEditDeleteBtn">🗑 この本を削除</button>
+          <div class="paper-edit-save-wrap">
+            <button type="button" class="btn btn-secondary" id="paperEditCancelBtn">キャンセル</button>
+            <button type="button" class="btn btn-primary" id="paperEditSaveBtn">保存</button>
+          </div>
         </div>
       </div>
     </div>

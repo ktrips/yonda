@@ -403,6 +403,46 @@ header {
 .book-photo-btn-icon {
   margin-right: 0.25rem;
 }
+
+.book-photo-btn-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.book-photo-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 200;
+  min-width: 160px;
+  overflow: hidden;
+}
+
+.book-photo-dropdown.open {
+  display: block;
+}
+
+.book-photo-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 0.9rem;
+  cursor: pointer;
+  white-space: nowrap;
+  color: var(--text-primary, #333);
+}
+
+.book-photo-dropdown-item:hover {
+  background: #f5f0ea;
+}
 .book-search-photo-status {
   font-size: 0.8rem;
   color: var(--text-secondary);
@@ -1788,6 +1828,8 @@ header {
 }
 .genre-badge {
   display: inline-block;
+  cursor: pointer;
+}
   font-size: 0.65rem; font-weight: 600;
   padding: 0.15rem 0.45rem;
   border-radius: 3px;
@@ -1842,15 +1884,18 @@ header {
   background: var(--completed); color: #fff;
   border-radius: 3px; font-size: 0.6rem; font-weight: 600;
   vertical-align: middle; letter-spacing: 0.04em;
+  cursor: pointer;
 }
 .badge-source {
   display: inline-block; padding: 0.08rem 0.3rem;
   border-radius: 3px; font-size: 0.55rem; font-weight: 600;
   vertical-align: middle; letter-spacing: 0.03em;
+  cursor: pointer;
 }
 .badge-setagaya { background: var(--accent-light); color: var(--accent); }
 .badge-audible_jp { background: var(--audible-light); color: var(--audible-accent); }
 .badge-kindle { background: #ddeeff; color: #3366aa; }
+.badge-paper  { background: #e8f5e9; color: #2e7d32; }
 .badge-favorite { color: #c45c6a; font-size: 0.75rem; }
 .badge-short {
   padding: 0.06rem 0.25rem;
@@ -1859,6 +1904,7 @@ header {
   text-align: center;
   border-radius: 3px;
   letter-spacing: 0;
+  cursor: pointer;
 }
 
 .book-card.completed { border-left: 3px solid var(--completed); }
@@ -2448,10 +2494,10 @@ header {
     width: 53px; height: 74px;
   }
   .book-card .badge-source:not(.badge-short) { display: none; }
-  .book-card .book-card-genre,
   .book-card .book-card-summary,
   .book-card .book-card-comment,
   .book-card .book-card-rating-content { display: none; }
+  .book-card .book-card-genre-row .book-card-genre { display: block; }
   .book-card .book-card-meta { flex-wrap: nowrap; gap: 0.5rem; }
   .book-card .book-card-title { -webkit-line-clamp: 2; padding: 0.25rem 0; }
   .book-table th:nth-child(1), .book-table td:nth-child(1),
@@ -2865,4 +2911,182 @@ header {
     grid-template-columns: 7rem 1fr auto;
   }
   .tag-cat-tab { font-size: 0.72rem; padding: 0.25rem 0.45rem; }
+}
+
+/* ── 紙の本 編集モーダル ──────────────────────────────── */
+.modal-paper-edit {
+  max-width: 640px;
+  width: 95%;
+}
+
+.paper-edit-layout {
+  display: flex;
+  gap: 1.2rem;
+  align-items: flex-start;
+}
+
+.paper-edit-cover-col {
+  flex-shrink: 0;
+  width: 130px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.paper-edit-cover-preview {
+  width: 120px;
+  height: 168px;
+  background: #f0e6d8;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #ddd;
+}
+
+.paper-edit-cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.paper-edit-upload-btn {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  text-align: center;
+  width: 100%;
+}
+
+.paper-edit-cover-url-wrap {
+  width: 100%;
+}
+
+.paper-edit-file-label {
+  font-size: 0.75rem;
+  color: #666;
+  padding: 0.2rem 0;
+  text-align: center;
+}
+
+.paper-edit-fields-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.paper-edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.paper-edit-field label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #666;
+}
+
+.paper-edit-meta-text {
+  font-size: 0.85rem;
+  color: #555;
+  padding: 0.2rem 0;
+}
+
+.paper-edit-added-date {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.paper-edit-input {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  background: #fafafa;
+  box-sizing: border-box;
+}
+
+.paper-edit-input:focus {
+  outline: none;
+  border-color: #8a7968;
+  background: #fff;
+}
+
+.paper-edit-textarea {
+  resize: vertical;
+  min-height: 90px;
+}
+
+.paper-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+
+.paper-edit-save-wrap {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-danger {
+  background: #e74c3c;
+  color: #fff;
+  border: none;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background: #c0392b;
+}
+
+/* 詳細モーダル内の紙の本アクションバー */
+.book-detail-paper-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+
+/* タイトル・概要のソースバッジ */
+.badge-detail-src, .badge-summary-src {
+  vertical-align: middle;
+  font-size: 0.65rem !important;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  text-decoration: none;
+}
+
+.badge-title-link {
+  text-decoration: none;
+}
+
+@media (max-width: 560px) {
+  .paper-edit-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+  .paper-edit-cover-col {
+    width: 100%;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0.8rem;
+  }
+  .paper-edit-cover-preview {
+    width: 80px;
+    height: 112px;
+  }
 }
