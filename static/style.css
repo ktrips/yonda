@@ -191,13 +191,45 @@ header {
 .snr-bookoff { background: #e07050; color: #fff; }
 .snr-library { background: #5a7a5a; color: #fff; }
 .snr-paper {
-  width: 100%;
   background: linear-gradient(135deg, #4a7c4a, #5a9a5a);
   color: #fff;
-  font-size: 0.88rem;
-  padding: 0.55rem 1rem;
 }
 .snr-paper:hover { background: linear-gradient(135deg, #3a6a3a, #4a8a4a); }
+.snr-kindle { background: #ff9900; color: #fff; }
+.snr-kindle:hover { background: #e68a00; }
+.snr-custom { background: #607d8b; color: #fff; }
+.snr-custom:hover { background: #455a64; }
+
+/* アプリ設定 チェックボックスグリッド */
+.sa-builtin-grid {
+  display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-bottom: 0.5rem;
+}
+.sa-check-label {
+  display: flex; align-items: center; gap: 0.35rem;
+  font-size: 0.88rem; cursor: pointer;
+}
+.sa-check-label input[type="checkbox"] { accent-color: var(--accent); width: 1rem; height: 1rem; }
+.modal-section-sub {
+  font-size: 0.8rem; font-weight: 600; color: var(--text-muted);
+  margin-bottom: 0.3rem; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.sa-custom-row {
+  display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.35rem;
+}
+.sa-custom-row .sa-custom-label { flex: 0 0 7rem; min-width: 0; }
+.sa-custom-row .sa-custom-url  { flex: 1; min-width: 0; }
+.sa-custom-del {
+  flex: 0 0 auto; background: none; border: none; color: var(--text-muted);
+  font-size: 1.1rem; cursor: pointer; padding: 0.1rem 0.3rem; line-height: 1;
+}
+.sa-custom-del:hover { color: #e55; }
+.snr-author-hint {
+  display: inline-block;
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--accent);
+  font-weight: 600;
+}
 .header-search-input {
   width: 100%; padding: 0.4rem 0.75rem;
   font-size: 0.9rem; border-radius: var(--radius);

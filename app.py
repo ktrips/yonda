@@ -2103,16 +2103,19 @@ def api_add_paper_book():
         if status == "completed" and not completed_date:
             completed_date = now_iso
 
-        # ── Google Books で表紙・概要・ジャンル補完 ──
+        # ── Google Books で表紙・著者・概要・ジャンル補完 ──
         needs_cover   = not cover_url
+        needs_author  = not author
         needs_summary = not summary
         needs_genre   = not genre
-        if needs_cover or needs_summary or needs_genre:
+        if needs_cover or needs_author or needs_summary or needs_genre:
             q = f"{title} {author}".strip()
             gb_result = _fetch_book_info_with_genre(q, want_title=title, want_author=author)
             if gb_result:
                 if needs_cover and gb_result.get("cover_url"):
                     cover_url = gb_result["cover_url"]
+                if needs_author and gb_result.get("author"):
+                    author = gb_result["author"]
                 if needs_summary and gb_result.get("summary"):
                     raw = gb_result["summary"].strip()
                     raw = re.sub(r"^(本書[はでにをも]、?|この本[はでにをも]、?|著者[はが]、?)", "", raw).strip()
@@ -2238,7 +2241,9 @@ def _fetch_book_info_with_genre(q: str, want_title: str = "", want_author: str =
             desc = vi.get("description", "")
             cats = vi.get("categories", [])
             genre = " / ".join(cats) if cats else ""
-            return {"cover_url": cover, "summary": desc[:300] if desc else "", "genre": genre}
+            authors = vi.get("authors", [])
+            author = ", ".join(authors) if authors else ""
+            return {"cover_url": cover, "summary": desc[:300] if desc else "", "genre": genre, "author": author}
     except Exception as e:
         logger.debug("_fetch_book_info_with_genre エラー: %s", e)
     return None

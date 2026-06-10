@@ -55,6 +55,7 @@
         <hr class="menu-separator">
         <button type="button" class="menu-item menu-item-fetch" id="menuFetchDirect">読書記録取込み</button>
         <div id="menuSyncDates" class="menu-sync-dates"></div>
+        <button type="button" class="menu-item" id="menuAmazonSettings">Amazon設定</button>
         <button type="button" class="menu-item" id="menuAmazonAi">アプリ設定</button>
         <hr class="menu-separator">
         <button type="button" class="menu-link menu-link-btn" data-help-url="{{ url_for('help_page') }}" data-help-title="設定のヘルプ">設定ヘルプ</button>
@@ -209,8 +210,8 @@
       <!-- Yomu: これから検索 -->
       <div id="mainContentYomu" class="main-content" style="display:none;">
         <div class="book-search-section" id="bookSearchSection">
-          <p class="book-search-headline"><strong>次に読みたい本検索</strong></p>
-          <p class="book-search-description">読みたい本の名前か著者を入れて下さい。<br>本の写真を撮るだけで、情報を収集して、一番お得に手に入る方法を探してくれます。<br>（Amazon、Kindle、Audible、メルカリ、ブックオフ、図書館）</p>
+          <p class="book-search-headline"><strong>読みたい本検索</strong></p>
+          <p class="book-search-description">読みたい本の名前か著者、本の写真をアップして下さい。情報を収集して、一番お得な方法を探します。</p>
           <div class="book-search-input-row">
             <input type="text" id="searchInput" class="book-search-input" placeholder="タイトル・著者で検索…">
             <button type="button" class="btn btn-secondary" id="bookPhotoBtn">
@@ -224,24 +225,13 @@
         <!-- Amazon ほしいものリスト -->
         <div class="amazon-list-section" id="amazonListSection">
           <div class="amazon-list-header">
-            <span class="amazon-list-title">Amazonほしいものリスト</span>
+            <span class="amazon-list-title">気になる本リスト</span>
             <span class="amazon-list-count" id="amazonListCount"></span>
+            <a id="amazonListRegisteredLink" href="#" target="_blank" rel="noopener" class="amazon-list-registered-name" style="display:none;"></a>
           </div>
-          <!-- 登録済み表示（名前あり） -->
-          <div class="amazon-list-registered" id="amazonListRegistered" style="display:none;">
-            <a id="amazonListRegisteredLink" href="#" target="_blank" rel="noopener" class="amazon-list-registered-name"></a>
-            <button type="button" id="amazonListUrlEditBtn" class="btn-amazon-url-edit">編集</button>
-          </div>
-          <!-- URL・名前入力欄 -->
-          <div class="amazon-list-url-form" id="amazonListUrlForm">
-            <div class="amazon-list-url-row">
-              <input type="text" id="amazonListName" class="amazon-list-name-input" placeholder="リスト名（例: 読みたい本）">
-            </div>
-            <div class="amazon-list-url-row">
-              <input type="url" id="amazonListUrl" class="amazon-list-url-input" placeholder="AmazonほしいものリストのURL…">
-              <button type="button" id="amazonListUrlSaveBtn" class="btn-amazon-url-save">保存</button>
-            </div>
-          </div>
+          <!-- hidden inputs for compatibility -->
+          <input type="text" id="amazonListName" style="display:none;">
+          <input type="url" id="amazonListUrl" style="display:none;">
           <div id="amazonListItems" class="amazon-list-items"></div>
         </div>
 
@@ -347,6 +337,42 @@
     </div>
   </div>
 
+  <!-- Amazon設定モーダル -->
+  <div class="modal-overlay" id="amazonSettingsModal">
+    <div class="modal modal-amazon-settings">
+      <div class="modal-header">
+        <h2>Amazon設定</h2>
+        <button type="button" class="modal-close" id="amazonSettingsClose" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="modal-body">
+        <h3 class="modal-section-title">Amazonほしいものリスト</h3>
+        <div class="modal-field">
+          <label for="amazonSettingsListName">リスト名（任意）</label>
+          <input type="text" id="amazonSettingsListName" class="modal-input" placeholder="例: 読みたい本">
+        </div>
+        <div class="modal-field">
+          <label for="amazonSettingsListUrl">ほしいものリストのURL</label>
+          <input type="url" id="amazonSettingsListUrl" class="modal-input" placeholder="https://www.amazon.co.jp/hz/wishlist/ls/...">
+        </div>
+        <p class="modal-note">YomuタブのAmazonほしいものリストに表示されます。</p>
+
+        <hr class="modal-divider">
+        <h3 class="modal-section-title">アフィリエイトタグ</h3>
+        <div class="modal-field">
+          <label for="amazonSettingsTag">タグ（Kindle・Audible・Amazonリンクに付与）</label>
+          <input type="text" id="amazonSettingsTag" class="modal-input" placeholder="例: ktrip-22">
+        </div>
+        <p class="modal-note">本の検索・詳細ページの Amazon/Kindle/Audible リンクに <code>&amp;tag=xxx</code> を付与します。空欄でデフォルト（ktrip-22）を使用。</p>
+
+        <div class="modal-status" id="amazonSettingsStatus"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="amazonSettingsCancelBtn">キャンセル</button>
+          <button type="button" class="btn btn-primary" id="amazonSettingsSaveBtn">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 設定モーダル -->
   <div class="modal-overlay" id="settingsModal">
     <div class="modal">
@@ -388,6 +414,27 @@
           <input type="password" id="aiApiKeyInput" class="modal-input" placeholder="sk-... または AIza...">
         </div>
         <p class="modal-note">本の写真を撮ると、OpenAI または Gemini 3 で表紙からタイトル・著者を正確に抽出します。空欄で無効（バーコード・OCR にフォールバック）。</p>
+
+        <hr class="modal-divider">
+        <h3 class="modal-section-title">検索するアプリ</h3>
+        <p class="modal-note">ヘッダー検索の「外部で探す」に表示するアプリを選択します。</p>
+        <div class="sa-builtin-grid" id="saBuiltinGrid">
+          <label class="sa-check-label"><input type="checkbox" id="saAmazon">  Amazon</label>
+          <label class="sa-check-label"><input type="checkbox" id="saKindle">  Kindle</label>
+          <label class="sa-check-label"><input type="checkbox" id="saAudible"> Audible</label>
+          <label class="sa-check-label"><input type="checkbox" id="saMercari"> メルカリ</label>
+          <label class="sa-check-label"><input type="checkbox" id="saBookoff"> ブックオフ</label>
+          <label class="sa-check-label"><input type="checkbox" id="saLibrary"> 図書館</label>
+        </div>
+        <div class="modal-field" id="saLibraryUrlField" style="margin-top:0.5rem;">
+          <label for="saLibraryUrl">図書館URL（所在地）</label>
+          <input type="url" id="saLibraryUrl" class="modal-input" placeholder="https://... （空＝世田谷区立図書館、{q}で検索語が入ります）">
+        </div>
+
+        <div class="modal-section-sub" style="margin-top:0.8rem;">カスタムアプリ</div>
+        <div id="saCustomList"></div>
+        <button type="button" class="btn btn-secondary btn-sm" id="saAddCustomBtn" style="margin-top:0.4rem;">＋ アプリを追加</button>
+        <p class="modal-note" style="margin-top:0.4rem;">URLの <code>{q}</code> は検索語に自動で置換されます。</p>
 
         <div class="modal-status" id="settingsModalStatus"></div>
         <div class="modal-actions">

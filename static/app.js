@@ -319,6 +319,104 @@ function showToast(message, type = 'info') {
 
 const AFFILIATE_TAG_KEY = 'yonda_affiliate_tag';
 const DEFAULT_AFFILIATE_TAG = 'ktrip-22';
+
+const SEARCH_APPS_KEY = 'yonda_search_apps';
+const BUILTIN_SEARCH_APP_IDS = ['amazon', 'kindle', 'audible', 'mercari', 'bookoff', 'library'];
+
+function getSearchAppsConfig() {
+  try {
+    const stored = localStorage.getItem(SEARCH_APPS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch (_) {}
+  return {
+    builtin: { amazon: true, kindle: true, audible: true, mercari: true, bookoff: true, library: true },
+    libraryUrl: '',
+    custom: [],
+  };
+}
+
+function saveSearchAppsConfig(config) {
+  localStorage.setItem(SEARCH_APPS_KEY, JSON.stringify(config));
+}
+
+/** 設定UIの「カスタムアプリ」行を1件描画して saCustomList に追加 */
+function _renderCustomAppRow(app, idx) {
+  const list = document.getElementById('saCustomList');
+  if (!list) return;
+  const row = document.createElement('div');
+  row.className = 'sa-custom-row';
+  row.dataset.idx = idx;
+  row.innerHTML = `
+    <input type="text" class="modal-input sa-custom-label" placeholder="アプリ名" value="${escapeHtml(app.label || '')}">
+    <input type="url" class="modal-input sa-custom-url" placeholder="URL（{q}で検索語）" value="${escapeHtml(app.url || '')}">
+    <button type="button" class="sa-custom-del" aria-label="削除">&times;</button>
+  `;
+  row.querySelector('.sa-custom-del').addEventListener('click', () => row.remove());
+  list.appendChild(row);
+}
+
+/** 設定モーダルの search apps UI を現在の config で初期化 */
+function _loadSearchAppsUI() {
+  const cfg = getSearchAppsConfig();
+  for (const id of BUILTIN_SEARCH_APP_IDS) {
+    const el = document.getElementById('sa' + id.charAt(0).toUpperCase() + id.slice(1));
+    if (el) el.checked = cfg.builtin[id] !== false;
+  }
+  const libraryUrlEl = document.getElementById('saLibraryUrl');
+  if (libraryUrlEl) libraryUrlEl.value = cfg.libraryUrl || '';
+  const list = document.getElementById('saCustomList');
+  if (list) list.innerHTML = '';
+  (cfg.custom || []).forEach((app, i) => _renderCustomAppRow(app, i));
+}
+
+/** 設定モーダルの search apps UI から config を収集して保存 */
+function _saveSearchAppsFromUI() {
+  const builtin = {};
+  for (const id of BUILTIN_SEARCH_APP_IDS) {
+    const el = document.getElementById('sa' + id.charAt(0).toUpperCase() + id.slice(1));
+    builtin[id] = el ? el.checked : true;
+  }
+  const libraryUrl = (document.getElementById('saLibraryUrl')?.value || '').trim();
+  const customRows = document.querySelectorAll('#saCustomList .sa-custom-row');
+  const custom = [];
+  customRows.forEach(row => {
+    const label = row.querySelector('.sa-custom-label')?.value.trim() || '';
+    const url = row.querySelector('.sa-custom-url')?.value.trim() || '';
+    if (label && url) custom.push({ label, url, enabled: true });
+  });
+  saveSearchAppsConfig({ builtin, libraryUrl, custom });
+}
+
+/** 検索結果なしパネル用: 設定に基づいたアプリボタン HTML を生成 */
+function _buildSearchAppButtons(urls, rawQuery) {
+  const cfg = getSearchAppsConfig();
+  const q = encodeURIComponent((rawQuery || '').trim());
+  const parts = [];
+  const b = cfg.builtin;
+  if (b.amazon !== false) parts.push(`<a href="${escapeHtml(urls.amazon)}" target="_blank" rel="noopener" class="snr-btn snr-amazon">Amazon</a>`);
+  if (b.kindle !== false) parts.push(`<a href="${escapeHtml(urls.kindle)}" target="_blank" rel="noopener" class="snr-btn snr-kindle">Kindle</a>`);
+  if (b.audible !== false) parts.push(`<a href="${escapeHtml(urls.audible)}" target="_blank" rel="noopener" class="snr-btn snr-audible">Audible</a>`);
+  if (b.mercari !== false) parts.push(`<a href="${escapeHtml(urls.mercari)}" target="_blank" rel="noopener" class="snr-btn snr-mercari">メルカリ</a>`);
+  if (b.bookoff !== false) parts.push(`<a href="${escapeHtml(urls.bookoff)}" target="_blank" rel="noopener" class="snr-btn snr-bookoff">ブックオフ</a>`);
+  // +紙の本 は常にブックオフの直後
+  parts.push(`<button type="button" class="snr-btn snr-paper" id="snrAddPaperBtn">＋紙の本</button>`);
+  if (b.library !== false) {
+    const libUrl = cfg.libraryUrl
+      ? cfg.libraryUrl.replace('{q}', q)
+      : urls.setagaya;
+    parts.push(`<a href="${escapeHtml(libUrl)}" target="_blank" rel="noopener" class="snr-btn snr-library">図書館</a>`);
+  }
+  for (const app of cfg.custom || []) {
+    if (app.enabled !== false && app.label && app.url) {
+      const appUrl = app.url.replace('{q}', q);
+      parts.push(`<a href="${escapeHtml(appUrl)}" target="_blank" rel="noopener" class="snr-btn snr-custom">${escapeHtml(app.label)}</a>`);
+    }
+  }
+  return parts.join('');
+}
 const DEFAULT_PAGE_KEY = 'yonda_default_page';
 const DEFAULT_PAGE = 'yonda';
 
@@ -580,8 +678,12 @@ async function addPaperBook(title, author, coverUrl, summary, genre, detailUrl =
     return;
   }
 
-  // カバー画像：指定があればそれを使い、なければ撮影写真（圧縮済み）を使用
-  const effectiveCover = coverUrl || window._lastBookPhotoCover || '';
+  // カバー画像：撮影写真がある場合は常に優先（外部URLより鮮明な実物写真を使う）
+  const effectiveCover = window._lastBookPhotoCover || coverUrl || '';
+  // 著者・概要：引数が空の場合は自動取得データで補完
+  const bookInfo = window._lastBookInfo || {};
+  const effectiveAuthor = author || bookInfo.author || '';
+  const effectiveSummary = summary || bookInfo.summary || '';
 
   const today = new Date();
   const pad = n => String(n).padStart(2, '0');
@@ -592,9 +694,11 @@ async function addPaperBook(title, author, coverUrl, summary, genre, detailUrl =
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        title, author,
+        title,
+        author: effectiveAuthor,
         cover_url: effectiveCover,
-        summary, genre,
+        summary: effectiveSummary,
+        genre,
         completed_date: completedDate,
         detail_url: detailUrl || '',
       }),
@@ -609,14 +713,22 @@ async function addPaperBook(title, author, coverUrl, summary, genre, detailUrl =
       return;
     }
     showToast(`「${title}」を紙の本として登録しました`, 'success');
-    window._lastBookPhotoCover = null; // 撮影写真をクリア
+    window._lastBookPhotoCover = null;
+    window._lastBookInfo = null;
     if (data.books) {
       allBooks = data.books;
       for (const b of allBooks) b._normalizedGenre = normalizeGenre(b.genre || '');
       applyFilters();
-      // Yomuタブの検索結果を更新して登録した本を表示
       if (activeMainTab === 'yomu') renderBookSearchResults();
     }
+    // Yomuの気になる本リストにも追加
+    const savedBook = data.book || {};
+    addToAmazonList({
+      title: savedBook.title || title,
+      author: savedBook.author || effectiveAuthor,
+      cover_url: (savedBook.cover_url || effectiveCover || '').startsWith('data:') ? '' : (savedBook.cover_url || ''),
+      asin: '',
+    }).then(() => loadAmazonList()).catch(() => {});
   } catch (e) {
     showToast('登録中にエラーが発生しました', 'error');
   }
@@ -1626,11 +1738,35 @@ async function processBookPhoto(file) {
     } catch (_) {
       window._lastBookPhotoCover = null;
     }
+    window._lastBookInfo = null; // リセット
     inputEl.value = searchText;
     const modelLabel = window._lastAiExtractModel || (window._lastAiExtractProvider === 'gemini' ? 'Gemini' : (window._lastAiExtractProvider === 'openai' ? 'OpenAI' : ''));
     const statusSuffix = modelLabel ? ` (${modelLabel})` : '';
     setStatus('検索しました: ' + searchText.substring(0, 30) + (searchText.length > 30 ? '…' : '') + statusSuffix);
     renderBookSearchResults();
+    // バックグラウンドで著者・概要・ジャンルを取得
+    const parts = searchText.split(/\s+/);
+    const titleGuess = parts[0] || searchText;
+    const authorGuess = parts.slice(1).join(' ');
+    const params = new URLSearchParams({ q: searchText });
+    if (titleGuess) params.set('title', titleGuess);
+    if (authorGuess) params.set('author', authorGuess);
+    fetch(`${API.bookInfo}?${params}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          window._lastBookInfo = {
+            author: data.author || authorGuess || '',
+            summary: data.summary || '',
+          };
+          // パネルが表示中なら更新
+          const panel = document.getElementById('searchNoResults');
+          if (panel && panel.style.display !== 'none') {
+            updateSearchNoResultsPanel(searchText);
+          }
+        }
+      })
+      .catch(() => {});
   } else if (!showedError) {
     setStatus('本の情報を取得できませんでした。検索語を手入力してください。', true);
   }
@@ -1714,15 +1850,17 @@ function renderBookSearchResults() {
 /* --- Amazon ほしいものリスト --- */
 
 function getAmazonWishlistUrl(asin, title, author) {
-  if (asin) return `https://www.amazon.co.jp/wishlist/add-item?ASIN.1=${encodeURIComponent(asin)}`;
+  const tag = getAffiliateTag();
+  if (asin) return appendTagToUrl(`https://www.amazon.co.jp/wishlist/add-item?ASIN.1=${encodeURIComponent(asin)}`, tag);
   const q = encodeURIComponent(`${title} ${author}`.trim());
-  return `https://www.amazon.co.jp/s?k=${q}`;
+  return appendTagToUrl(`https://www.amazon.co.jp/s?k=${q}`, tag);
 }
 
 function getAmazonProductUrl(asin, title, author) {
-  if (asin) return `https://www.amazon.co.jp/dp/${encodeURIComponent(asin)}`;
+  const tag = getAffiliateTag();
+  if (asin) return appendTagToUrl(`https://www.amazon.co.jp/dp/${encodeURIComponent(asin)}`, tag);
   const q = encodeURIComponent(`${title} ${author}`.trim());
-  return `https://www.amazon.co.jp/s?k=${q}`;
+  return appendTagToUrl(`https://www.amazon.co.jp/s?k=${q}`, tag);
 }
 
 async function loadAmazonList() {
@@ -1745,7 +1883,7 @@ function renderAmazonList(books) {
   if (countEl) countEl.textContent = books.length > 0 ? `${books.length}冊` : '';
 
   if (books.length === 0) {
-    itemsEl.innerHTML = '<p class="amazon-list-empty">検索結果の「+ Amazonリスト」から本を追加できます</p>';
+    itemsEl.innerHTML = '<p class="amazon-list-empty">検索結果の「+ Amazonリスト」または「＋紙の本」から本を追加できます</p>';
     return;
   }
 
@@ -1805,26 +1943,28 @@ const AMAZON_LIST_NAME_KEY = 'yonda_amazonListName';
 function loadAmazonListUrl() {
   const url = localStorage.getItem(AMAZON_LIST_URL_KEY) || '';
   const name = localStorage.getItem(AMAZON_LIST_NAME_KEY) || '';
-  const urlInput = document.getElementById('amazonListUrl');
-  const nameInput = document.getElementById('amazonListName');
-  if (urlInput) urlInput.value = url;
-  if (nameInput) nameInput.value = name;
-  _updateAmazonListRegisteredView(url, name);
+  const link = document.getElementById('amazonListRegisteredLink');
+  if (link) {
+    if (url) {
+      link.href = url;
+      link.textContent = name || 'Amazonリストで見る →';
+      link.style.display = 'inline';
+    } else {
+      link.style.display = 'none';
+    }
+  }
 }
 
 function _updateAmazonListRegisteredView(url, name) {
+  // 後方互換のため残す（loadAmazonListUrl に統合）
+  loadAmazonListUrl();
   const registered = document.getElementById('amazonListRegistered');
   const form = document.getElementById('amazonListUrlForm');
-  const link = document.getElementById('amazonListRegisteredLink');
   if (!registered || !form) return;
 
   if (url) {
     registered.style.display = 'flex';
     form.style.display = 'none';
-    if (link) {
-      link.href = url;
-      link.textContent = name || url;
-    }
   } else {
     registered.style.display = 'none';
     form.style.display = 'block';
@@ -1852,23 +1992,6 @@ function saveAmazonListUrl() {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  const saveBtn = document.getElementById('amazonListUrlSaveBtn');
-  if (saveBtn) saveBtn.addEventListener('click', saveAmazonListUrl);
-
-  const urlInput = document.getElementById('amazonListUrl');
-  if (urlInput) urlInput.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') saveAmazonListUrl();
-  });
-
-  const editBtn = document.getElementById('amazonListUrlEditBtn');
-  if (editBtn) editBtn.addEventListener('click', function() {
-    const registered = document.getElementById('amazonListRegistered');
-    const form = document.getElementById('amazonListUrlForm');
-    if (registered) registered.style.display = 'none';
-    if (form) form.style.display = 'block';
-    if (urlInput) urlInput.focus();
-  });
-
   loadAmazonListUrl();
 });
 
@@ -2861,28 +2984,28 @@ function updateSearchNoResultsPanel(query) {
     panel.innerHTML = '';
     return;
   }
-  const urls = getBookSearchUrls(query, { bookTitle: query });
+  const info = window._lastBookInfo || {};
+  const knownAuthor = info.author || '';
+  const knownSummary = info.summary || '';
+  const searchQuery = knownAuthor ? `${query} ${knownAuthor}`.trim() : query;
+  const urls = getBookSearchUrls(searchQuery, { bookTitle: query });
+  const authorHint = knownAuthor
+    ? `<span class="snr-author-hint">著者: ${escapeHtml(knownAuthor)}</span>`
+    : '';
   panel.innerHTML = `
-    <div class="snr-label">「${escapeHtml(query)}」の記録なし — 外部で探す</div>
+    <div class="snr-label">「${escapeHtml(query)}」の記録なし${authorHint} — 外部で探す</div>
     <div class="snr-ext-row">
-      <a href="${escapeHtml(urls.amazon)}" target="_blank" rel="noopener" class="snr-btn snr-amazon">Amazon</a>
-      <a href="${escapeHtml(urls.audible)}" target="_blank" rel="noopener" class="snr-btn snr-audible">Audible</a>
-      <a href="${escapeHtml(urls.mercari)}" target="_blank" rel="noopener" class="snr-btn snr-mercari">メルカリ</a>
-      <a href="${escapeHtml(urls.bookoff)}" target="_blank" rel="noopener" class="snr-btn snr-bookoff">ブックオフ</a>
-      <a href="${escapeHtml(urls.setagaya)}" target="_blank" rel="noopener" class="snr-btn snr-library">図書館</a>
-    </div>
-    <div class="snr-paper-row">
-      <button type="button" class="snr-btn snr-paper" id="snrAddPaperBtn">＋ 紙の本として保存</button>
+      ${_buildSearchAppButtons(urls, query)}
     </div>
   `;
   panel.style.display = 'block';
 
-  // +紙の本ボタン
+  // +紙の本ボタン（著者・概要・Amazonリンク込みで保存）
   document.getElementById('snrAddPaperBtn')?.addEventListener('click', async () => {
     const btn = document.getElementById('snrAddPaperBtn');
     if (btn) { btn.disabled = true; btn.textContent = '保存中…'; }
-    await addPaperBook(query, '', '', '', '', urls.amazon);
-    // 保存成功時はパネルを閉じる
+    const cur = window._lastBookInfo || {};
+    await addPaperBook(query, cur.author || '', cur.summary || '', '', '', urls.amazon);
     const stillExists = allBooks.some(b => (b.title || '').trim().toLowerCase() === query.trim().toLowerCase());
     if (stillExists) {
       panel.style.display = 'none';
@@ -3095,7 +3218,7 @@ function reviewUrlForBook(book) {
   if (book.source === 'setagaya') return getSetagayaRatingUrl(book);
   if (book.source === 'paper') {
     const q = `${book.title || ''} ${book.author || ''}`.trim();
-    return q ? `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks` : '';
+    return q ? appendTagToUrl(`https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`, getAffiliateTag()) : '';
   }
   return '';
 }
@@ -3544,10 +3667,10 @@ function openBookDetail(book) {
   // 紙の本: 保存済み detail_url があればそれを使い、なければ Amazon 検索URLを生成
   if (book.source === 'paper') {
     if (book.detail_url) {
-      detailHref = book.detail_url;
+      detailHref = appendTagToUrl(book.detail_url, getAffiliateTag());
     } else {
       const q = `${book.title || ''} ${book.author || ''}`.trim();
-      if (q) detailHref = `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`;
+      if (q) detailHref = appendTagToUrl(`https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`, getAffiliateTag());
     }
   }
 
@@ -3948,11 +4071,11 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
     // 詳細URLを解決（外部リンク用）
     const cardDetailUrl = (() => {
       if (book.source === 'paper') {
-        if (book.detail_url) return book.detail_url;
+        if (book.detail_url) return appendTagToUrl(book.detail_url, getAffiliateTag());
         const q = `${book.title || ''} ${book.author || ''}`.trim();
-        return q ? `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks` : '';
+        return q ? appendTagToUrl(`https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`, getAffiliateTag()) : '';
       }
-      return book.detail_url || '';
+      return book.detail_url ? appendTagToUrl(book.detail_url, getAffiliateTag()) : '';
     })();
     const srcBadge = srcShort ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short" title="${escapeHtml(sourceLabel(book.source))}" data-filter-source="${escapeHtml(book.source)}">${srcShort}</span> ` : '';
     const completedBadge = book.completed ? `<span class="badge-completed badge-short" title="読了" data-filter-source="${escapeHtml(book.source || '')}">完</span> ` : '';
@@ -4644,6 +4767,7 @@ async function openSettingsModal() {
     }
   }
   if (statusEl) statusEl.textContent = '';
+  _loadSearchAppsUI();
   modal.classList.add('open');
 }
 
@@ -4664,6 +4788,7 @@ async function saveSettings() {
   if (defaultPageSelect) {
     setDefaultPage(defaultPageSelect.value);
   }
+  _saveSearchAppsFromUI();
   try {
     const res = await fetch('/api/ai-config', {
       method: 'POST',
@@ -4985,6 +5110,61 @@ document.getElementById('menuAmazonAi')?.addEventListener('click', () => {
   document.getElementById('hamburgerMenu')?.classList.remove('open');
   openSettingsModal();
 });
+
+/* --- Amazon設定モーダル --- */
+
+function openAmazonSettingsModal() {
+  const modal = document.getElementById('amazonSettingsModal');
+  if (!modal) return;
+  // 現在の値をロード
+  const url = localStorage.getItem(AMAZON_LIST_URL_KEY) || '';
+  const name = localStorage.getItem(AMAZON_LIST_NAME_KEY) || '';
+  const tag = localStorage.getItem(AFFILIATE_TAG_KEY) || DEFAULT_AFFILIATE_TAG;
+  const urlInput = document.getElementById('amazonSettingsListUrl');
+  const nameInput = document.getElementById('amazonSettingsListName');
+  const tagInput = document.getElementById('amazonSettingsTag');
+  if (urlInput) urlInput.value = url;
+  if (nameInput) nameInput.value = name;
+  if (tagInput) tagInput.value = tag;
+  const statusEl = document.getElementById('amazonSettingsStatus');
+  if (statusEl) statusEl.textContent = '';
+  modal.style.display = 'flex';
+}
+
+function closeAmazonSettingsModal() {
+  const modal = document.getElementById('amazonSettingsModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function saveAmazonSettings() {
+  const url = (document.getElementById('amazonSettingsListUrl')?.value || '').trim();
+  const name = (document.getElementById('amazonSettingsListName')?.value || '').trim();
+  const tag = (document.getElementById('amazonSettingsTag')?.value || '').trim();
+  // Amazonリストの保存
+  localStorage.setItem(AMAZON_LIST_URL_KEY, url);
+  localStorage.setItem(AMAZON_LIST_NAME_KEY, name);
+  // アフィリエイトタグの保存
+  setAffiliateTag(tag);
+  // Yomuタブのリスト表示も更新
+  loadAmazonListUrl();
+  const statusEl = document.getElementById('amazonSettingsStatus');
+  if (statusEl) {
+    statusEl.textContent = '保存しました';
+    statusEl.style.color = 'var(--success)';
+    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
+  }
+}
+
+document.getElementById('menuAmazonSettings')?.addEventListener('click', () => {
+  document.getElementById('hamburgerMenu')?.classList.remove('open');
+  openAmazonSettingsModal();
+});
+document.getElementById('amazonSettingsClose')?.addEventListener('click', closeAmazonSettingsModal);
+document.getElementById('amazonSettingsCancelBtn')?.addEventListener('click', closeAmazonSettingsModal);
+document.getElementById('amazonSettingsSaveBtn')?.addEventListener('click', saveAmazonSettings);
+document.getElementById('amazonSettingsModal')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeAmazonSettingsModal();
+});
 document.getElementById('menuMessages')?.addEventListener('click', openMessagesFromMenu);
 document.querySelectorAll('[data-help-url]').forEach((el) => {
   el.addEventListener('click', () => {
@@ -5017,6 +5197,11 @@ document.getElementById('settingsModal')?.addEventListener('click', (e) => {
   if (e.target === e.currentTarget) closeSettingsModal();
 });
 document.getElementById('settingsSaveBtn')?.addEventListener('click', saveSettings);
+document.getElementById('saAddCustomBtn')?.addEventListener('click', () => {
+  const cfg = getSearchAppsConfig();
+  const newIdx = (document.querySelectorAll('#saCustomList .sa-custom-row').length);
+  _renderCustomAppRow({ label: '', url: '', enabled: true }, newIdx);
+});
 document.getElementById('affiliateTagToggle')?.addEventListener('click', () => {
   const section = document.getElementById('affiliateTagSection');
   if (section) section.style.display = section.style.display === 'none' ? 'block' : 'none';
