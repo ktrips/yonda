@@ -2086,9 +2086,9 @@ def api_add_paper_book():
         if not title:
             return jsonify({"success": False, "error": "タイトルは必須です"}), 400
 
-        import pytz as _pytz
-        _jst = _pytz.timezone("Asia/Tokyo")
-        now_jst = datetime.now(_jst)
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+        _jst = _tz(_td(hours=9))
+        now_jst = _dt.now(_jst)
         now_iso = now_jst.strftime("%Y-%m-%dT%H:%M:%S+09:00")
         today = now_jst.strftime("%Y-%m-%d")
 
