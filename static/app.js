@@ -3765,8 +3765,8 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
         <div class="book-card-body">
           <div class="book-card-title">${titleSrcBadge}${favoriteBadge}${escapeHtml(book.title)}</div>
           ${supplementHtml ? `<div class="book-card-title-supplement">${supplementHtml}${unratedBtn}</div>` : unratedBtn}
-          <div class="book-card-author">${escapeHtml(book.author || '')}${(book.runtime_length_min || 0) > 0 ? ` · ${formatRuntime(book.runtime_length_min)}` : ''}${book.completed && book.completed_date ? ` · 読了: ${formatDateOnly(book.completed_date)}` : ''}</div>
-          <div class="book-card-genre-row">${completedBadge}${srcBadge}${genreHtml}</div>
+          <div class="book-card-author">${escapeHtml(book.author || '')}${(book.runtime_length_min || 0) > 0 ? ` · ${formatRuntime(book.runtime_length_min)}` : ''}${book.completed ? ` · <span class="badge-completed badge-short" title="読了" data-filter-source="${escapeHtml(book.source || '')}">完</span>${book.completed_date ? ` ${formatDateOnly(book.completed_date)}` : ''}` : ''}</div>
+          <div class="book-card-genre-row">${genreHtml}</div>
           ${progressBarHtml}
           ${!book.completed ? `<div class="book-card-meta">${formatProgress(book) ? `<span>進捗: ${formatProgress(book)}</span>` : `<span>${formatDate(book.loan_date)}</span>`}</div>` : ''}
           ${summaryHtml}
