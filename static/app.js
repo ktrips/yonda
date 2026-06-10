@@ -716,6 +716,10 @@ async function loadFromFile() {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'データなし');
     allBooks = data.books || [];
+    // ジャンル正規化をプリコンピュート（各所での再計算を回避）
+    for (const b of allBooks) {
+      b._normalizedGenre = normalizeGenre(b.genre || '');
+    }
     const sources = data.sources || [];
     updateStats();
     populateSourceFilter(sources);
@@ -1031,15 +1035,16 @@ function populateGenreFilter() {
   const current = sel.value;
   const genreCount = {};
   for (const b of allBooks) {
-    const g = displayGenre(b.genre) || 'その他';
+    const g = b._normalizedGenre || 'その他';
     genreCount[g] = (genreCount[g] || 0) + 1;
   }
   const sorted = Object.entries(genreCount)
     .sort((a, b) => b[1] - a[1]);
-  sel.innerHTML = '<option value="all">すべて</option>';
+  const html = ['<option value="all">すべて</option>'];
   for (const [g, cnt] of sorted) {
-    sel.innerHTML += `<option value="${escapeHtml(g)}">${escapeHtml(g)}（${cnt}）</option>`;
+    html.push(`<option value="${escapeHtml(g)}">${escapeHtml(g)}（${cnt}）</option>`);
   }
+  sel.innerHTML = html.join('');
   if ([...sel.options].some(o => o.value === current)) sel.value = current;
 }
 
@@ -1439,7 +1444,7 @@ function applyFilters() {
     books = books.filter(b => b.source === source);
   }
   if (genre !== 'all') {
-    books = books.filter(b => (displayGenre(b.genre) || 'その他') === genre);
+    books = books.filter(b => (b._normalizedGenre || 'その他') === genre);
   }
   if (rating === 'completed') {
     books = books.filter(b => b.completed);
@@ -2286,14 +2291,19 @@ function applySorting(books) {
 
 /* --- Charts --- */
 
-/** ソース・状態・ジャンルでフィルタした本リスト（チャート用。検索・並べ替えは含まない） */
+/** チャート用本リスト: filteredBooks を再利用してフィルタ重複計算を回避 */
 function getBooksForChart() {
+  // filteredBooks は applyFilters() で既にフィルタ済みのため、そのまま利用
+  // ただし検索文字列によるフィルタは除外したいので検索なしの場合は filteredBooks を使う
+  const searchVal = (document.getElementById('searchInputYonda')?.value || '').trim();
+  if (!searchVal) return [...filteredBooks];
+  // 検索中は allBooks からフィルタし直す（検索を除いたフィルタ条件）
   const source = document.getElementById('sourceFilter')?.value || 'all';
   const genre = document.getElementById('genreFilter')?.value || 'all';
   const rating = document.getElementById('ratingFilter')?.value || 'all';
   let books = [...allBooks];
   if (source !== 'all') books = books.filter(b => b.source === source);
-  if (genre !== 'all') books = books.filter(b => (displayGenre(b.genre) || 'その他') === genre);
+  if (genre !== 'all') books = books.filter(b => (b._normalizedGenre || 'その他') === genre);
   if (rating === 'completed') books = books.filter(b => b.completed);
   else if (rating === 'in_progress') books = books.filter(b => isInProgress(b));
   else if (rating === 'yearly_completed') {
@@ -2501,7 +2511,7 @@ function renderGenreChart() {
   const useRuntime = chartMode === 'runtime';
   const books = getBooksForChart();
   for (const b of books) {
-    const g = displayGenre(b.genre) || 'その他';
+    const g = b._normalizedGenre || 'その他';
     if (!genreData[g]) genreData[g] = { count: 0, runtime: 0 };
     genreData[g].count++;
     if (useRuntime && (b.source === 'audible_jp' || b.source === 'setagaya') && b.completed) {
@@ -2599,7 +2609,7 @@ function renderRelationChart() {
     const ratingKeys = [0, 1, 2, 3, 4, 5];
 
     for (const b of books) {
-      const g = displayGenre(b.genre) || 'その他';
+      const g = b._normalizedGenre || 'その他';
       const r = Math.round(displayRating(b) || 0);
       if (!genreCount[g]) genreCount[g] = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
       genreCount[g][Math.min(r, 5)] = (genreCount[g][Math.min(r, 5)] || 0) + 1;
@@ -2640,7 +2650,7 @@ function renderRelationChart() {
     const authorGenreCount = {};
     for (const b of books) {
       const a = (b.author || '').trim() || '（著者不明）';
-      const g = displayGenre(b.genre) || 'その他';
+      const g = b._normalizedGenre || 'その他';
       if (!authorGenreCount[a]) authorGenreCount[a] = {};
       authorGenreCount[a][g] = (authorGenreCount[a][g] || 0) + 1;
     }
@@ -2651,7 +2661,7 @@ function renderRelationChart() {
       .sort((x, y) => y[1] - x[1])
       .slice(0, 10);
     const authors = authorTotals.map(([a]) => a);
-    const genres = [...new Set(books.flatMap(b => [displayGenre(b.genre) || 'その他']))]
+    const genres = [...new Set(books.flatMap(b => [b._normalizedGenre || 'その他']))]
       .filter(Boolean)
       .sort((a, b) => {
         const ca = books.filter(bk => (displayGenre(bk.genre) || 'その他') === a).length;
@@ -2704,7 +2714,7 @@ function renderTagTab() {
   for (const cat of CANONICAL_GENRES) { genreBooks[cat] = []; genreTagMap[cat] = {}; }
 
   for (const b of books) {
-    const cat = normalizeGenre(b.genre);
+    const cat = b._normalizedGenre || normalizeGenre(b.genre || '');
     if (!genreBooks[cat]) { genreBooks[cat] = []; genreTagMap[cat] = {}; }
     genreBooks[cat].push(b);
     for (const tag of generateDetailedTagsForBook(b, cat)) {
@@ -2751,7 +2761,7 @@ function _showGenreTagBooks(genre, tag, books) {
   if (!resultEl) return;
 
   const matched = books
-    .filter(b => normalizeGenre(b.genre) === genre)
+    .filter(b => (b._normalizedGenre || normalizeGenre(b.genre || '')) === genre)
     .filter(b => generateDetailedTagsForBook(b, genre).includes(tag))
     .sort((a, b) => {
       if (a.completed && !b.completed) return -1;
@@ -3879,7 +3889,7 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
     const progressBarHtml = book.source === 'kindle' && (book.percent_complete || 0) > 0 ? renderProgressBar(book) : '';
 
     // ジャンル背景色（unread カラーを薄く）
-    const genreCanonical = normalizeGenre(book.genre || '');
+    const genreCanonical = book._normalizedGenre || normalizeGenre(book.genre || '');
     const genreColors = CAT_COLORS[genreCanonical] || CAT_COLORS['その他'];
     const cardBg = genreColors.unread + '55'; // ~33% opacity
     const cardStyle = `style="background: ${cardBg};"`;

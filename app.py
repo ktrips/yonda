@@ -15,6 +15,7 @@ from pathlib import Path
 
 import requests
 from flask import Flask, render_template, jsonify, request, send_file
+from flask_compress import Compress
 
 import library_service
 from adapters.kindle import KindleAdapter
@@ -38,6 +39,15 @@ app = Flask(
     static_folder=str(APP_DIR / "static"),
 )
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB（長い会話履歴対応）
+app.config["COMPRESS_MIMETYPES"] = [
+    "application/json",
+    "text/html",
+    "text/css",
+    "application/javascript",
+    "text/javascript",
+]
+app.config["COMPRESS_LEVEL"] = 6
+Compress(app)
 
 
 @app.route("/")
@@ -984,13 +994,16 @@ def api_books():
     try:
         data = library_service.load_saved()
         if data is None:
-            return jsonify({
+            resp = jsonify({
                 "success": True,
                 "books": [],
                 "sources": [],
                 "total": 0,
             })
-        return jsonify({"success": True, **data})
+        else:
+            resp = jsonify({"success": True, **data})
+        resp.headers["Cache-Control"] = "private, max-age=60"
+        return resp
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
