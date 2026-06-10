@@ -174,7 +174,6 @@
         </div>
         <div id="bookTabs" class="book-tabs" style="display:none;">
           <button type="button" class="book-tab active" id="tabRead" data-tab="read">読んだ</button>
-          <button type="button" class="book-tab" id="tabRanking" data-tab="ranking">ランキング</button>
           <button type="button" class="book-tab" id="tabCommunity" data-tab="community">みんなのYonda</button>
         </div>
         <div id="communitySection" class="recommend-section" style="display:none;">
@@ -185,15 +184,14 @@
           <div id="communityLoading" class="recommend-loading" style="display:none;">読み込み中…</div>
           <div id="communityMessageList"></div>
         </div>
-        <div id="rankingSection" class="ranking-section" style="display:none;">
-          <div class="ranking-filters">
-            <span class="ranking-menu-label">ランキング</span>
-            <div class="filter-group">
-              <select id="rankingYearFilter" class="filter-select">
-                <option value="all">全期間</option>
-              </select>
-            </div>
-          </div>
+        <!-- マイ・ランキング（読んだタブ内） -->
+        <div id="myRankingBar" class="my-ranking-bar" style="display:none;">
+          <button type="button" class="btn-my-ranking" id="myRankingToggleBtn">🏆 マイ・ランキング</button>
+          <select id="rankingYearFilter" class="filter-select my-ranking-year">
+            <option value="all">全期間</option>
+          </select>
+        </div>
+        <div id="rankingSection" class="ranking-section my-ranking-section" style="display:none;">
           <div id="rankingList" class="ranking-list"></div>
         </div>
         <div id="messagesSection" class="messages-section" style="display:none;">

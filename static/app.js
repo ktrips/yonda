@@ -26,7 +26,8 @@ let allBooks = [];
 let filteredBooks = [];
 let currentPage = 0;
 let activeMainTab = 'yonda'; // 'yonda' | 'yomu' | 'oshi'
-let activeBookTab = 'read'; // 'read' = 読んだ/途中, 'ranking' = ランキング, 'community' = みんなのYonda, 'messages' = メッセージ
+let activeBookTab = 'read'; // 'read' = 読んだ/途中, 'community' = みんなのYonda, 'messages' = メッセージ
+let myRankingOpen = false;
 let monthlyChart = null;
 let genreChart = null;
 let currentDetailBook = null;
@@ -939,6 +940,8 @@ function showFilters() {
   if (bookTabs) {
     bookTabs.style.display = allBooks.length > 0 ? 'flex' : 'none';
   }
+  const myRankingBar = document.getElementById('myRankingBar');
+  if (myRankingBar) myRankingBar.style.display = (activeMainTab === 'yonda' && activeBookTab === 'read' && allBooks.length > 0) ? 'flex' : 'none';
   updateTabContentVisibility();
   updateMainTabVisibility();
 }
@@ -969,18 +972,14 @@ function updateTabContentVisibility() {
   const bookList = document.getElementById('bookList');
   const pagination = document.getElementById('pagination');
   const rankingSection = document.getElementById('rankingSection');
+  const myRankingBar = document.getElementById('myRankingBar');
   const communitySection = document.getElementById('communitySection');
   const messagesSection = document.getElementById('messagesSection');
-  if (activeBookTab === 'ranking') {
-    if (bookList) bookList.style.display = 'none';
-    if (pagination) pagination.style.display = 'none';
-    if (communitySection) communitySection.style.display = 'none';
-    if (messagesSection) messagesSection.style.display = 'none';
-    if (rankingSection) {
-      rankingSection.style.display = 'block';
-      renderRanking();
-    }
-  } else if (activeBookTab === 'community') {
+
+  // マイ・ランキングバーは読んだタブのみ表示
+  if (myRankingBar) myRankingBar.style.display = (activeBookTab === 'read' && allBooks.length > 0) ? 'flex' : 'none';
+
+  if (activeBookTab === 'community') {
     if (bookList) bookList.style.display = 'none';
     if (pagination) pagination.style.display = 'none';
     if (rankingSection) rankingSection.style.display = 'none';
@@ -999,7 +998,8 @@ function updateTabContentVisibility() {
       renderMessages();
     }
   } else {
-    if (rankingSection) rankingSection.style.display = 'none';
+    // read タブ
+    if (rankingSection) rankingSection.style.display = myRankingOpen ? 'block' : 'none';
     if (communitySection) communitySection.style.display = 'none';
     if (messagesSection) messagesSection.style.display = 'none';
     // bookList / pagination は renderBooks で表示制御
@@ -1289,6 +1289,18 @@ function renderCommunitySection() {
     });
 }
 document.getElementById('communityRefreshBtn')?.addEventListener('click', renderCommunitySection);
+document.getElementById('myRankingToggleBtn')?.addEventListener('click', () => {
+  myRankingOpen = !myRankingOpen;
+  const btn = document.getElementById('myRankingToggleBtn');
+  const section = document.getElementById('rankingSection');
+  if (btn) btn.classList.toggle('active', myRankingOpen);
+  if (section) section.style.display = myRankingOpen ? 'block' : 'none';
+  if (myRankingOpen) {
+    selectedRankingGenre = null;
+    populateRankingFilters();
+    renderRanking();
+  }
+});
 
 async function renderYondaRecommend() {
   const listEl = document.getElementById('recommendList');
@@ -1381,7 +1393,7 @@ async function renderYondaRecommend() {
 }
 
 function applyFilters() {
-  if (activeBookTab === 'ranking' || activeBookTab === 'messages') {
+  if (activeBookTab === 'messages') {
     updateTabContentVisibility();
     return;
   }
@@ -4016,7 +4028,7 @@ document.querySelectorAll('.book-tab').forEach(tab => {
     activeBookTab = tabVal;
     document.querySelectorAll('.book-tab').forEach(t => t.classList.remove('active'));
     tab.classList.add('active');
-    if (tabVal === 'ranking' || tabVal === 'community' || tabVal === 'messages') {
+    if (tabVal === 'community' || tabVal === 'messages') {
       updateTabContentVisibility();
     } else {
       const sortSel = document.getElementById('sortSelect');
@@ -4028,11 +4040,12 @@ document.querySelectorAll('.book-tab').forEach(tab => {
 });
 
 document.getElementById('rankingYearFilter')?.addEventListener('change', () => {
-  if (activeBookTab === 'ranking') {
+  if (myRankingOpen) {
     selectedRankingGenre = null;
     populateRankingFilters();
     renderRanking();
   }
+});
 });
 document.getElementById('recommendGenerateBtn')?.addEventListener('click', () => {
   if (activeBookTab === 'recommend') renderYondaRecommend();

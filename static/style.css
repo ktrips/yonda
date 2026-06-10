@@ -2954,6 +2954,40 @@ header {
   .tag-cat-tab { font-size: 0.72rem; padding: 0.25rem 0.45rem; }
 }
 
+/* ── マイ・ランキングバー ── */
+.my-ranking-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.5rem;
+  margin-bottom: 0.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.btn-my-ranking {
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-my-ranking:hover, .btn-my-ranking.active {
+  background: var(--accent);
+  color: #fff;
+}
+.my-ranking-year {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.4rem;
+}
+.my-ranking-section {
+  margin-bottom: 0.75rem;
+}
+
 /* ── みんなのYonda コミュニティセクション ── */
 .community-header {
   display: flex;
