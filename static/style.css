@@ -2959,11 +2959,8 @@ header {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.4rem 0.5rem;
+  padding: 0.4rem 0;
   margin-bottom: 0.5rem;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
 }
 .btn-my-ranking {
   font-size: 0.82rem;

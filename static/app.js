@@ -1260,15 +1260,19 @@ function renderCommunitySection() {
         listEl.innerHTML = '<p class="recommend-empty">メッセージがまだありません。</p>';
         return;
       }
+      // book データをキャッシュして後でクリック時に参照
+      const communityBookCache = {};
       listEl.innerHTML = messages.map((msg, idx) => {
         const dateText = msg.created_at ? formatSyncDate(msg.created_at) : '日時不明';
         const books = (msg.books || []).slice(0, 5);
-        const bookItems = books.map(item => {
+        const bookItems = books.map((item, bidx) => {
           const book = item.book || item;
+          const cacheKey = `${idx}-${bidx}`;
+          communityBookCache[cacheKey] = book;
           const cover = book.cover_url || NO_COVER;
           const srcShort = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' }[book.source] || '';
           const srcBadge = srcShort ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short">${srcShort}</span> ` : '';
-          return `<div class="community-book-item">
+          return `<div class="community-book-item" data-cache-key="${cacheKey}" style="cursor:pointer;">
             <img src="${escapeHtml(cover)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'" class="community-book-cover">
             <div class="community-book-info">
               <div class="community-book-title">${srcBadge}${escapeHtml(book.title || '—')}</div>
@@ -1282,6 +1286,20 @@ function renderCommunitySection() {
           <div class="community-books-row">${bookItems}${more}</div>
         </div>`;
       }).join('');
+
+      // クリックで詳細モーダルを開く
+      listEl.querySelectorAll('.community-book-item').forEach(el => {
+        el.addEventListener('click', () => {
+          const key = el.dataset.cacheKey;
+          const msgBook = communityBookCache[key];
+          if (!msgBook) return;
+          // allBooks から book_id で一致する本を探す（より詳細なデータがある場合）
+          const found = msgBook.book_id
+            ? allBooks.find(b => b.book_id === msgBook.book_id)
+            : allBooks.find(b => b.title === msgBook.title && b.author === msgBook.author);
+          openBookDetail(found || msgBook);
+        });
+      });
     })
     .catch(e => {
       if (loadingEl) loadingEl.style.display = 'none';
@@ -4045,7 +4063,6 @@ document.getElementById('rankingYearFilter')?.addEventListener('change', () => {
     populateRankingFilters();
     renderRanking();
   }
-});
 });
 document.getElementById('recommendGenerateBtn')?.addEventListener('click', () => {
   if (activeBookTab === 'recommend') renderYondaRecommend();
