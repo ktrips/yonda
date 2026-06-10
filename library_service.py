@@ -403,7 +403,7 @@ def update_paper_book(book_id: str, updates: dict) -> dict:
 
     books: list[dict] = payload.get("books", [])
     allowed = {"title", "author", "cover_url", "summary", "full_summary", "genre",
-               "status", "completed", "completed_date", "added_date"}
+               "status", "completed", "completed_date", "added_date", "detail_url"}
     for book in books:
         # book_id が無い旧データは title+author でマッチ
         match_id = book.get("book_id") == book_id

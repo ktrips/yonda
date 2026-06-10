@@ -2175,6 +2175,8 @@ def api_update_paper_book(book_id: str):
             updates["completed"] = (status == "completed")
         if "completed_date" in body:
             updates["completed_date"] = (body["completed_date"] or "").strip()
+        if "detail_url" in body:
+            updates["detail_url"] = (body["detail_url"] or "").strip()
         # 旧データ（book_id 未設定）の title+author フォールバック用
         updates["_title"] = body.get("_title", "")
         updates["_author"] = body.get("_author", "")

@@ -2078,6 +2078,26 @@ header {
   border: 1px solid var(--accent);
   border-radius: 999px;
   background: var(--accent-light);
+
+.book-table-insight-edit {
+  margin-bottom: 0.25rem;
+}
+
+.btn-table-edit-paper {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.68rem;
+  border: 1px solid #8a9;
+  border-radius: 999px;
+  background: #f0f8f0;
+  color: #2e7d32;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-table-edit-paper:hover {
+  background: #c8e6c9;
+}
   color: var(--accent);
   font-size: 0.68rem;
   font-weight: 600;
@@ -2336,9 +2356,19 @@ header {
 .book-detail-comment { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.75rem; line-height: 1.5; }
 .book-card-runtime { font-size: 0.8rem; color: var(--text-secondary); margin-right: 0.5rem; }
 .book-detail-links {
-  display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem;
+  display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.75rem;
 }
-.book-detail-links .btn { flex: 0 0 auto; }
+.book-detail-links .btn {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.7rem;
+}
+.book-detail-genre-orig {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #888);
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
 .book-detail-summary-wrap h3 {
   font-size: 0.85rem; font-weight: 600; color: var(--accent);
   margin-bottom: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border);

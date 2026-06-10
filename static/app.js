@@ -2834,15 +2834,22 @@ async function copyBookInsightText(insight, button = null) {
 
 function renderTableInsightCell(book) {
   const insight = findBookInsight(book);
+  const editBtn = book.source === 'paper' && book.book_id
+    ? `<button type="button" class="btn-table-edit-paper" data-book-id="${escapeHtml(book.book_id)}" title="編集" onclick="event.stopPropagation();openPaperBookEditById(this.dataset.bookId)">✏️</button>`
+    : '';
   if (!insight || !Array.isArray(insight.points) || insight.points.length === 0) {
     const idx = allBooks.indexOf(book);
-    return `<button type="button" class="btn-table-ai-insight" data-book-index="${idx}">AI生成</button>`;
+    return `<div class="book-table-insight-wrap">
+      ${editBtn ? `<div class="book-table-insight-edit">${editBtn}</div>` : ''}
+      <button type="button" class="btn-table-ai-insight" data-book-index="${idx}">AI生成</button>
+    </div>`;
   }
   const idx = allBooks.indexOf(book);
   const reviewUrl = reviewUrlForBook(book);
   return `
     <div class="book-table-insight-wrap">
       <div class="book-table-insight-actions">
+        ${editBtn}
         <button type="button" class="btn-copy-insight btn-copy-insight-table" data-book-index="${idx}" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉</button>
         ${reviewUrl ? `<a href="${escapeAttr(reviewUrl)}" target="_blank" rel="noopener" class="btn-review-insight btn-review-insight-table" title="レビューを書く" aria-label="レビューを書く">📖</a>` : ''}
       </div>
@@ -3311,10 +3318,14 @@ function openBookDetail(book) {
     const tag = getAffiliateTag();
     if (tag) detailHref = appendTagToUrl(book.detail_url, tag);
   }
-  // 紙の本はAmazonリンクを自動付与
+  // 紙の本: 保存済み detail_url があればそれを使い、なければ Amazon 検索URLを生成
   if (book.source === 'paper') {
-    const q = `${book.title || ''} ${book.author || ''}`.trim();
-    if (q) detailHref = `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`;
+    if (book.detail_url) {
+      detailHref = book.detail_url;
+    } else {
+      const q = `${book.title || ''} ${book.author || ''}`.trim();
+      if (q) detailHref = `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`;
+    }
   }
 
   // タイトル: detail URLがあればリンクにする、ソースバッジも付ける
@@ -3339,7 +3350,17 @@ function openBookDetail(book) {
     authorEl.textContent = book.author ? `著者: ${book.author}` : '';
   }
 
-  document.getElementById('bookDetailGenre').textContent = book.genre ? `ジャンル: ${book.genre}` : '';
+  const genreEl = document.getElementById('bookDetailGenre');
+  if (book.genre) {
+    const canonical = normalizeGenre(book.genre);
+    const colors = CAT_COLORS[canonical] || CAT_COLORS['その他'];
+    const bg = book.completed ? colors.read : colors.unread;
+    const textColor = book.completed ? '#fff' : '#444';
+    const orig = book.genre !== canonical ? `<span class="book-detail-genre-orig">${escapeHtml(book.genre)}</span>` : '';
+    genreEl.innerHTML = `<span class="genre-badge" style="background:${bg};color:${textColor}" data-filter-genre="${escapeHtml(canonical)}">${escapeHtml(canonical)}</span>${orig}`;
+  } else {
+    genreEl.textContent = '';
+  }
   document.getElementById('bookDetailFavorite').textContent = book.favorite ? '♥ お気に入り' : '';
   document.getElementById('bookDetailFavorite').style.display = book.favorite ? '' : 'none';
 
@@ -3511,6 +3532,10 @@ function openPaperBookEdit(book) {
   const addedDateEl = document.getElementById('paperEditAddedDate');
   if (addedDateEl) addedDateEl.textContent = book.added_date || book.loan_date || '—';
 
+  // Amazonリンク
+  const detailUrlEl = document.getElementById('paperEditDetailUrl');
+  if (detailUrlEl) detailUrlEl.value = book.detail_url || '';
+
   // 表紙
   const coverUrl = book.cover_url || '';
   const isDataUrl = coverUrl.startsWith('data:');
@@ -3533,6 +3558,11 @@ function _toggleCompletedDateField(status) {
 function closePaperBookEdit() {
   _paperEditBook = null;
   document.getElementById('paperBookEditModal').classList.remove('open');
+}
+
+function openPaperBookEditById(bookId) {
+  const book = allBooks.find(b => b.book_id === bookId);
+  if (book) openPaperBookEdit(book);
 }
 
 async function savePaperBookEdit() {
@@ -3571,6 +3601,7 @@ async function savePaperBookEdit() {
   const body = {
     title, author, genre, summary, cover_url: coverUrl,
     status, completed_date: completedDate,
+    detail_url: (document.getElementById('paperEditDetailUrl')?.value || '').trim(),
     _title: _paperEditBook.title || '',
     _author: _paperEditBook.author || '',
   };
@@ -3694,13 +3725,14 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
     // 詳細URLを解決（外部リンク用）
     const cardDetailUrl = (() => {
       if (book.source === 'paper') {
+        if (book.detail_url) return book.detail_url;
         const q = `${book.title || ''} ${book.author || ''}`.trim();
         return q ? `https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks` : '';
       }
       return book.detail_url || '';
     })();
     const srcBadge = srcShort ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short" title="${escapeHtml(sourceLabel(book.source))}" data-filter-source="${escapeHtml(book.source)}">${srcShort}</span> ` : '';
-    const completedBadge = book.completed ? `<span class="badge-completed badge-short" title="読了" data-filter-source="${escapeHtml(book.source || '')}">了</span> ` : '';
+    const completedBadge = book.completed ? `<span class="badge-completed badge-short" title="読了" data-filter-source="${escapeHtml(book.source || '')}">完</span> ` : '';
     const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
     // タイトル左のソースバッジ（外部リンク付き）
     const titleSrcBadge = srcShort && cardDetailUrl
@@ -3720,8 +3752,14 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
     const summaryHtml = book.summary ? `<div class="book-card-summary">${escapeHtml(book.summary)}</div>` : '';
     const progressBarHtml = book.source === 'kindle' && (book.percent_complete || 0) > 0 ? renderProgressBar(book) : '';
 
+    // ジャンル背景色（unread カラーを薄く）
+    const genreCanonical = normalizeGenre(book.genre || '');
+    const genreColors = CAT_COLORS[genreCanonical] || CAT_COLORS['その他'];
+    const cardBg = genreColors.unread + '55'; // ~33% opacity
+    const cardStyle = `style="background: ${cardBg};"`;
+
     return header + `
-      <div class="book-card book-card-clickable${book.completed ? ' completed' : ''}${srcClass}" data-book-index="${i}" role="button" tabindex="0">
+      <div class="book-card book-card-clickable${book.completed ? ' completed' : ''}${srcClass}" data-book-index="${i}" role="button" tabindex="0" ${cardStyle}>
         <img class="book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
              onerror="this.src='${NO_COVER}'">
         <div class="book-card-body">
