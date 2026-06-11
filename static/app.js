@@ -89,13 +89,11 @@ function _showPublicOnly() {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  // 検索・統計・ハンバーガーを非表示
+  // 検索・統計を非表示（ハンバーガーはログインボタンのため残す）
   const searchEl = document.querySelector('.header-search');
   if (searchEl) searchEl.style.display = 'none';
   const statsEl = document.getElementById('headerStats');
   if (statsEl) statsEl.style.display = 'none';
-  const hamburgerEl = document.getElementById('hamburgerBtn');
-  if (hamburgerEl) hamburgerEl.style.display = 'none';
 
   // Yonda タブをコミュニティタブに切り替え
   const yondaTab = document.getElementById('mainTabYonda');
@@ -1613,17 +1611,16 @@ function renderCommunitySection() {
           </div>`;
         }).join('');
         const more = (msg.books || []).length > 5 ? `<div class="community-more">他 ${(msg.books || []).length - 5} 冊</div>` : '';
-        // ユーザー情報
+        // ユーザー情報＋日付を1行で
         const msgUser = msg.user || {};
-        const userHtml = msgUser.name ? `
-          <div class="community-user-row">
-            ${msgUser.picture ? `<img src="${escapeHtml(msgUser.picture)}" alt="" class="community-user-avatar" width="20" height="20">` : ''}
-            <span class="community-user-name">${escapeHtml(msgUser.name)}</span>
-          </div>` : '';
+        const avatarHtml = msgUser.picture
+          ? `<img src="${escapeHtml(msgUser.picture)}" alt="" class="community-user-avatar" width="18" height="18">`
+          : '';
+        const nameHtml = msgUser.name ? `<span class="community-user-name">${escapeHtml(msgUser.name)}</span>` : '';
+        const sepHtml = msgUser.name ? `<span class="community-date-sep">·</span>` : '';
         return `<div class="community-message-card">
           <div class="community-message-header">
-            ${userHtml}
-            <div class="community-message-date">${escapeHtml(dateText)}</div>
+            ${avatarHtml}${nameHtml}${sepHtml}<span class="community-message-date">${escapeHtml(dateText)}</span>
           </div>
           <div class="community-books-row">${bookItems}${more}</div>
         </div>`;
