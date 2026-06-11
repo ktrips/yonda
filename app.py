@@ -78,6 +78,10 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 # ---- Google OAuth ----
 _GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 _GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+_GOOGLE_REDIRECT_URI = os.environ.get(
+    "GOOGLE_REDIRECT_URI",
+    "https://yonda-305586484898.asia-northeast1.run.app/auth/callback"
+)
 _OAUTH_ENABLED = bool(_GOOGLE_CLIENT_ID and _GOOGLE_CLIENT_SECRET)
 
 oauth = OAuth(app)
@@ -138,9 +142,13 @@ def _before_request_handler():
 def auth_login():
     if not _OAUTH_ENABLED:
         return redirect(url_for("index"))
-    # Cloud Run / プロキシ経由では https を強制
-    redirect_uri = url_for("auth_callback", _external=True, _scheme="https")
-    return oauth.google.authorize_redirect(redirect_uri)
+    return oauth.google.authorize_redirect(_GOOGLE_REDIRECT_URI)
+
+
+@app.route("/auth/debug-redirect")
+def auth_debug_redirect():
+    """redirect_uri の確認用（開発時のみ）"""
+    return jsonify({"redirect_uri": _GOOGLE_REDIRECT_URI})
 
 
 def _migrate_root_data_to_user(uid_safe: str) -> None:
@@ -174,7 +182,7 @@ def _migrate_root_data_to_user(uid_safe: str) -> None:
 def auth_callback():
     if not _OAUTH_ENABLED:
         return redirect(url_for("index"))
-    token = oauth.google.authorize_access_token()
+    token = oauth.google.authorize_access_token(redirect_uri=_GOOGLE_REDIRECT_URI)
     user_info = token.get("userinfo") or oauth.google.userinfo()
     uid_safe = re.sub(r"[^a-zA-Z0-9_\-]", "_", user_info.get("sub", "anonymous"))
     session["user"] = {
