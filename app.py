@@ -154,12 +154,16 @@ def _before_request_handler():
 _OAUTH_STATE_DIR = Path(os.environ.get("YONDA_DATA_DIR", "data")) / ".oauth_states"
 
 
-def _save_oauth_state_to_fs(state: str) -> None:
+def _save_oauth_state_to_fs(state: str, redirect_uri: str) -> None:
     """OAuth state をファイルシステムにバックアップする（Cookie 消失対策）"""
     try:
         _OAUTH_STATE_DIR.mkdir(parents=True, exist_ok=True)
         sf = _OAUTH_STATE_DIR / f"oauth_state_{state}.json"
-        sf.write_text(json.dumps({"state": state, "created_at": time.time()}))
+        sf.write_text(json.dumps({
+            "state": state,
+            "redirect_uri": redirect_uri,
+            "created_at": time.time(),
+        }))
         logger.debug("OAuth state saved to FS: %s", state)
     except Exception as e:
         logger.warning("OAuth state FS backup failed: %s", e)
@@ -168,7 +172,6 @@ def _save_oauth_state_to_fs(state: str) -> None:
 def _restore_oauth_state_from_fs(state: str) -> bool:
     """ファイルシステムから OAuth state をセッションに復元する。成功すれば True。
     authlib 1.x のセッションキー形式 _state_google_{state} を使用。"""
-    # authlib 1.x で使われるセッションキー形式
     session_key = f"_state_google_{state}"
     if session_key in session:
         return True
@@ -182,8 +185,11 @@ def _restore_oauth_state_from_fs(state: str) -> bool:
         if time.time() - data.get("created_at", 0) > 600:
             logger.warning("OAuth state expired: %s", state)
             return False
-        # authlib が authorize_access_token で期待する最低限のデータをセッションへ注入
-        session[session_key] = {"state": state}
+        # redirect_uri を含めてセッションに注入（authlib が state_data から取り出す）
+        session[session_key] = {
+            "state": state,
+            "redirect_uri": data.get("redirect_uri", ""),
+        }
         logger.info("OAuth state restored from FS: %s → session[%s]", state, session_key)
         return True
     except Exception as e:
@@ -195,10 +201,10 @@ def _restore_oauth_state_from_fs(state: str) -> bool:
 def auth_login():
     if not _OAUTH_ENABLED:
         return redirect(url_for("index"))
-    # 独自に state を生成してファイルシステムに保存（Cookie 消失時のバックアップ）
     state = os.urandom(16).hex()
-    _save_oauth_state_to_fs(state)
-    # authlib に同じ state を渡してリダイレクト（セッション Cookie にも保存される）
+    # FS にバックアップ（redirect_uri も含めて保存）
+    _save_oauth_state_to_fs(state, _GOOGLE_REDIRECT_URI)
+    # authlib に同じ state を渡してリダイレクト
     return oauth.google.authorize_redirect(_GOOGLE_REDIRECT_URI, state=state)
 
 
@@ -255,7 +261,8 @@ def auth_callback():
         logger.warning("OAuth state not found for state=%s, restarting login", state)
         return redirect(url_for("auth_login"))
     try:
-        token = oauth.google.authorize_access_token(redirect_uri=_GOOGLE_REDIRECT_URI)
+        # redirect_uri は authlib が state_data から取り出すため、ここでは渡さない
+        token = oauth.google.authorize_access_token()
     except MismatchingStateError:
         logger.warning("MismatchingStateError after restore attempt, restarting login")
         return redirect(url_for("auth_login"))
