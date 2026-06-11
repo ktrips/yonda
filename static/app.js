@@ -23,25 +23,41 @@ function _applyAuthUI() {
   const avatarEl = document.getElementById('headerUserAvatar');
   const nameEl = document.getElementById('headerUserName');
 
+  // メニュー内のauth要素
+  const menuAuthSection = document.getElementById('menuAuthSection');
+  const menuUserInfo = document.getElementById('menuUserInfo');
+  const menuUserAvatar = document.getElementById('menuUserAvatar');
+  const menuUserName = document.getElementById('menuUserName');
+  const menuLoginBtn = document.getElementById('menuLoginBtn');
+
   if (!_oauthEnabled) {
-    // OAuth 未設定: ログインUIを非表示、全タブ表示
     if (loginBtn) loginBtn.style.display = 'none';
     if (userEl) userEl.style.display = 'none';
+    if (menuAuthSection) menuAuthSection.style.display = 'none';
     _showAllTabs();
     return;
   }
 
+  // メニューのauth欄を常に表示
+  if (menuAuthSection) menuAuthSection.style.display = '';
+
   if (_authUser) {
-    // ログイン済み
     if (loginBtn) loginBtn.style.display = 'none';
     if (userEl) userEl.style.display = '';
     if (avatarEl && _authUser.picture) avatarEl.src = _authUser.picture;
     if (nameEl) nameEl.textContent = _authUser.name || _authUser.email || '';
+    // メニュー内: ユーザー情報表示、ログインボタン非表示
+    if (menuUserInfo) menuUserInfo.style.display = '';
+    if (menuLoginBtn) menuLoginBtn.style.display = 'none';
+    if (menuUserAvatar && _authUser.picture) menuUserAvatar.src = _authUser.picture;
+    if (menuUserName) menuUserName.textContent = _authUser.name || _authUser.email || '';
     _showAllTabs();
   } else {
-    // 未ログイン: みんなのYondaのみ
     if (loginBtn) loginBtn.style.display = '';
     if (userEl) userEl.style.display = 'none';
+    // メニュー内: ログインボタン表示、ユーザー情報非表示
+    if (menuUserInfo) menuUserInfo.style.display = 'none';
+    if (menuLoginBtn) menuLoginBtn.style.display = '';
     _showPublicOnly();
   }
 }

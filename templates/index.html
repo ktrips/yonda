@@ -63,6 +63,16 @@
         <span></span><span></span><span></span>
       </button>
       <div class="hamburger-menu" id="hamburgerMenu">
+        <!-- ログイン状態（OAuth有効時） -->
+        <div id="menuAuthSection" style="display:none;">
+          <div id="menuUserInfo" class="menu-user-info" style="display:none;">
+            <img id="menuUserAvatar" class="menu-user-avatar" src="" alt="" width="24" height="24">
+            <span id="menuUserName" class="menu-user-name"></span>
+            <a href="/auth/logout" class="menu-logout-btn">ログアウト</a>
+          </div>
+          <a href="/auth/login" id="menuLoginBtn" class="menu-item menu-login-btn" style="display:none;">Googleでログイン</a>
+          <hr class="menu-separator">
+        </div>
         <button type="button" class="menu-item" id="menuMessages">メッセージ</button>
         <hr class="menu-separator">
         <button type="button" class="menu-link menu-link-btn" data-help-url="{{ url_for('help_usage_page') }}" data-help-title="Yondaの使い方">Yondaの使い方</button>
