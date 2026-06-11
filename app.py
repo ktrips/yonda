@@ -42,7 +42,27 @@ app = Flask(
     static_folder=str(APP_DIR / "static"),
 )
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
-app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", os.urandom(24).hex())
+def _get_stable_secret_key() -> str:
+    """FLASK_SECRET_KEY 未設定時は data/ に永続ファイルを生成して再起動後も維持"""
+    env_key = os.environ.get("FLASK_SECRET_KEY", "")
+    if env_key:
+        return env_key
+    key_file = Path(os.environ.get("YONDA_DATA_DIR", "data")) / ".secret_key"
+    key_file.parent.mkdir(parents=True, exist_ok=True)
+    if key_file.exists():
+        try:
+            return key_file.read_text().strip()
+        except Exception:
+            pass
+    new_key = os.urandom(32).hex()
+    try:
+        key_file.write_text(new_key)
+        key_file.chmod(0o600)
+    except Exception:
+        pass
+    return new_key
+
+app.config["SECRET_KEY"] = _get_stable_secret_key()
 app.config["COMPRESS_MIMETYPES"] = [
     "application/json",
     "text/html",
@@ -120,18 +140,47 @@ def auth_login():
     return oauth.google.authorize_redirect(redirect_uri)
 
 
+def _migrate_root_data_to_user(uid_safe: str) -> None:
+    """初回ログイン時: DATA_DIR ルートのデータをユーザーディレクトリにコピーする（一度だけ）"""
+    import shutil
+    user_dir = library_service.DATA_DIR / "users" / uid_safe
+    user_dir.mkdir(parents=True, exist_ok=True)
+    migrate_files = [
+        "library_books.json", "audible_books.json", "kindle_books.json",
+        "paper_books.json", "amazon_list.json", "book_insights.json",
+        "private_books.json", "hidden_books.json",
+    ]
+    # 既にユーザーデータがあればスキップ
+    has_data = any((user_dir / f).exists() for f in migrate_files)
+    if has_data:
+        return
+    migrated = []
+    for fname in migrate_files:
+        src = library_service.DATA_DIR / fname
+        if src.exists():
+            shutil.copy2(src, user_dir / fname)
+            migrated.append(fname)
+    if migrated:
+        logger.info("初回ログイン移行 (%s): %s", uid_safe, migrated)
+    # グローバル AI 設定も移行
+    if AI_CONFIG_PATH.exists() and not (user_dir / "ai_config.json").exists():
+        shutil.copy2(AI_CONFIG_PATH, user_dir / "ai_config.json")
+
+
 @app.route("/auth/callback")
 def auth_callback():
     if not _OAUTH_ENABLED:
         return redirect(url_for("index"))
     token = oauth.google.authorize_access_token()
     user_info = token.get("userinfo") or oauth.google.userinfo()
+    uid_safe = re.sub(r"[^a-zA-Z0-9_\-]", "_", user_info.get("sub", "anonymous"))
     session["user"] = {
         "sub": user_info.get("sub"),
         "email": user_info.get("email"),
         "name": user_info.get("name"),
         "picture": user_info.get("picture"),
     }
+    _migrate_root_data_to_user(uid_safe)
     return redirect(url_for("index"))
 
 
@@ -419,42 +468,55 @@ def _sanitize_api_key(key: str) -> str:
     return key.translate(table)
 
 
-_ai_config_cache: dict | None = None
-_ai_config_cache_mtime: float = 0.0
+_ai_config_cache: dict[str, dict] = {}      # key: path str
+_ai_config_cache_mtime: dict[str, float] = {}
+
+
+def _get_ai_config_path() -> Path:
+    """ログイン済みならユーザーデータディレクトリの ai_config.json、未ログインはグローバルパス"""
+    user_dir = library_service.get_user_data_dir()
+    if user_dir != library_service.DATA_DIR:
+        return user_dir / "ai_config.json"
+    return AI_CONFIG_PATH
 
 
 def _load_ai_config():
     """AI設定を読み込み。mtimeが変わっていなければキャッシュを返す。"""
-    global _ai_config_cache, _ai_config_cache_mtime
-    if not AI_CONFIG_PATH.exists():
+    path = _get_ai_config_path()
+    key = str(path)
+    if not path.exists():
         return {}
     try:
-        mtime = AI_CONFIG_PATH.stat().st_mtime
-        if _ai_config_cache is not None and mtime <= _ai_config_cache_mtime:
-            return _ai_config_cache
-        with open(AI_CONFIG_PATH, "r", encoding="utf-8") as f:
+        mtime = path.stat().st_mtime
+        if _ai_config_cache.get(key) is not None and mtime <= _ai_config_cache_mtime.get(key, 0):
+            return _ai_config_cache[key]
+        with open(path, "r", encoding="utf-8") as f:
             cfg = json.load(f)
         api_key = cfg.get("api_key") or ""
         if api_key:
             cfg["api_key"] = _sanitize_api_key(api_key)
-        _ai_config_cache = cfg
-        _ai_config_cache_mtime = mtime
+        _ai_config_cache[key] = cfg
+        _ai_config_cache_mtime[key] = mtime
         return cfg
     except Exception:
         return {}
 
 
 def _save_ai_config(provider: str, api_key: str):
-    """AI設定を保存（~/.config/yonda/ai_config.json）"""
-    global _ai_config_cache, _ai_config_cache_mtime
-    ensure_config_dir()
-    key = _sanitize_api_key(api_key.strip())
-    data = {"provider": provider, "api_key": key}
-    with open(AI_CONFIG_PATH, "w", encoding="utf-8") as f:
+    """AI設定を保存（ユーザーデータディレクトリ or グローバルパス）"""
+    path = _get_ai_config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    key_str = str(path)
+    api_key_clean = _sanitize_api_key(api_key.strip())
+    data = {"provider": provider, "api_key": api_key_clean}
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    AI_CONFIG_PATH.chmod(0o600)
-    _ai_config_cache = None
-    _ai_config_cache_mtime = 0.0
+    try:
+        path.chmod(0o600)
+    except Exception:
+        pass
+    _ai_config_cache.pop(key_str, None)
+    _ai_config_cache_mtime.pop(key_str, None)
 
 
 def _extract_field_value(line: str) -> str:
