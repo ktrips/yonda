@@ -4,6 +4,12 @@
 let _authUser = null;      // ログイン中ユーザー情報 (null = 未ログイン or OAuth 無効)
 let _oauthEnabled = false; // サーバーで OAuth が設定されているか
 
+function confirmLogout() {
+  if (confirm('ログアウトしますか？')) {
+    location.href = '/auth/logout';
+  }
+}
+
 async function initAuth() {
   try {
     const res = await fetch('/auth/me');

@@ -3401,8 +3401,11 @@ header {
 /* ---- ログイン UI ---- */
 .header-user {
   display: inline-flex; align-items: center; gap: 0.4rem;
-  margin-right: 0.5rem;
+  margin-right: 0.5rem; cursor: pointer;
+  padding: 0.2rem 0.4rem; border-radius: 1rem;
+  transition: background 0.15s;
 }
+.header-user:hover { background: rgba(255,255,255,0.15); }
 .header-user-avatar {
   width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
   border: 2px solid rgba(255,255,255,0.6);
@@ -3411,11 +3414,9 @@ header {
   font-size: 0.78rem; color: var(--header-text, #fff);
   max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.header-user-logout {
-  font-size: 0.85rem; color: rgba(255,255,255,0.75); text-decoration: none;
-  padding: 0.15rem 0.35rem; border-radius: 4px;
+@media (max-width: 600px) {
+  .header-user-name { display: none; }
 }
-.header-user-logout:hover { background: rgba(255,255,255,0.15); }
 
 .header-login-btn {
   display: inline-block;
