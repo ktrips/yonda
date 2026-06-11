@@ -59,6 +59,7 @@ _JSON_MAP: dict[str, Path] = {
 AMAZON_LIST_PATH = DATA_DIR / "amazon_list.json"
 BOOK_INSIGHTS_PATH = DATA_DIR / "book_insights.json"
 YONDA_MESSAGES_PATH = DATA_DIR / "yonda_messages.json"
+PRIVATE_BOOKS_PATH = DATA_DIR / "private_books.json"
 
 _ENV_MAP = {
     "setagaya": ("SETAGAYA_USER_ID", "SETAGAYA_PASSWORD"),
@@ -312,9 +313,10 @@ _saved_cache_mtime: float = 0.0
 
 
 def _get_books_max_mtime() -> float:
-    """書籍JSONファイル群の最新 mtime を返す（キャッシュ有効性チェック用）"""
+    """書籍JSONファイル群（+ 非公開設定）の最新 mtime を返す（キャッシュ有効性チェック用）"""
+    paths = list(_JSON_MAP.values()) + [PRIVATE_BOOKS_PATH]
     return max(
-        (p.stat().st_mtime for p in _JSON_MAP.values() if p.exists()),
+        (p.stat().st_mtime for p in paths if p.exists()),
         default=0.0,
     )
 
@@ -355,6 +357,12 @@ def _load_saved_uncached() -> Optional[dict]:
             logger.warning("JSON 読込失敗 (%s): %s", path, e)
     if not all_books:
         return None
+    # 非公開フラグを付与
+    private_ids = load_private_book_ids()
+    if private_ids:
+        for b in all_books:
+            if b.get("book_id") in private_ids:
+                b["private"] = True
     all_books.sort(key=lambda b: b.get("loan_date", ""), reverse=True)
     return {"sources": sources, "total": len(all_books), "books": all_books}
 
@@ -571,6 +579,31 @@ def book_insight_key(book: dict) -> str:
     raw = f"{source}::{title}::{author}".lower()
     import hashlib
     return "book:" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
+
+
+def load_private_book_ids() -> set:
+    """非公開に設定された book_id の集合を返す"""
+    if not PRIVATE_BOOKS_PATH.exists():
+        return set()
+    try:
+        with open(PRIVATE_BOOKS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return set(data.get("ids", []))
+    except Exception:
+        return set()
+
+
+def set_book_private(book_id: str, private: bool) -> None:
+    """指定 book_id の非公開フラグを設定・解除する"""
+    ids = load_private_book_ids()
+    if private:
+        ids.add(book_id)
+    else:
+        ids.discard(book_id)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with open(PRIVATE_BOOKS_PATH, "w", encoding="utf-8") as f:
+        json.dump({"ids": sorted(ids)}, f, ensure_ascii=False, indent=2)
+    invalidate_saved_cache()
 
 
 _insights_cache: Optional[dict] = None

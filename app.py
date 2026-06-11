@@ -2229,6 +2229,22 @@ def api_delete_paper_book(book_id: str):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/book/set-private", methods=["POST"])
+def api_set_book_private():
+    """本の非公開フラグを設定・解除する"""
+    data = request.get_json(force=True) or {}
+    book_id = (data.get("book_id") or "").strip()
+    private = bool(data.get("private", False))
+    if not book_id:
+        return jsonify({"success": False, "error": "book_id が必要です"}), 400
+    try:
+        library_service.set_book_private(book_id, private)
+        return jsonify({"success": True})
+    except Exception as e:
+        logger.warning("api_set_book_private エラー: %s", e, exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 def _fetch_book_info_with_genre(q: str, want_title: str = "", want_author: str = "") -> dict | None:
     """Google Books から表紙URL・概要・ジャンルを一括取得"""
     try:

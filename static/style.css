@@ -3370,6 +3370,20 @@ header {
   padding-top: 0.75rem;
   border-top: 1px solid var(--border);
 }
+/* 非公開チェックボックス（詳細画面） */
+.book-detail-private { margin-bottom: 0.35rem; }
+.book-detail-private-label {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-size: 0.75rem; color: var(--text-muted); cursor: pointer;
+}
+.book-detail-private-label input[type="checkbox"] { accent-color: var(--accent); width: 0.85rem; height: 0.85rem; }
+/* テーブルビュー 非公開列 */
+.col-private { width: 3.2rem; text-align: center; }
+.private-check-label {
+  display: inline-flex; align-items: center; gap: 0.2rem;
+  cursor: pointer; font-size: 0.75rem;
+}
+.private-check-label input[type="checkbox"] { accent-color: var(--accent); width: 0.85rem; height: 0.85rem; }
 
 /* タイトル・概要のソースバッジ */
 .badge-detail-src, .badge-summary-src {

@@ -20,6 +20,7 @@ const API = {
   addPaperBook: '/api/add-paper-book',
   updatePaperBook: (id) => `/api/paper-book/${id}`,
   deletePaperBook: (id) => `/api/paper-book/${id}`,
+  setBookPrivate: '/api/book/set-private',
 };
 
 let allBooks = [];
@@ -1427,10 +1428,12 @@ function renderCommunitySection() {
           const book = item.book || item;
           const cacheKey = `${idx}-${bidx}`;
           communityBookCache[cacheKey] = book;
-          // allBooks から個人評価・レビューを取得
+          // allBooks から個人評価・レビューを取得（非公開チェックも）
           const myBook = book.book_id
             ? allBooks.find(b => b.book_id === book.book_id)
             : allBooks.find(b => b.title === book.title && b.author === book.author);
+          // 非公開の本はコミュニティに表示しない
+          if (myBook && myBook.private) return '';
           const myRating = myBook ? (myBook.rating || 0) : 0;
           const myReview = myBook ? (myBook.review_headline || myBook.comment || '') : '';
           const starsStr = myRating > 0
@@ -3747,6 +3750,21 @@ function openBookDetail(book) {
   document.getElementById('bookDetailFavorite').textContent = book.favorite ? '♥ お気に入り' : '';
   document.getElementById('bookDetailFavorite').style.display = book.favorite ? '' : 'none';
 
+  // 非公開チェックボックス
+  const privateEl = document.getElementById('bookDetailPrivate');
+  if (privateEl && book.book_id) {
+    privateEl.innerHTML = `<label class="book-detail-private-label">
+      <input type="checkbox" id="bookDetailPrivateChk" ${book.private ? 'checked' : ''}>
+      <span>非公開（みんなのYondaに表示しない）</span>
+    </label>`;
+    document.getElementById('bookDetailPrivateChk').addEventListener('change', (e) => {
+      book.private = e.target.checked;
+      toggleBookPrivate(book.book_id, e.target.checked);
+    });
+  } else if (privateEl) {
+    privateEl.innerHTML = '';
+  }
+
   const ratingEl = document.getElementById('bookDetailRating');
   const reviewUrl = reviewUrlForBook(book);
   const dispRating = displayRating(book); // 一覧と同じ: Audibleはcatalog_rating優先
@@ -4007,6 +4025,24 @@ async function savePaperBookEdit() {
   }
 }
 
+async function toggleBookPrivate(bookId, makePrivate) {
+  try {
+    const res = await fetch(API.setBookPrivate, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ book_id: bookId, private: makePrivate }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || '保存失敗');
+    // allBooks のフラグをインプレース更新
+    const b = allBooks.find(x => x.book_id === bookId);
+    if (b) b.private = makePrivate;
+    showToast(makePrivate ? '非公開にしました' : '公開にしました', 'success');
+  } catch (e) {
+    showToast('エラー: ' + e.message, 'error');
+  }
+}
+
 async function confirmDeletePaperBook(book) {
   if (!confirm(`「${book.title}」を削除しますか？`)) return;
   const bookId = book.book_id || '';
@@ -4163,7 +4199,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
       if (sg !== lastSubGenre) {
         lastSubGenre = sg;
         const cnt = subGenreCounts[sg] || 0;
-        headerRow = `<tr class="rating-group-row"><td colspan="11" class="rating-group-header">${escapeHtml(sg)}（${cnt}冊）</td></tr>`;
+        headerRow = `<tr class="rating-group-row"><td colspan="12" class="rating-group-header">${escapeHtml(sg)}（${cnt}冊）</td></tr>`;
       }
     }
     const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}" data-filter-source="${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span>` : '';
@@ -4200,6 +4236,12 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
         <td class="col-tsundoku">${tsundokuStr}</td>
         <td>${srcBadge}</td>
         <td class="col-ai-insight">${renderTableInsightCell(book)}</td>
+        <td class="col-private" onclick="event.stopPropagation()">
+          ${book.book_id ? `<label class="private-check-label" title="${book.private ? '非公開' : '公開'}">
+            <input type="checkbox" class="private-checkbox" data-book-id="${escapeAttr(book.book_id)}" ${book.private ? 'checked' : ''}>
+            <span class="private-check-icon">${book.private ? '🔒' : ''}</span>
+          </label>` : ''}
+        </td>
       </tr>
     `;
   }).join('');
@@ -4219,6 +4261,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
           <th class="th-sortable" data-sort-asc="tsundoku_desc" data-sort-desc="tsundoku_desc" title="クリックでソート">積読</th>
           <th>ソース</th>
           <th class="col-ai-insight">書評ポイント</th>
+          <th class="col-private" title="非公開にするとみんなのYondaに表示されません">非公開</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -5411,6 +5454,18 @@ document.getElementById('paperEditCoverUrl')?.addEventListener('blur', function(
 });
 document.getElementById('bookInsightGenerateBtn')?.addEventListener('click', () => generateBookInsight());
 document.getElementById('bookInsightEditBtn')?.addEventListener('click', showBookInsightForm);
+
+document.getElementById('bookList')?.addEventListener('change', (e) => {
+  const cb = e.target.closest('.private-checkbox');
+  if (!cb) return;
+  e.stopPropagation();
+  const bookId = cb.dataset.bookId;
+  const makePrivate = cb.checked;
+  const icon = cb.closest('label')?.querySelector('.private-check-icon');
+  if (icon) icon.textContent = makePrivate ? '🔒' : '';
+  cb.closest('label')?.setAttribute('title', makePrivate ? '非公開' : '公開');
+  toggleBookPrivate(bookId, makePrivate);
+});
 
 document.getElementById('bookList')?.addEventListener('click', (e) => {
   const reviewLink = e.target.closest('.btn-review-insight-table');
