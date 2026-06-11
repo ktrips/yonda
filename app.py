@@ -19,6 +19,7 @@ import requests
 from authlib.integrations.flask_client import OAuth
 from flask import Flask, render_template, jsonify, request, send_file, session, redirect, url_for
 from flask_compress import Compress
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import library_service
 from adapters.kindle import KindleAdapter
@@ -72,6 +73,7 @@ app.config["COMPRESS_MIMETYPES"] = [
 ]
 app.config["COMPRESS_LEVEL"] = 6
 Compress(app)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # ---- Google OAuth ----
 _GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
@@ -136,7 +138,8 @@ def _before_request_handler():
 def auth_login():
     if not _OAUTH_ENABLED:
         return redirect(url_for("index"))
-    redirect_uri = url_for("auth_callback", _external=True)
+    # Cloud Run / プロキシ経由では https を強制
+    redirect_uri = url_for("auth_callback", _external=True, _scheme="https")
     return oauth.google.authorize_redirect(redirect_uri)
 
 
