@@ -164,8 +164,11 @@ def auth_debug_redirect():
 
 
 def _migrate_root_data_to_user(uid_safe: str) -> None:
-    """初回ログイン時: DATA_DIR ルートのデータをユーザーディレクトリにコピーする（一度だけ）"""
+    """初回ログイン時: DATA_DIR ルートのデータをユーザーディレクトリにコピーする。
+    センチネルファイル (.data_migrated) により、最初のユーザーのみに適用され
+    2人目以降の新規ユーザーには ROOT データが引き継がれない。"""
     import shutil
+    sentinel = library_service.DATA_DIR / ".data_migrated"
     user_dir = library_service.DATA_DIR / "users" / uid_safe
     user_dir.mkdir(parents=True, exist_ok=True)
     migrate_files = [
@@ -177,17 +180,24 @@ def _migrate_root_data_to_user(uid_safe: str) -> None:
     has_data = any((user_dir / f).exists() for f in migrate_files)
     if has_data:
         return
+    # センチネルがあれば ROOTデータは既に別ユーザーへ移行済み → 新規ユーザーは空から開始
+    if sentinel.exists():
+        logger.info("新規ユーザー (%s): 既存データなし、空のデータディレクトリで開始", uid_safe)
+        return
     migrated = []
     for fname in migrate_files:
         src = library_service.DATA_DIR / fname
         if src.exists():
             shutil.copy2(src, user_dir / fname)
             migrated.append(fname)
-    if migrated:
-        logger.info("初回ログイン移行 (%s): %s", uid_safe, migrated)
     # グローバル AI 設定も移行
     if AI_CONFIG_PATH.exists() and not (user_dir / "ai_config.json").exists():
         shutil.copy2(AI_CONFIG_PATH, user_dir / "ai_config.json")
+    if migrated:
+        logger.info("初回ログイン移行 (%s): %s", uid_safe, migrated)
+    # 移行完了マーク（2人目以降は ROOT データを引き継がない）
+    sentinel.touch()
+    logger.info("データ移行センチネル作成: %s → ユーザー %s に帰属確定", sentinel, uid_safe)
 
 
 @app.route("/auth/callback")
