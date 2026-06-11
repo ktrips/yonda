@@ -1068,7 +1068,7 @@ function updateBookTabLabels() {
     else if (rating === '3') label = `★★★☆☆以上（${allBooks.filter(b => (displayRating(b) || 0) >= 3).length}）`;
     else {
       const sel = document.getElementById('ratingFilter');
-      const optText = sel?.selectedOptions?.[0]?.textContent || '読んだ';
+      const optText = sel?.selectedOptions?.[0]?.textContent || 'Yonda';
       label = `${optText}（${allCount}）`;
     }
     tabRead.textContent = label;
