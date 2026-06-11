@@ -51,6 +51,14 @@
         </a>
       </div>
 
+      <!-- ログイン状態表示 -->
+      <div class="header-user" id="headerUser" style="display:none;">
+        <img class="header-user-avatar" id="headerUserAvatar" src="" alt="" width="28" height="28">
+        <span class="header-user-name" id="headerUserName"></span>
+        <a href="/auth/logout" class="header-user-logout" title="ログアウト">↩</a>
+      </div>
+      <a href="/auth/login" class="header-login-btn" id="headerLoginBtn" style="display:none;">Googleでログイン</a>
+
       <button type="button" class="hamburger-btn" id="hamburgerBtn" aria-label="メニュー">
         <span></span><span></span><span></span>
       </button>

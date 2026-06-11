@@ -1,5 +1,108 @@
 /* --- yonda frontend --- */
 
+// ---- 認証状態 ----
+let _authUser = null;      // ログイン中ユーザー情報 (null = 未ログイン or OAuth 無効)
+let _oauthEnabled = false; // サーバーで OAuth が設定されているか
+
+async function initAuth() {
+  try {
+    const res = await fetch('/auth/me');
+    const data = await res.json();
+    _oauthEnabled = data.oauth_enabled || false;
+    _authUser = data.user || null;
+  } catch (_) {
+    _oauthEnabled = false;
+    _authUser = null;
+  }
+  _applyAuthUI();
+}
+
+function _applyAuthUI() {
+  const loginBtn = document.getElementById('headerLoginBtn');
+  const userEl = document.getElementById('headerUser');
+  const avatarEl = document.getElementById('headerUserAvatar');
+  const nameEl = document.getElementById('headerUserName');
+
+  if (!_oauthEnabled) {
+    // OAuth 未設定: ログインUIを非表示、全タブ表示
+    if (loginBtn) loginBtn.style.display = 'none';
+    if (userEl) userEl.style.display = 'none';
+    _showAllTabs();
+    return;
+  }
+
+  if (_authUser) {
+    // ログイン済み
+    if (loginBtn) loginBtn.style.display = 'none';
+    if (userEl) userEl.style.display = '';
+    if (avatarEl && _authUser.picture) avatarEl.src = _authUser.picture;
+    if (nameEl) nameEl.textContent = _authUser.name || _authUser.email || '';
+    _showAllTabs();
+  } else {
+    // 未ログイン: みんなのYondaのみ
+    if (loginBtn) loginBtn.style.display = '';
+    if (userEl) userEl.style.display = 'none';
+    _showPublicOnly();
+  }
+}
+
+function _showAllTabs() {
+  ['mainTabYonda', 'mainTabYomu', 'mainTabOshi'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = '';
+  });
+  const searchEl = document.querySelector('.header-search');
+  if (searchEl) searchEl.style.display = '';
+  const statsEl = document.getElementById('headerStats');
+  if (statsEl) statsEl.style.display = '';
+  const hamburgerEl = document.getElementById('hamburgerBtn');
+  if (hamburgerEl) hamburgerEl.style.display = '';
+}
+
+function _showPublicOnly() {
+  // Yomu / Oshi タブを非表示
+  ['mainTabYomu', 'mainTabOshi'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  // 検索・統計・ハンバーガーを非表示
+  const searchEl = document.querySelector('.header-search');
+  if (searchEl) searchEl.style.display = 'none';
+  const statsEl = document.getElementById('headerStats');
+  if (statsEl) statsEl.style.display = 'none';
+  const hamburgerEl = document.getElementById('hamburgerBtn');
+  if (hamburgerEl) hamburgerEl.style.display = 'none';
+
+  // Yonda タブをコミュニティタブに切り替え
+  const yondaTab = document.getElementById('mainTabYonda');
+  if (yondaTab) {
+    yondaTab.classList.add('active');
+    yondaTab.style.display = '';
+  }
+  // コンテンツをみんなのYondaに切り替え
+  switchMainTab('yonda');
+  switchBookTab('community');
+
+  // ログインバナーを表示
+  _showLoginBanner();
+}
+
+function _showLoginBanner() {
+  const bannerId = 'publicLoginBanner';
+  if (document.getElementById(bannerId)) return;
+  const banner = document.createElement('div');
+  banner.id = bannerId;
+  banner.className = 'public-login-banner';
+  banner.innerHTML = `
+    <p>📚 <strong>Yonda</strong>へようこそ！Googleアカウントでログインすると、自分の読書記録を管理できます。</p>
+    <a href="/auth/login" class="btn btn-primary">Googleでログイン</a>
+  `;
+  const communityList = document.getElementById('communityMessageList');
+  if (communityList && communityList.parentNode) {
+    communityList.parentNode.insertBefore(banner, communityList);
+  }
+}
+
 const API = {
   books: '/api/books',
   fetch: '/api/fetch',
@@ -5701,6 +5804,15 @@ document.getElementById('statFavorite')?.addEventListener('click', (e) => {
 /* --- Init --- */
 
 async function init() {
+  // まず認証状態を確認（UIの表示制御のため最初に実行）
+  await initAuth();
+
+  // 未ログインかつ OAuth 有効の場合は書籍データ読み込みをスキップ
+  if (_oauthEnabled && !_authUser) {
+    renderCommunitySection();
+    return;
+  }
+
   activeMainTab = getDefaultPage();
 
   try {

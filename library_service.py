@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -49,18 +50,44 @@ DATA_DIR = Path(os.environ.get(
 ))
 CREDS_PATH = get_credentials_path()
 
-_JSON_MAP: dict[str, Path] = {
-    "setagaya": DATA_DIR / "library_books.json",
-    "audible_jp": DATA_DIR / "audible_books.json",
-    "kindle": DATA_DIR / "kindle_books.json",
-    "paper": DATA_DIR / "paper_books.json",
-}
-
-AMAZON_LIST_PATH = DATA_DIR / "amazon_list.json"
-BOOK_INSIGHTS_PATH = DATA_DIR / "book_insights.json"
+# コミュニティデータはユーザーに関係なく共有
 YONDA_MESSAGES_PATH = DATA_DIR / "yonda_messages.json"
-PRIVATE_BOOKS_PATH = DATA_DIR / "private_books.json"
-HIDDEN_BOOKS_PATH = DATA_DIR / "hidden_books.json"
+
+# ---- スレッドローカルなユーザーデータディレクトリ ----
+_tls = threading.local()
+
+def set_user_data_dir(path: Path) -> None:
+    """リクエストごとのユーザーデータディレクトリをセット（app.py の before_request で呼ぶ）"""
+    _tls.user_data_dir = path
+
+def get_user_data_dir() -> Path:
+    """現在スレッドのユーザーデータディレクトリを返す（未セットなら DATA_DIR）"""
+    return getattr(_tls, 'user_data_dir', DATA_DIR)
+
+def _get_json_map() -> dict[str, Path]:
+    d = get_user_data_dir()
+    return {
+        "setagaya": d / "library_books.json",
+        "audible_jp": d / "audible_books.json",
+        "kindle": d / "kindle_books.json",
+        "paper": d / "paper_books.json",
+    }
+
+def _amazon_list_path() -> Path:
+    return get_user_data_dir() / "amazon_list.json"
+
+def _book_insights_path() -> Path:
+    return get_user_data_dir() / "book_insights.json"
+
+def _private_books_path() -> Path:
+    return get_user_data_dir() / "private_books.json"
+
+def _hidden_books_path() -> Path:
+    return get_user_data_dir() / "hidden_books.json"
+
+# 後方互換エイリアス（既存コードが直接参照している場合向け）
+def _json_map_compat():
+    return _get_json_map()
 
 _ENV_MAP = {
     "setagaya": ("SETAGAYA_USER_ID", "SETAGAYA_PASSWORD"),
@@ -68,7 +95,7 @@ _ENV_MAP = {
 
 
 def _json_path_for(library_id: str) -> Path:
-    return _JSON_MAP.get(library_id, DATA_DIR / f"{library_id}_books.json")
+    return _get_json_map().get(library_id, get_user_data_dir() / f"{library_id}_books.json")
 
 
 # ------------------------------------------------------------------
@@ -309,13 +336,14 @@ def fetch_and_save(library_id: str) -> dict:
     return payload
 
 
-_saved_cache: Optional[dict] = None
-_saved_cache_mtime: float = 0.0
+# ユーザーディレクトリをキーにしたキャッシュ辞書
+_saved_caches: dict[str, Optional[dict]] = {}
+_saved_cache_mtimes: dict[str, float] = {}
 
 
 def _get_books_max_mtime() -> float:
     """書籍JSONファイル群（+ 非公開・非表示設定）の最新 mtime を返す（キャッシュ有効性チェック用）"""
-    paths = list(_JSON_MAP.values()) + [PRIVATE_BOOKS_PATH, HIDDEN_BOOKS_PATH]
+    paths = list(_get_json_map().values()) + [_private_books_path(), _hidden_books_path()]
     return max(
         (p.stat().st_mtime for p in paths if p.exists()),
         default=0.0,
@@ -324,18 +352,19 @@ def _get_books_max_mtime() -> float:
 
 def invalidate_saved_cache() -> None:
     """書籍データを更新した後にキャッシュを強制無効化する"""
-    global _saved_cache, _saved_cache_mtime
-    _saved_cache = None
-    _saved_cache_mtime = 0.0
+    key = str(get_user_data_dir())
+    _saved_caches.pop(key, None)
+    _saved_cache_mtimes.pop(key, None)
 
 
 def _load_saved_uncached() -> Optional[dict]:
     """キャッシュなしで全ソースの JSON を統合読み込み（内部用）"""
     all_books: list[dict] = []
     sources: list[dict] = []
+    json_map = _get_json_map()
     load_order = ("setagaya", "audible_jp", "kindle", "paper")
     for lid in load_order:
-        path = _JSON_MAP.get(lid)
+        path = json_map.get(lid)
         if not path or not path.exists():
             continue
         try:
@@ -373,13 +402,13 @@ def _load_saved_uncached() -> Optional[dict]:
 
 def load_saved() -> Optional[dict]:
     """全ソースの保存済み JSON を統合して読み込む。mtimeが変わっていなければキャッシュを返す。"""
-    global _saved_cache, _saved_cache_mtime
+    key = str(get_user_data_dir())
     max_mtime = _get_books_max_mtime()
-    if _saved_cache is not None and max_mtime <= _saved_cache_mtime:
-        return _saved_cache
+    if _saved_caches.get(key) is not None and max_mtime <= _saved_cache_mtimes.get(key, 0.0):
+        return _saved_caches[key]
     result = _load_saved_uncached()
-    _saved_cache = result
-    _saved_cache_mtime = max_mtime
+    _saved_caches[key] = result
+    _saved_cache_mtimes[key] = max_mtime
     return result
 
 
@@ -394,7 +423,7 @@ def load_saved_for(library_id: str) -> Optional[dict]:
 
 def add_paper_book(book_data: dict) -> dict:
     """紙の本を paper_books.json に追記して保存する。重複（タイトル+著者）はスキップ。"""
-    path = _JSON_MAP["paper"]
+    path = _get_json_map()["paper"]
     if path.exists():
         with open(path, encoding="utf-8") as f:
             payload = json.load(f)
@@ -433,7 +462,7 @@ def add_paper_book(book_data: dict) -> dict:
 
 def update_paper_book(book_id: str, updates: dict) -> dict:
     """paper_books.json の指定 book_id の本を更新する。"""
-    path = _JSON_MAP["paper"]
+    path = _get_json_map()["paper"]
     if not path.exists():
         return {"success": False, "error": "paper_books.json が存在しません"}
 
@@ -466,7 +495,7 @@ def update_paper_book(book_id: str, updates: dict) -> dict:
 
 def delete_paper_book(book_id: str) -> dict:
     """paper_books.json から指定 book_id の本を削除する。"""
-    path = _JSON_MAP["paper"]
+    path = _get_json_map()["paper"]
     if not path.exists():
         return {"success": False, "error": "paper_books.json が存在しません"}
 
@@ -556,10 +585,11 @@ def try_auto_fetch_kindle() -> bool:
 
 def load_amazon_list() -> dict:
     """Amazon ほしいものリストを読み込む。ファイルがなければ空リストを返す。"""
-    if not AMAZON_LIST_PATH.exists():
+    p = _amazon_list_path()
+    if not p.exists():
         return {"books": []}
     try:
-        with open(AMAZON_LIST_PATH, "r", encoding="utf-8") as f:
+        with open(p, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {"books": []}
@@ -567,8 +597,9 @@ def load_amazon_list() -> dict:
 
 def save_amazon_list(books: list) -> None:
     """Amazon ほしいものリストを保存する。"""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with open(AMAZON_LIST_PATH, "w", encoding="utf-8") as f:
+    p = _amazon_list_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f:
         json.dump({"books": books}, f, ensure_ascii=False, indent=2)
 
 
@@ -587,10 +618,11 @@ def book_insight_key(book: dict) -> str:
 
 def load_private_book_ids() -> set:
     """非公開に設定された book_id の集合を返す"""
-    if not PRIVATE_BOOKS_PATH.exists():
+    p = _private_books_path()
+    if not p.exists():
         return set()
     try:
-        with open(PRIVATE_BOOKS_PATH, "r", encoding="utf-8") as f:
+        with open(p, "r", encoding="utf-8") as f:
             data = json.load(f)
         return set(data.get("ids", []))
     except Exception:
@@ -604,18 +636,20 @@ def set_book_private(book_id: str, private: bool) -> None:
         ids.add(book_id)
     else:
         ids.discard(book_id)
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with open(PRIVATE_BOOKS_PATH, "w", encoding="utf-8") as f:
+    p = _private_books_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f:
         json.dump({"ids": sorted(ids)}, f, ensure_ascii=False, indent=2)
     invalidate_saved_cache()
 
 
 def load_hidden_book_ids() -> set:
     """非表示に設定された book_id の集合を返す"""
-    if not HIDDEN_BOOKS_PATH.exists():
+    p = _hidden_books_path()
+    if not p.exists():
         return set()
     try:
-        with open(HIDDEN_BOOKS_PATH, "r", encoding="utf-8") as f:
+        with open(p, "r", encoding="utf-8") as f:
             data = json.load(f)
         return set(data.get("ids", []))
     except Exception:
@@ -629,30 +663,32 @@ def set_book_hidden(book_id: str, hidden: bool) -> None:
         ids.add(book_id)
     else:
         ids.discard(book_id)
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with open(HIDDEN_BOOKS_PATH, "w", encoding="utf-8") as f:
+    p = _hidden_books_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with open(p, "w", encoding="utf-8") as f:
         json.dump({"ids": sorted(ids)}, f, ensure_ascii=False, indent=2)
     invalidate_saved_cache()
 
 
-_insights_cache: Optional[dict] = None
-_insights_cache_mtime: float = 0.0
+# 書評ポイントキャッシュ: ユーザーディレクトリキー → (data, mtime)
+_insights_caches: dict[str, tuple[Optional[dict], float]] = {}
 
 
 def load_book_insights() -> dict:
     """書評ポイントを読み込む。mtimeが変わっていなければキャッシュを返す。"""
-    global _insights_cache, _insights_cache_mtime
-    if not BOOK_INSIGHTS_PATH.exists():
+    p = _book_insights_path()
+    key = str(p)
+    if not p.exists():
         return {"items": {}}
     try:
-        mtime = BOOK_INSIGHTS_PATH.stat().st_mtime
-        if _insights_cache is not None and mtime <= _insights_cache_mtime:
-            return _insights_cache
-        with open(BOOK_INSIGHTS_PATH, "r", encoding="utf-8") as f:
+        mtime = p.stat().st_mtime
+        cached_data, cached_mtime = _insights_caches.get(key, (None, 0.0))
+        if cached_data is not None and mtime <= cached_mtime:
+            return cached_data
+        with open(p, "r", encoding="utf-8") as f:
             data = json.load(f)
         if isinstance(data, dict) and isinstance(data.get("items"), dict):
-            _insights_cache = data
-            _insights_cache_mtime = mtime
+            _insights_caches[key] = (data, mtime)
             return data
     except Exception:
         logger.warning("書評ポイントの読込に失敗", exc_info=True)
@@ -661,23 +697,22 @@ def load_book_insights() -> dict:
 
 def get_book_insight(book: dict) -> dict | None:
     """指定本の書評ポイントを返す。"""
-    key = book_insight_key(book)
-    return load_book_insights().get("items", {}).get(key)
+    k = book_insight_key(book)
+    return load_book_insights().get("items", {}).get(k)
 
 
 def save_book_insight(book: dict, insight: dict) -> dict:
     """指定本の書評ポイントを保存して返す。"""
-    global _insights_cache, _insights_cache_mtime
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    p = _book_insights_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
     data = load_book_insights()
-    key = book_insight_key(book)
+    k = book_insight_key(book)
     insight = dict(insight)
-    insight["id"] = key
-    data.setdefault("items", {})[key] = insight
-    with open(BOOK_INSIGHTS_PATH, "w", encoding="utf-8") as f:
+    insight["id"] = k
+    data.setdefault("items", {})[k] = insight
+    with open(p, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    _insights_cache = data
-    _insights_cache_mtime = BOOK_INSIGHTS_PATH.stat().st_mtime
+    _insights_caches[str(p)] = (data, p.stat().st_mtime)
     return insight
 
 
@@ -1082,8 +1117,8 @@ def _build_payload(adapter, records: list[BookRecord]) -> dict:
 
 
 def _save_json(library_id: str, payload: dict) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
     path = _json_path_for(library_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     invalidate_saved_cache()

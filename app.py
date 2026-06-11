@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import concurrent.futures
+import functools
 import hashlib
 import hmac
 import json
@@ -15,7 +16,8 @@ import uuid
 from pathlib import Path
 
 import requests
-from flask import Flask, render_template, jsonify, request, send_file
+from authlib.integrations.flask_client import OAuth
+from flask import Flask, render_template, jsonify, request, send_file, session, redirect, url_for
 from flask_compress import Compress
 
 import library_service
@@ -39,7 +41,8 @@ app = Flask(
     template_folder=str(APP_DIR / "templates"),
     static_folder=str(APP_DIR / "static"),
 )
-app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB（長い会話履歴対応）
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+app.config["SECRET_KEY"] = os.environ.get("FLASK_SECRET_KEY", os.urandom(24).hex())
 app.config["COMPRESS_MIMETYPES"] = [
     "application/json",
     "text/html",
@@ -49,6 +52,99 @@ app.config["COMPRESS_MIMETYPES"] = [
 ]
 app.config["COMPRESS_LEVEL"] = 6
 Compress(app)
+
+# ---- Google OAuth ----
+_GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+_GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+_OAUTH_ENABLED = bool(_GOOGLE_CLIENT_ID and _GOOGLE_CLIENT_SECRET)
+
+oauth = OAuth(app)
+if _OAUTH_ENABLED:
+    oauth.register(
+        name="google",
+        client_id=_GOOGLE_CLIENT_ID,
+        client_secret=_GOOGLE_CLIENT_SECRET,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile"},
+    )
+
+
+def get_current_user() -> dict | None:
+    """セッションからログイン中ユーザー情報を返す。未ログインなら None。"""
+    return session.get("user")
+
+
+def get_user_data_dir_for_session() -> Path:
+    """ログイン中ユーザーのデータディレクトリを返す。未ログインなら BASE DATA_DIR。"""
+    user = get_current_user()
+    if user:
+        uid = re.sub(r"[^a-zA-Z0-9_\-]", "_", user.get("sub", "anonymous"))
+        d = library_service.DATA_DIR / "users" / uid
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    return library_service.DATA_DIR
+
+
+# OAuth 有効時に認証不要なパス（前方一致）
+_PUBLIC_PREFIXES = ("/auth/", "/static/", "/help")
+# OAuth 有効時に認証不要な完全一致パス
+_PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info"}
+
+
+@app.before_request
+def _before_request_handler():
+    """① ユーザーデータディレクトリをスレッドローカルにセット  ② 認証チェック"""
+    library_service.set_user_data_dir(get_user_data_dir_for_session())
+
+    if not _OAUTH_ENABLED:
+        return  # OAuth 未設定は全公開
+
+    path = request.path
+    if any(path.startswith(p) for p in _PUBLIC_PREFIXES):
+        return
+    if path in _PUBLIC_EXACT:
+        return
+
+    if not get_current_user():
+        if path.startswith("/api/"):
+            return jsonify({"error": "not_authenticated",
+                            "login_url": url_for("auth_login")}), 401
+        return redirect(url_for("auth_login"))
+
+
+@app.route("/auth/login")
+def auth_login():
+    if not _OAUTH_ENABLED:
+        return redirect(url_for("index"))
+    redirect_uri = url_for("auth_callback", _external=True)
+    return oauth.google.authorize_redirect(redirect_uri)
+
+
+@app.route("/auth/callback")
+def auth_callback():
+    if not _OAUTH_ENABLED:
+        return redirect(url_for("index"))
+    token = oauth.google.authorize_access_token()
+    user_info = token.get("userinfo") or oauth.google.userinfo()
+    session["user"] = {
+        "sub": user_info.get("sub"),
+        "email": user_info.get("email"),
+        "name": user_info.get("name"),
+        "picture": user_info.get("picture"),
+    }
+    return redirect(url_for("index"))
+
+
+@app.route("/auth/logout")
+def auth_logout():
+    session.pop("user", None)
+    return redirect(url_for("index"))
+
+
+@app.route("/auth/me")
+def auth_me():
+    user = get_current_user()
+    return jsonify({"user": user, "oauth_enabled": _OAUTH_ENABLED})
 
 
 @app.route("/")
