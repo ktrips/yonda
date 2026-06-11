@@ -44,15 +44,24 @@ app = Flask(
 )
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 def _get_stable_secret_key() -> str:
-    """FLASK_SECRET_KEY 未設定時は data/ に永続ファイルを生成して再起動後も維持"""
+    """FLASK_SECRET_KEY 未設定時は複数インスタンスで共有できるキーを生成する。
+    Google Client Secret から派生させることで Cloud Run 全インスタンスで一致させる。"""
     env_key = os.environ.get("FLASK_SECRET_KEY", "")
     if env_key:
         return env_key
+    # Google Client Secret から派生（全インスタンスで同値になる）
+    g_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    if g_secret:
+        import hashlib
+        return hashlib.sha256(f"yonda-session-v1-{g_secret}".encode()).hexdigest()
+    # フォールバック: data/.secret_key ファイル（ローカル開発用）
     key_file = Path(os.environ.get("YONDA_DATA_DIR", "data")) / ".secret_key"
     key_file.parent.mkdir(parents=True, exist_ok=True)
     if key_file.exists():
         try:
-            return key_file.read_text().strip()
+            k = key_file.read_text().strip()
+            if k:
+                return k
         except Exception:
             pass
     new_key = os.urandom(32).hex()
@@ -64,6 +73,9 @@ def _get_stable_secret_key() -> str:
     return new_key
 
 app.config["SECRET_KEY"] = _get_stable_secret_key()
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["COMPRESS_MIMETYPES"] = [
     "application/json",
     "text/html",
