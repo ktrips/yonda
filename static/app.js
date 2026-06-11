@@ -1434,10 +1434,10 @@ function renderCommunitySection() {
             : allBooks.find(b => b.title === book.title && b.author === book.author);
           // 非公開の本はコミュニティに表示しない
           if (myBook && myBook.private) return '';
-          const myRating = myBook ? (myBook.rating || 0) : 0;
+          const myRating = myBook ? displayRating(myBook) : 0;
           const myReview = myBook ? (myBook.review_headline || myBook.comment || '') : '';
           const starsStr = myRating > 0
-            ? (() => { let s = ''; for (let i = 1; i <= 5; i++) s += i <= myRating ? '★' : '☆'; return `<span class="community-book-stars">${s}</span>`; })()
+            ? `<span class="community-book-stars">${starsHtml(myRating)}</span>`
             : '';
           const reviewStr = myReview
             ? `<span class="community-book-review">${escapeHtml(myReview)}</span>`
