@@ -80,12 +80,13 @@ function starsHtml(rating, options = {}) {
   return content;
 }
 
-/** Audible の表示用評価: 総合評価(catalog_rating)を優先、なければ自分の評価(rating) */
+/** 表示用評価: 個人評価(rating)を最優先、なければAudibleの総合評価(catalog_rating) */
 function displayRating(book) {
+  if ((book.rating || 0) > 0) return book.rating;
   if (book.source === 'audible_jp' && (book.catalog_rating || 0) > 0) {
     return book.catalog_rating;
   }
-  return book.rating || 0;
+  return 0;
 }
 
 /** 途中: Audible/Kindleで進捗があるが読了していない / 図書館で借りているが評価を付けていない */
@@ -1426,14 +1427,30 @@ function renderCommunitySection() {
           const book = item.book || item;
           const cacheKey = `${idx}-${bidx}`;
           communityBookCache[cacheKey] = book;
+          // allBooks から個人評価・レビューを取得
+          const myBook = book.book_id
+            ? allBooks.find(b => b.book_id === book.book_id)
+            : allBooks.find(b => b.title === book.title && b.author === book.author);
+          const myRating = myBook ? (myBook.rating || 0) : 0;
+          const myReview = myBook ? (myBook.review_headline || myBook.comment || '') : '';
+          const starsStr = myRating > 0
+            ? (() => { let s = ''; for (let i = 1; i <= 5; i++) s += i <= myRating ? '★' : '☆'; return `<span class="community-book-stars">${s}</span>`; })()
+            : '';
+          const reviewStr = myReview
+            ? `<span class="community-book-review">${escapeHtml(myReview)}</span>`
+            : '';
           const cover = book.cover_url || NO_COVER;
           const srcShort = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' }[book.source] || '';
           const srcBadge = srcShort ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short">${srcShort}</span> ` : '';
-          return `<div class="community-book-item" data-cache-key="${cacheKey}" style="cursor:pointer;">
+          // ジャンルカラー（左ボーダー）
+          const genreCanonical = normalizeGenre(book.genre || '');
+          const genreCol = (CAT_COLORS[genreCanonical] || CAT_COLORS['その他']).read;
+          return `<div class="community-book-item" data-cache-key="${cacheKey}" style="cursor:pointer;border-left:3px solid ${genreCol};">
             <img src="${escapeHtml(cover)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'" class="community-book-cover">
             <div class="community-book-info">
               <div class="community-book-title">${srcBadge}${escapeHtml(book.title || '—')}</div>
               <div class="community-book-author">${escapeHtml(book.author || '')}</div>
+              ${starsStr || reviewStr ? `<div class="community-book-rating-row">${starsStr}${reviewStr}</div>` : ''}
             </div>
           </div>`;
         }).join('');
@@ -3732,12 +3749,12 @@ function openBookDetail(book) {
 
   const ratingEl = document.getElementById('bookDetailRating');
   const reviewUrl = reviewUrlForBook(book);
-  const personalRating = book.rating || 0;
+  const dispRating = displayRating(book); // 一覧と同じ: Audibleはcatalog_rating優先
   const reviewText = book.review_headline || book.comment || '';
 
-  if (personalRating > 0) {
+  if (dispRating > 0) {
     // 星あり → クリックでレビュー画面へ
-    const starsContent = starsHtml(personalRating);
+    const starsContent = starsHtml(dispRating);
     ratingEl.innerHTML = reviewUrl
       ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="rating-link stars-link" title="レビュー画面へ">${starsContent}</a>`
       : starsContent;

@@ -342,7 +342,7 @@ def _load_saved_uncached() -> Optional[dict]:
             for b in books:
                 if not b.get("source"):
                     b["source"] = lid
-                if lid == "setagaya" and (b.get("runtime_length_min") or 0) == 0:
+                if lid in ("setagaya", "paper") and (b.get("runtime_length_min") or 0) == 0:
                     b["runtime_length_min"] = 240
             all_books.extend(books)
             sources.append({

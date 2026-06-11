@@ -3179,8 +3179,9 @@ header {
   gap: 0.4rem;
   background: var(--bg);
   border-radius: 4px;
-  padding: 0.25rem 0.4rem;
+  padding: 0.25rem 0.4rem 0.25rem 0.35rem;
   max-width: 160px;
+  border-left: 3px solid var(--border);
 }
 .community-book-cover {
   width: 28px;
@@ -3207,6 +3208,16 @@ header {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.community-book-rating-row {
+  display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap; margin-top: 0.15rem;
+}
+.community-book-stars {
+  font-size: 0.65rem; color: var(--star); letter-spacing: 0.02em; flex-shrink: 0;
+}
+.community-book-review {
+  font-size: 0.62rem; color: var(--text-secondary); font-style: italic;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0;
 }
 .community-more {
   font-size: 0.72rem;
