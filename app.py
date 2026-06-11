@@ -17,6 +17,7 @@ from pathlib import Path
 
 import requests
 from authlib.integrations.flask_client import OAuth
+from authlib.integrations.base_client.errors import MismatchingStateError
 from flask import Flask, render_template, jsonify, request, send_file, session, redirect, url_for
 from flask_compress import Compress
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -150,11 +151,52 @@ def _before_request_handler():
         return redirect(url_for("auth_login"))
 
 
+_OAUTH_STATE_DIR = Path(os.environ.get("YONDA_DATA_DIR", "data")) / ".oauth_states"
+
+
+def _save_oauth_state_to_fs() -> None:
+    """セッションの OAuth state をファイルシステムにバックアップする（Cookie 消失対策）"""
+    try:
+        _OAUTH_STATE_DIR.mkdir(parents=True, exist_ok=True)
+        for k, v in list(session.items()):
+            if k.startswith("_google_state_"):
+                sf = _OAUTH_STATE_DIR / f"{k}.json"
+                sf.write_text(json.dumps({"value": v, "created_at": time.time()}))
+                logger.debug("OAuth state saved to FS: %s", k)
+    except Exception as e:
+        logger.warning("OAuth state FS backup failed: %s", e)
+
+
+def _restore_oauth_state_from_fs(state: str) -> bool:
+    """ファイルシステムから OAuth state をセッションに復元する。成功すれば True。"""
+    state_key = f"_google_state_{state}"
+    if state_key in session:
+        return True
+    try:
+        sf = _OAUTH_STATE_DIR / f"{state_key}.json"
+        if not sf.exists():
+            return False
+        data = json.loads(sf.read_text())
+        sf.unlink(missing_ok=True)
+        if time.time() - data.get("created_at", 0) > 600:
+            logger.warning("OAuth state expired: %s", state_key)
+            return False
+        session[state_key] = data["value"]
+        logger.info("OAuth state restored from FS: %s", state_key)
+        return True
+    except Exception as e:
+        logger.warning("OAuth state FS restore failed: %s", e)
+        return False
+
+
 @app.route("/auth/login")
 def auth_login():
     if not _OAUTH_ENABLED:
         return redirect(url_for("index"))
-    return oauth.google.authorize_redirect(_GOOGLE_REDIRECT_URI)
+    response = oauth.google.authorize_redirect(_GOOGLE_REDIRECT_URI)
+    # セッション Cookie が Cloud Run で失われる場合に備えてファイルシステムにも保存
+    _save_oauth_state_to_fs()
+    return response
 
 
 @app.route("/auth/debug-redirect")
@@ -204,7 +246,16 @@ def _migrate_root_data_to_user(uid_safe: str) -> None:
 def auth_callback():
     if not _OAUTH_ENABLED:
         return redirect(url_for("index"))
-    token = oauth.google.authorize_access_token(redirect_uri=_GOOGLE_REDIRECT_URI)
+    # Cookie 消失時: ファイルシステムから state を復元
+    state = request.args.get("state", "")
+    if state and not _restore_oauth_state_from_fs(state):
+        logger.warning("OAuth state not found for state=%s, restarting login", state)
+        return redirect(url_for("auth_login"))
+    try:
+        token = oauth.google.authorize_access_token(redirect_uri=_GOOGLE_REDIRECT_URI)
+    except MismatchingStateError:
+        logger.warning("MismatchingStateError after restore attempt, restarting login")
+        return redirect(url_for("auth_login"))
     user_info = token.get("userinfo") or oauth.google.userinfo()
     uid_safe = re.sub(r"[^a-zA-Z0-9_\-]", "_", user_info.get("sub", "anonymous"))
     session["user"] = {
