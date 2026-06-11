@@ -1392,7 +1392,10 @@ async function renderHistoryRecommend() {
       const reasonHtml = reason
         ? `<div class="history-recommend-reason"><span class="history-recommend-reason-label">推薦理由</span>${escapeHtml(reason)}</div>`
         : '';
-      return `<div class="history-recommend-item">${cardHtml}${reasonHtml}</div>`;
+      return `<div class="history-recommend-item">
+        <div class="history-recommend-card-wrap">${cardHtml}</div>
+        ${reasonHtml}
+      </div>`;
     }).join('');
     if (refreshBtn) refreshBtn.style.display = 'block';
   } catch (e) {
@@ -2169,6 +2172,12 @@ function setAiRecommendMode(mode) {
   if (formEl) {
     formEl.style.display = (mode === '5questions') ? '' : 'none';
   }
+  // 読書履歴推しではチャット・入力エリアを非表示
+  const chatEl2 = document.getElementById('aiRecommendChat');
+  const inputRow = document.querySelector('.ai-recommend-input-row');
+  const isHistory = mode === 'history';
+  if (chatEl2) chatEl2.style.display = isHistory ? 'none' : '';
+  if (inputRow) inputRow.style.display = isHistory ? 'none' : '';
   if (descEl) {
     const base = AI_RECOMMEND_MODE_DESCRIPTIONS[mode] || AI_RECOMMEND_MODE_DESCRIPTIONS['5questions'];
     const providerEl = document.getElementById('aiRecommendProvider');
