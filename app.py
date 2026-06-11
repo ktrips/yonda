@@ -1458,6 +1458,13 @@ def _create_completed_books_message(
         "sync_summary": sync_summary,
         "ai_status": "pending" if needs_insight else "complete",
     }
+    user = get_current_user()
+    if user:
+        message["user"] = {
+            "name": user.get("name", ""),
+            "picture": user.get("picture", ""),
+            "email": user.get("email", ""),
+        }
     message["body"] = _message_text_for_completed_books(message_books, sync_summary)
     message["ios_sent"] = False
     library_service.save_yonda_message(message)

@@ -1613,8 +1613,18 @@ function renderCommunitySection() {
           </div>`;
         }).join('');
         const more = (msg.books || []).length > 5 ? `<div class="community-more">他 ${(msg.books || []).length - 5} 冊</div>` : '';
+        // ユーザー情報
+        const msgUser = msg.user || {};
+        const userHtml = msgUser.name ? `
+          <div class="community-user-row">
+            ${msgUser.picture ? `<img src="${escapeHtml(msgUser.picture)}" alt="" class="community-user-avatar" width="20" height="20">` : ''}
+            <span class="community-user-name">${escapeHtml(msgUser.name)}</span>
+          </div>` : '';
         return `<div class="community-message-card">
-          <div class="community-message-date">${escapeHtml(dateText)}</div>
+          <div class="community-message-header">
+            ${userHtml}
+            <div class="community-message-date">${escapeHtml(dateText)}</div>
+          </div>
           <div class="community-books-row">${bookItems}${more}</div>
         </div>`;
       }).join('');
