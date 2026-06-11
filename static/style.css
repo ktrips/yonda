@@ -3391,8 +3391,12 @@ header {
   padding-top: 0.75rem;
   border-top: 1px solid var(--border);
 }
-/* 非公開チェックボックス（詳細画面） */
-.book-detail-private { margin-bottom: 0.35rem; }
+/* 非公開チェックボックス（詳細画面・右下） */
+.book-detail-private-bottom {
+  display: flex; justify-content: flex-end;
+  margin-top: 0.75rem; padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
 .book-detail-private-label {
   display: inline-flex; align-items: center; gap: 0.35rem;
   font-size: 0.75rem; color: var(--text-muted); cursor: pointer;
