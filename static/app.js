@@ -1447,20 +1447,20 @@ function renderCommunitySection() {
             : '';
           const cover = book.cover_url || NO_COVER;
           const srcShort = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' }[book.source] || '';
-          const srcBadge = srcShort ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short">${srcShort}</span> ` : '';
-          // ジャンルカラー（左ボーダー＋頭文字バッジ）
+          const srcBadge = srcShort ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short">${srcShort}</span>` : '';
+          // ジャンルカラー（左ボーダー＋頭文字バッジ＋背景色）
           const genreCanonical = normalizeGenre(book.genre || '');
           const genreCol = (CAT_COLORS[genreCanonical] || CAT_COLORS['その他']).read;
           const genreLabel = genreCanonical || (book.genre || '');
           const genreInitial = genreLabel ? [...genreLabel][0] : '?';
           const genreBadge = `<span class="community-genre-badge" style="background:${genreCol};" title="${escapeHtml(genreLabel)}">${escapeHtml(genreInitial)}</span>`;
-          return `<div class="community-book-item" data-cache-key="${cacheKey}" style="cursor:pointer;border-left:3px solid ${genreCol};">
+          const bgColor = genreCol + '18'; // 約10%透明度の背景
+          return `<div class="community-book-item" data-cache-key="${cacheKey}" style="cursor:pointer;border-left:3px solid ${genreCol};background:${bgColor};">
             <img src="${escapeHtml(cover)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'" class="community-book-cover">
             <div class="community-book-info">
-              <div class="community-book-title">${srcBadge}${escapeHtml(book.title || '—')}</div>
+              <div class="community-book-title">${genreBadge}${srcBadge}${escapeHtml(book.title || '—')}</div>
               <div class="community-book-author">${escapeHtml(book.author || '')}</div>
               ${starsStr || reviewStr ? `<div class="community-book-rating-row">${starsStr}${reviewStr}</div>` : ''}
-              <div class="community-book-meta-row">${genreBadge}</div>
             </div>
           </div>`;
         }).join('');
