@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import concurrent.futures
 import hashlib
 import hmac
 import json
@@ -224,38 +225,31 @@ def api_book_cover():
         return jsonify({"success": False, "error": "q または title パラメータが必要です"}), 400
     search_q = q or f"{title} {author}".strip() or title
 
-    # 1. title+author で intitle:inauthor: 検索（Google Books が最も正確）
+    # ラウンド1: title+author指定検索（Google Books）と Open Library を並列実行
     cover_url = None
-    if title and author:
-        cover_url = _fetch_cover_google_books(
-            f"intitle:{title} inauthor:{author}",
-            max_results=8,
-            want_title=title,
-            want_author=author,
+    sq = search_q or title
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        f_gb1 = ex.submit(
+            _fetch_cover_google_books,
+            f"intitle:{title} inauthor:{author}" if (title and author) else sq,
+            8, title or sq, author,
         )
-    # 2. Open Library（タイトル・著者で検証）
-    if not cover_url:
-        cover_url = _fetch_cover_open_library(
-            search_q or title,
-            limit=8,
-            want_title=title or search_q,
-            want_author=author,
+        f_ol1 = ex.submit(
+            _fetch_cover_open_library,
+            sq, 8, title or sq, author,
         )
-    # 3. Google Books 汎用検索（タイトル・著者で検証）
+    cover_url = f_gb1.result() or f_ol1.result()
+
+    # ラウンド2: 汎用検索（Google Books）と Open Library 緩め検索を並列実行
     if not cover_url:
-        cover_url = _fetch_cover_google_books(
-            search_q or title,
-            max_results=8,
-            want_title=title or search_q,
-            want_author=author,
-        )
-    # 4. 検証なしでフォールバック（一致なしの場合）
-    if not cover_url and title and author:
-        cover_url = _fetch_cover_google_books(f"intitle:{title} inauthor:{author}", max_results=3)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+            f_gb2 = ex.submit(_fetch_cover_google_books, sq, 8, sq, author)
+            f_ol2 = ex.submit(_fetch_cover_open_library, sq, 3)
+        cover_url = f_gb2.result() or f_ol2.result()
+
+    # ラウンド3: 検証なし最終フォールバック
     if not cover_url:
-        cover_url = _fetch_cover_open_library(search_q or title, limit=3)
-    if not cover_url:
-        cover_url = _fetch_cover_google_books(search_q or title, max_results=3)
+        cover_url = _fetch_cover_google_books(sq, max_results=3)
 
     if cover_url:
         return jsonify({"success": True, "cover_url": cover_url})
@@ -329,16 +323,26 @@ def _sanitize_api_key(key: str) -> str:
     return key.translate(table)
 
 
+_ai_config_cache: dict | None = None
+_ai_config_cache_mtime: float = 0.0
+
+
 def _load_ai_config():
-    """AI設定を読み込み"""
+    """AI設定を読み込み。mtimeが変わっていなければキャッシュを返す。"""
+    global _ai_config_cache, _ai_config_cache_mtime
     if not AI_CONFIG_PATH.exists():
         return {}
     try:
+        mtime = AI_CONFIG_PATH.stat().st_mtime
+        if _ai_config_cache is not None and mtime <= _ai_config_cache_mtime:
+            return _ai_config_cache
         with open(AI_CONFIG_PATH, "r", encoding="utf-8") as f:
             cfg = json.load(f)
         api_key = cfg.get("api_key") or ""
         if api_key:
             cfg["api_key"] = _sanitize_api_key(api_key)
+        _ai_config_cache = cfg
+        _ai_config_cache_mtime = mtime
         return cfg
     except Exception:
         return {}
@@ -346,12 +350,15 @@ def _load_ai_config():
 
 def _save_ai_config(provider: str, api_key: str):
     """AI設定を保存（~/.config/yonda/ai_config.json）"""
+    global _ai_config_cache, _ai_config_cache_mtime
     ensure_config_dir()
     key = _sanitize_api_key(api_key.strip())
     data = {"provider": provider, "api_key": key}
     with open(AI_CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     AI_CONFIG_PATH.chmod(0o600)
+    _ai_config_cache = None
+    _ai_config_cache_mtime = 0.0
 
 
 def _extract_field_value(line: str) -> str:

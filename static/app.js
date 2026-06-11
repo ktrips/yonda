@@ -24,6 +24,15 @@ const API = {
 
 let allBooks = [];
 let filteredBooks = [];
+/** allBooks の O(1) インデックス検索用 Map（indexOf の O(n) を回避） */
+const _bookIndexMap = new Map();
+function _rebuildBookIndexMap() {
+  _bookIndexMap.clear();
+  allBooks.forEach((b, i) => _bookIndexMap.set(b, i));
+}
+function _bookIndex(book) {
+  return _bookIndexMap.has(book) ? _bookIndexMap.get(book) : _bookIndex(book);
+}
 let currentPage = 0;
 let activeMainTab = 'yonda'; // 'yonda' | 'yomu' | 'oshi'
 let activeBookTab = 'read'; // 'read' = 読んだ/途中, 'community' = みんなのYonda, 'messages' = メッセージ
@@ -718,6 +727,7 @@ async function addPaperBook(title, author, coverUrl, summary, genre, detailUrl =
     if (data.books) {
       allBooks = data.books;
       for (const b of allBooks) b._normalizedGenre = normalizeGenre(b.genre || '');
+      _rebuildBookIndexMap();
       applyFilters();
       if (activeMainTab === 'yomu') renderBookSearchResults();
     }
@@ -851,10 +861,8 @@ async function loadFromFile() {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'データなし');
     allBooks = data.books || [];
-    // ジャンル正規化をプリコンピュート（各所での再計算を回避）
-    for (const b of allBooks) {
-      b._normalizedGenre = normalizeGenre(b.genre || '');
-    }
+    for (const b of allBooks) b._normalizedGenre = normalizeGenre(b.genre || '');
+    _rebuildBookIndexMap();
     const sources = data.sources || [];
     updateStats();
     populateSourceFilter(sources);
@@ -869,6 +877,7 @@ async function loadFromFile() {
       error.style.display = 'block';
     }
     allBooks = [];
+    _rebuildBookIndexMap();
   } finally {
     if (loading) loading.style.display = 'none';
     if (empty) empty.style.display = allBooks.length === 0 ? 'block' : 'none';
@@ -1240,7 +1249,7 @@ function renderRankingItem(book, rank) {
   const completedYear = (book.completed_date || '').slice(0, 4);
   const dateStr = completedYear ? `読了 ${completedYear}年` : '';
   return `
-    <div class="ranking-item book-card-clickable" data-book-index="${allBooks.indexOf(book)}" role="button" tabindex="0">
+    <div class="ranking-item book-card-clickable" data-book-index="${_bookIndex(book)}" role="button" tabindex="0">
       <span class="ranking-rank">${rank}位</span>
       <img class="book-cover ranking-cover" src="${escapeHtml(cover)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'">
       <div class="ranking-body">
@@ -1517,7 +1526,7 @@ async function renderYondaRecommend() {
     const items = recs.map((r, i) => {
       const b = r.book;
       const cover = b.cover_url || NO_COVER;
-      const idx = allBooks.indexOf(b);
+      const idx = _bookIndex(b);
       const searchText = `${b.title || ''} ${b.author || ''}`.trim();
       const urls = getBookSearchUrls(searchText, { bookTitle: b.title });
       return `
@@ -2359,6 +2368,9 @@ function renderAiRecommendMessageContent(content, isUser) {
   return sanitizeAiRecommendHtml(cleaned.replace(/\n/g, '<br>'));
 }
 
+/** AI推し本カード用カバー・概要キャッシュ（q → {cover_url, summary}） */
+const _bookInfoCache = new Map();
+
 function renderAiRecommendChat() {
   const chatEl = document.getElementById('aiRecommendChat');
   if (!chatEl) return;
@@ -2379,12 +2391,20 @@ function renderAiRecommendChat() {
     const title = img.getAttribute('data-cover-title') || '';
     const author = img.getAttribute('data-cover-author') || '';
     if (!q) return;
+    // キャッシュヒット時は API を呼ばない
+    const cached = _bookInfoCache.get(q);
+    if (cached) {
+      if (cached.cover_url) img.src = cached.cover_url;
+      if (summaryEl && cached.summary) summaryEl.textContent = cached.summary;
+      return;
+    }
     const params = new URLSearchParams({ q });
     if (title) params.set('title', title);
     if (author) params.set('author', author);
     fetch(`${API.bookInfo}?${params}`)
       .then(r => r.json())
       .then(data => {
+        _bookInfoCache.set(q, { cover_url: data.cover_url || '', summary: data.summary || '' });
         if (data.success && data.cover_url) img.src = data.cover_url;
         if (summaryEl && data.summary) summaryEl.textContent = data.summary;
       })
@@ -2937,7 +2957,7 @@ function _showGenreTagBooks(genre, tag, books) {
     resultEl.style.display = '';
   } else {
     const items = matched.map(b => {
-      const idx = allBooks.indexOf(b);
+      const idx = _bookIndex(b);
       const status = b.completed
         ? `<span class="tag-detail-read">読了 ${(b.completed_date || '').slice(0, 7)}</span>`
         : `<span class="tag-detail-unread">未読</span>`;
@@ -3184,13 +3204,13 @@ function renderTableInsightCell(book) {
     ? `<button type="button" class="btn-table-edit-paper" data-book-id="${escapeHtml(book.book_id)}" title="編集" onclick="event.stopPropagation();openPaperBookEditById(this.dataset.bookId)">✏️</button>`
     : '';
   if (!insight || !Array.isArray(insight.points) || insight.points.length === 0) {
-    const idx = allBooks.indexOf(book);
+    const idx = _bookIndex(book);
     return `<div class="book-table-insight-wrap">
       ${editBtn ? `<div class="book-table-insight-edit">${editBtn}</div>` : ''}
       <button type="button" class="btn-table-ai-insight" data-book-index="${idx}">AI生成</button>
     </div>`;
   }
-  const idx = allBooks.indexOf(book);
+  const idx = _bookIndex(book);
   const reviewUrl = reviewUrlForBook(book);
   return `
     <div class="book-table-insight-wrap">
@@ -3711,29 +3731,28 @@ function openBookDetail(book) {
   document.getElementById('bookDetailFavorite').style.display = book.favorite ? '' : 'none';
 
   const ratingEl = document.getElementById('bookDetailRating');
-  if (book.source === 'audible_jp') {
-    const bookUrl = getAudibleRatingUrl(book);
-    const dispRating = displayRating(book);
-    const ratingContent = dispRating > 0
-      ? `総合評価: ${starsHtml(dispRating, { asLink: true, source: book.source, detailUrl: bookUrl })}${(book.catalog_rating || 0) > 0 && (book.catalog_rating || 0) % 1 !== 0 ? ` (${book.catalog_rating})` : ''}`
-      : `総合評価: <a href="${escapeHtml(bookUrl)}" target="_blank" rel="noopener" class="rating-link" title="Audibleで評価を入力">— 評価を入力</a>`;
-    ratingEl.innerHTML = ratingContent;
-  } else if (book.source === 'paper') {
-    const paperUrl = detailHref;
-    ratingEl.innerHTML = book.rating
-      ? `評価: ${starsHtml(book.rating, { asLink: !!paperUrl, source: book.source, detailUrl: paperUrl })}`
-      : `評価: ${paperUrl ? `<a href="${escapeHtml(paperUrl)}" target="_blank" rel="noopener" class="rating-link" title="Amazonで確認">— Amazon</a>` : '—'}`;
+  const reviewUrl = reviewUrlForBook(book);
+  const personalRating = book.rating || 0;
+  const reviewText = book.review_headline || book.comment || '';
+
+  if (personalRating > 0) {
+    // 星あり → クリックでレビュー画面へ
+    const starsContent = starsHtml(personalRating);
+    ratingEl.innerHTML = reviewUrl
+      ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="rating-link stars-link" title="レビュー画面へ">${starsContent}</a>`
+      : starsContent;
+  } else if (!reviewText && reviewUrl) {
+    // 星なし + コメントなし → 未レビューボタン
+    ratingEl.innerHTML = `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-no-review">未レビュー</a>`;
   } else {
-    ratingEl.innerHTML = book.rating ? `評価: ${starsHtml(book.rating)}` : '評価: —';
+    ratingEl.innerHTML = '';
   }
 
-  const headlineEl = document.getElementById('bookDetailReviewHeadline');
-  if (book.review_headline) {
-    headlineEl.textContent = `見出し: ${book.review_headline}`;
-    headlineEl.style.display = '';
-  } else {
-    headlineEl.textContent = '';
-    headlineEl.style.display = 'none';
+  // 個人レビュー（見出し or コメント）を星の右横にインライン表示
+  const reviewInlineEl = document.getElementById('bookDetailReviewInline');
+  if (reviewInlineEl) {
+    reviewInlineEl.textContent = reviewText;
+    reviewInlineEl.style.display = reviewText ? '' : 'none';
   }
 
   document.getElementById('bookDetailLoanDate').textContent =
@@ -3760,7 +3779,9 @@ function openBookDetail(book) {
     compEl.style.display = 'none';
   }
 
-  document.getElementById('bookDetailComment').textContent = book.comment || '';
+  // コメントはrating行のインラインレビューで表示済みのため非表示
+  document.getElementById('bookDetailComment').textContent = '';
+  document.getElementById('bookDetailComment').style.display = 'none';
   document.getElementById('bookDetailCover').src = book.cover_url || NO_COVER;
   document.getElementById('bookDetailCover').onerror = function() { this.src = NO_COVER; };
 
@@ -3797,13 +3818,7 @@ function openBookDetail(book) {
     }
   }
 
-  // レビューURL（評価横アイコン＆書評ポイント横ボタン共通）
-  const reviewUrl = reviewUrlForBook(book);
-  const reviewIcon = document.getElementById('bookDetailReviewIcon');
-  if (reviewIcon) {
-    reviewIcon.href = reviewUrl || '#';
-    reviewIcon.style.display = reviewUrl ? '' : 'none';
-  }
+  // 書評ポイント横「レビューを書く」ボタン
   const reviewBtn = document.getElementById('bookDetailReviewBtn');
   if (reviewBtn) {
     reviewBtn.href = reviewUrl || '#';
@@ -3812,24 +3827,20 @@ function openBookDetail(book) {
 
   loadBookInsight(book);
 
-  // 紙の本の場合は編集・削除ボタンを表示
-  let paperEditBar = document.getElementById('bookDetailPaperActions');
-  if (book.source === 'paper') {
-    if (!paperEditBar) {
-      paperEditBar = document.createElement('div');
-      paperEditBar.id = 'bookDetailPaperActions';
-      paperEditBar.className = 'book-detail-paper-actions';
-      modal.querySelector('.modal-body').appendChild(paperEditBar);
+  // 紙の本の場合は編集・削除ボタンを表示（書評ポイント下の固定枠を使用）
+  const paperEditBar = document.getElementById('bookDetailPaperActions');
+  if (paperEditBar) {
+    if (book.source === 'paper') {
+      paperEditBar.innerHTML = `
+        <button type="button" class="btn btn-secondary" id="paperDetailEditBtn">✏️ 編集</button>
+        <button type="button" class="btn btn-danger" id="paperDetailDeleteBtn">🗑 削除</button>
+      `;
+      document.getElementById('paperDetailEditBtn').onclick = () => { closeBookDetail(); openPaperBookEdit(book); };
+      document.getElementById('paperDetailDeleteBtn').onclick = () => confirmDeletePaperBook(book);
+      paperEditBar.style.display = '';
+    } else {
+      paperEditBar.style.display = 'none';
     }
-    paperEditBar.innerHTML = `
-      <button type="button" class="btn btn-secondary" id="paperDetailEditBtn">✏️ 編集</button>
-      <button type="button" class="btn btn-danger" id="paperDetailDeleteBtn">🗑 削除</button>
-    `;
-    document.getElementById('paperDetailEditBtn').onclick = () => { closeBookDetail(); openPaperBookEdit(book); };
-    document.getElementById('paperDetailDeleteBtn').onclick = () => confirmDeletePaperBook(book);
-    paperEditBar.style.display = '';
-  } else if (paperEditBar) {
-    paperEditBar.style.display = 'none';
   }
 
   modal.classList.add('open');
@@ -3964,6 +3975,7 @@ async function savePaperBookEdit() {
       showToast('保存しました', 'success');
       if (data.books) {
         allBooks = data.books;
+        _rebuildBookIndexMap();
         applyFilters();
       }
       closePaperBookEdit();
@@ -3989,6 +4001,7 @@ async function confirmDeletePaperBook(book) {
       closeBookDetail();
       if (data.books) {
         allBooks = data.books;
+        _rebuildBookIndexMap();
         applyFilters();
       }
     } else {
@@ -4607,7 +4620,7 @@ function _showTagDetailInline(tag, books, container) {
     const status = b.completed
       ? `<span class="tag-detail-read">読了 ${(b.completed_date || '').slice(0, 7)}</span>`
       : `<span class="tag-detail-unread">未読</span>`;
-    const idx = allBooks.indexOf(b);
+    const idx = _bookIndex(b);
     return `<div class="tag-detail-book" ${idx >= 0 ? `data-book-idx="${idx}"` : ''}>
       ${b.cover_url ? `<img class="tag-detail-cover" src="${escapeHtml(b.cover_url)}" alt="" loading="lazy">` : '<div class="tag-detail-cover tag-detail-cover-placeholder"></div>'}
       <div class="tag-detail-info"><strong>${escapeHtml(b.title || '—')}</strong><br><small>${escapeHtml(b.author || '')}</small><br>${status}</div>

@@ -11,7 +11,13 @@
   <meta name="theme-color" content="#6B3F1F">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- レンダリングブロックを避けるため非同期ロード。display=swap でフォント待ちを回避 -->
+  <link rel="preload" as="style"
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap"
+    onload="this.rel='stylesheet'">
+  <noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
+  </noscript>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -549,9 +555,8 @@
             <div class="book-detail-favorite" id="bookDetailFavorite"></div>
             <div class="book-detail-rating-row">
               <div class="book-detail-rating" id="bookDetailRating"></div>
-              <a id="bookDetailReviewIcon" href="#" target="_blank" rel="noopener" class="btn-review-detail" title="レビューを書く" style="display:none;">📖</a>
+              <span class="book-detail-review-inline" id="bookDetailReviewInline"></span>
             </div>
-            <div class="book-detail-review-headline" id="bookDetailReviewHeadline"></div>
             <div class="book-detail-dates">
               <span id="bookDetailLoanDate"></span>
               <span id="bookDetailCompleted" class="book-detail-completed"></span>
@@ -569,17 +574,20 @@
         </div>
         <div class="book-detail-insights-wrap">
           <div class="book-detail-insights-header">
-            <h3>書評ポイント</h3>
+            <h3 class="book-detail-insights-title">書評ポイント<a id="bookDetailReviewBtn" href="#" target="_blank" rel="noopener" class="btn-review-icon" title="レビューを書く" style="display:none;">📝</a></h3>
             <div class="book-detail-insights-actions">
-              <a id="bookDetailReviewBtn" href="#" target="_blank" rel="noopener" class="btn btn-secondary btn-review-text" title="レビューを書く" style="display:none;">レビューを書く</a>
-              <button type="button" class="btn btn-secondary" id="bookInsightEditBtn">手入力</button>
-              <button type="button" class="btn btn-secondary" id="bookInsightGenerateBtn">AIで生成</button>
+              <button type="button" class="btn btn-secondary btn-insight-sm" id="bookInsightEditBtn">手入力</button>
+              <button type="button" class="btn btn-secondary btn-insight-sm" id="bookInsightGenerateBtn">AIで生成</button>
             </div>
           </div>
           <div class="book-detail-insights-status" id="bookDetailInsightStatus"></div>
-          <ol class="book-detail-insights" id="bookDetailInsights"></ol>
+          <div class="book-detail-insights-scroll">
+            <ol class="book-detail-insights" id="bookDetailInsights"></ol>
+          </div>
           <div class="book-detail-insight-form" id="bookDetailInsightForm" style="display:none;"></div>
         </div>
+        <!-- 紙の本 編集・削除（書評ポイントの下に固定配置） -->
+        <div id="bookDetailPaperActions" class="book-detail-paper-actions" style="display:none;"></div>
       </div>
     </div>
   </div>

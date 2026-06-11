@@ -307,12 +307,29 @@ def fetch_and_save(library_id: str) -> dict:
     return payload
 
 
-def load_saved() -> Optional[dict]:
-    """全ソースの保存済み JSON を統合して読み込む。デフォルトは library_books.json と audible_books.json"""
+_saved_cache: Optional[dict] = None
+_saved_cache_mtime: float = 0.0
+
+
+def _get_books_max_mtime() -> float:
+    """書籍JSONファイル群の最新 mtime を返す（キャッシュ有効性チェック用）"""
+    return max(
+        (p.stat().st_mtime for p in _JSON_MAP.values() if p.exists()),
+        default=0.0,
+    )
+
+
+def invalidate_saved_cache() -> None:
+    """書籍データを更新した後にキャッシュを強制無効化する"""
+    global _saved_cache, _saved_cache_mtime
+    _saved_cache = None
+    _saved_cache_mtime = 0.0
+
+
+def _load_saved_uncached() -> Optional[dict]:
+    """キャッシュなしで全ソースの JSON を統合読み込み（内部用）"""
     all_books: list[dict] = []
     sources: list[dict] = []
-
-    # デフォルトのライブラリデータ: setagaya, audible_jp を優先（kindle, paper はあれば追加）
     load_order = ("setagaya", "audible_jp", "kindle", "paper")
     for lid in load_order:
         path = _JSON_MAP.get(lid)
@@ -326,7 +343,7 @@ def load_saved() -> Optional[dict]:
                 if not b.get("source"):
                     b["source"] = lid
                 if lid == "setagaya" and (b.get("runtime_length_min") or 0) == 0:
-                    b["runtime_length_min"] = 240  # 図書館の本は一律4時間
+                    b["runtime_length_min"] = 240
             all_books.extend(books)
             sources.append({
                 "library_id": data.get("library_id", lid),
@@ -336,17 +353,22 @@ def load_saved() -> Optional[dict]:
             })
         except (json.JSONDecodeError, OSError) as e:
             logger.warning("JSON 読込失敗 (%s): %s", path, e)
-
     if not all_books:
         return None
-
     all_books.sort(key=lambda b: b.get("loan_date", ""), reverse=True)
+    return {"sources": sources, "total": len(all_books), "books": all_books}
 
-    return {
-        "sources": sources,
-        "total": len(all_books),
-        "books": all_books,
-    }
+
+def load_saved() -> Optional[dict]:
+    """全ソースの保存済み JSON を統合して読み込む。mtimeが変わっていなければキャッシュを返す。"""
+    global _saved_cache, _saved_cache_mtime
+    max_mtime = _get_books_max_mtime()
+    if _saved_cache is not None and max_mtime <= _saved_cache_mtime:
+        return _saved_cache
+    result = _load_saved_uncached()
+    _saved_cache = result
+    _saved_cache_mtime = max_mtime
+    return result
 
 
 def load_saved_for(library_id: str) -> Optional[dict]:
@@ -392,6 +414,7 @@ def add_paper_book(book_data: dict) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+    invalidate_saved_cache()
 
     return {"duplicate": False, "book": book_data}
 
@@ -423,6 +446,7 @@ def update_paper_book(book_id: str, updates: dict) -> dict:
                 book["book_id"] = book_id
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False, indent=2)
+            invalidate_saved_cache()
             return {"success": True, "book": book}
 
     return {"success": False, "error": "本が見つかりません"}
@@ -445,6 +469,7 @@ def delete_paper_book(book_id: str) -> dict:
     payload["books"] = new_books
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+    invalidate_saved_cache()
 
     return {"success": True}
 
@@ -548,14 +573,24 @@ def book_insight_key(book: dict) -> str:
     return "book:" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
 
 
+_insights_cache: Optional[dict] = None
+_insights_cache_mtime: float = 0.0
+
+
 def load_book_insights() -> dict:
-    """書評ポイントを読み込む。"""
+    """書評ポイントを読み込む。mtimeが変わっていなければキャッシュを返す。"""
+    global _insights_cache, _insights_cache_mtime
     if not BOOK_INSIGHTS_PATH.exists():
         return {"items": {}}
     try:
+        mtime = BOOK_INSIGHTS_PATH.stat().st_mtime
+        if _insights_cache is not None and mtime <= _insights_cache_mtime:
+            return _insights_cache
         with open(BOOK_INSIGHTS_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
         if isinstance(data, dict) and isinstance(data.get("items"), dict):
+            _insights_cache = data
+            _insights_cache_mtime = mtime
             return data
     except Exception:
         logger.warning("書評ポイントの読込に失敗", exc_info=True)
@@ -570,6 +605,7 @@ def get_book_insight(book: dict) -> dict | None:
 
 def save_book_insight(book: dict, insight: dict) -> dict:
     """指定本の書評ポイントを保存して返す。"""
+    global _insights_cache, _insights_cache_mtime
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     data = load_book_insights()
     key = book_insight_key(book)
@@ -578,6 +614,8 @@ def save_book_insight(book: dict, insight: dict) -> dict:
     data.setdefault("items", {})[key] = insight
     with open(BOOK_INSIGHTS_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    _insights_cache = data
+    _insights_cache_mtime = BOOK_INSIGHTS_PATH.stat().st_mtime
     return insight
 
 
@@ -986,6 +1024,7 @@ def _save_json(library_id: str, payload: dict) -> None:
     path = _json_path_for(library_id)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
+    invalidate_saved_cache()
     logger.info("JSON 保存: %s (%d 冊)", path, payload["total"])
 
 
