@@ -1,6 +1,6 @@
 # yonda — 読書記録ビューア
 
-図書館・Audible・Kindle の読書記録を統合して表示・管理する Web アプリ。
+図書館・Audible・Kindle・紙の本の読書記録を統合して表示・管理する Web アプリ。
 
 ## 機能
 
@@ -11,38 +11,145 @@
 | **世田谷区立図書館** | 貸出履歴の取得、お気に入り登録の表示 |
 | **Audible Japan** | オーディオブック蔵書の取得（auth_jp.json 認証） |
 | **Kindle** | Amazon ログインまたはローカルファイルから蔵書取得 |
+| **紙の本** | 手動登録（タイトル入力・写真撮影・Amazon リンク貼付け） |
 
-### Yonda（読んだ？）— 読書記録の表示
+---
 
-- **読んだ / ランキング / オススメ**: タブで切り替え
-- **フィルター**: 検索（タイトル・著者）、ソース（図書館/Audible/Kindle）、状態（読了/未読/お気に入り/評価）、並べ替え
-- **表示切り替え**: カード表示 / テーブル表示
-- **本の概要**: カード・テーブルに本の概要を表示（Open Library / Google Books / Audible から取得）
-- **読書グラフ**: 月別・ジャンル別の読了数チャート
-- **統計**: 読了数、今年の読了数、お気に入り数
-- **評価・お気に入り**: 本ごとに★評価とお気に入り登録（Audible はカタログ評価を表示）
+### Yonda（読んだ？）— 読書記録の表示・管理
+
+#### タブ構成
+
+| タブ | 内容 |
+|------|------|
+| **Yonda** | 読んだ・読中の本一覧 |
+| **みんなのYonda** | ユーザー全体の読書記録をコミュニティ表示 |
+
+#### 一覧表示
+
+- **カード表示 / テーブル表示** の切り替え
+- **フィルター**: 検索（タイトル・著者）、ソース（図書館/Audible/Kindle/紙）、状態（読了/未読/お気に入り/評価）
+- **並べ替え**: 取得日・読了日・著者・積読日数など
+- **本の概要**: カード・テーブルに概要を表示（Open Library / Google Books / Audible から自動取得）
 - **表紙**: Open Library / Google Books API で自動取得
-- **Yonda オススメ**: 読了本の傾向から未読本を AI で 5 冊推薦
-- **最終同期日時**: メニューの「読書記録取込み」にソースごとの最終取得日時を表示（例: `図書館 4/3 06:00`）
+- **評価（★）**: 個人評価を優先表示。Audible は Audible カタログ評価にフォールバック
+- **ジャンル**: バッジ表示（ジャンル別カラーコード付き）
+
+#### テーブルビュー 列構成
+
+| 列 | 説明 |
+|----|------|
+| 表紙 | サムネイル |
+| タイトル | 読了バッジ・お気に入りバッジ |
+| 著者 | |
+| 概要 | 最大80文字 |
+| ジャンル | ジャンルカラーバッジ |
+| 再生時間 | Audible / 紙（デフォルト4時間） |
+| 取得日 | |
+| 読了日 | 読中は進捗 |
+| 積読 | 取得〜読了日数 |
+| ソース | 図/A/K/P バッジ |
+| 書評ポイント | AI 生成または手入力のレビューポイント |
+| **非公開** | チェックでみんなのYondaから除外 |
+| **非表示** | チェックで一覧から非表示（自分の一覧にも表示しない） |
+
+#### 本の詳細モーダル
+
+- 著者・ジャンル・★評価・レビュー（見出し/コメント）
+- Amazon・メルカリへのリンク（アフィリエイトタグ付き）
+- 概要テキスト
+- **書評ポイント**: AI 生成または手入力。スクロール可能エリア（最大260px）
+- 書評を書くリンク（📝 アイコン）
+- 紙の本の場合: 編集・削除ボタン
+- **非公開フラグ**: みんなのYondaから除外
+- **非表示フラグ**: 一覧から非表示
+
+#### マイ・ランキング
+
+- Yonda タブ内にインライン表示
+- 年別フィルター付き（全期間・各年）
+- ★評価順ランキング
+
+#### 読書グラフ・統計
+
+- 月別・ジャンル別の読了数チャート
+- 読了数・今年の読了数・お気に入り数
+
+---
 
 ### Yomu（何読む？）— 次に読みたい本検索
 
-- **価格比較検索**: タイトル・著者で検索し、Amazon（Kindle/Audible）、メルカリ、ブックオフ、図書館の在庫・価格を一覧表示
-- **写真から検索**: 本の表紙を撮影すると、AI（OpenAI/Gemini）またはバーコード（ISBN）・OCR で本の情報を自動抽出して検索
+- **キーワード検索**: タイトル・著者で Amazon・Kindle・Audible・メルカリ・ブックオフ・図書館を横断検索
+- **写真から検索**: 本の表紙を撮影すると AI（OpenAI/Gemini）またはバーコード（ISBN）・OCR で本情報を自動抽出
+- **+紙の本として保存**: 検索結果または手動入力で紙の本を登録。写真を表紙に使用可能
+- **Amazonリスト**: 欲しいものリストの本を表示・管理
+- **Amazon 設定**: ハンバーガーメニュー → Amazon設定 から Wishlist URL とアフィリエイトタグを設定
+- **検索するアプリ**: ハンバーガーメニュー → アプリ設定 → 検索するアプリ で有効/無効を選択、カスタムアプリも追加可能
+
+---
 
 ### Oshi（AI推し）— AI による本の提案
 
-- **選書モード**: 簡単な質問で選書（デフォルト）、MBTI診断で選書、Strength Finderで選書
-- **フォーム入力**: 簡単な質問モードでは性別・年代・職業・ジャンル・読書頻度をスライダーで選択（モバイルでは読書頻度は非表示）
-- **会話型提案**: AI が質問しながらあなたに合った本を提案
-- **提案内容**: 選んだ理由、本の紹介、レビュー、Amazon リンク
+| モード | 説明 |
+|--------|------|
+| **簡単質問推し** | 性別・年代・職業・ジャンル・頻度をスライダーで入力、会話形式で提案 |
+| **MBTI推し** | 性格タイプに合った本を提案 |
+| **強み診断推し** | StrengthsFinder の強みに合った本を提案 |
+| **読書履歴推し** | 自分の読了・未読リストから AI が最適な本を理由付きで推薦 |
 
-### その他
+---
 
-- **ISBN 検索**: Open Library API で ISBN から書籍情報を取得（CORS 回避用プロキシ）
-- **アフィリエイトタグ**: Kindle・Audible リンクにタグを付与可能
-- **書籍データダウンロード**: `GET /api/download/<source>` で保存済みの JSON をダウンロード
-- **API ドキュメント**: `GET /api/docs` でブラウザから REST API 仕様を確認可能
+### みんなのYonda — コミュニティ表示
+
+- 直近の読書メッセージ（最大10件、1件あたり5冊まで）
+- **ジャンルカラー**: 本カードの背景・左ボーダーをジャンル色で表示
+- **ジャンルバッジ**: 頭文字1文字の丸バッジ（ジャンル色）
+- **ソースバッジ**: 図/A/K/P
+- **個人評価★**: `displayRating` による星表示（個人評価優先、Audibleはカタログ評価）
+- **個人レビュー**: 見出しまたはコメントを表示
+- **非公開本は除外**: `private: true` の本は表示されない
+- 本をタップすると詳細モーダルが開く
+
+---
+
+### アプリ設定
+
+ハンバーガーメニュー → **アプリ設定** から各種設定が可能。
+
+| 設定項目 | 説明 |
+|---------|------|
+| **Amazon設定** | Wishlist URL・アフィリエイトタグ |
+| **AI設定** | OpenAI / Gemini API キー |
+| **検索するアプリ** | Amazon・Kindle・Audible・メルカリ・ブックオフ・図書館の有効/無効、カスタムアプリ追加 |
+
+---
+
+### 非公開・非表示フラグ
+
+| フラグ | 対象 | 効果 |
+|--------|------|------|
+| **非公開** | 全ソース | みんなのYondaに表示されない |
+| **非表示** | 全ソース | 自分の一覧にも表示されない |
+
+- `data/private_books.json` / `data/hidden_books.json` で book_id を管理
+- デフォルトは公開・表示（ブランク）
+
+---
+
+### ヘッダー検索
+
+- タイトル・著者のリアルタイム検索
+- 結果なし時: Amazon・Kindle・Audible・メルカリ・ブックオフ・図書館 + **+紙の本** ボタンを表示
+
+---
+
+### 書評ポイント
+
+- **手入力**: 見出し・本文を自分で入力
+- **AI生成**: OpenAI/Gemini で書評ポイントを自動生成
+- 各ポイントのコピーボタン付き
+- 本の詳細モーダルでスクロール可能エリアに表示
+
+---
 
 ### REST API v1
 
@@ -59,11 +166,13 @@
 | パラメータ | 値 | デフォルト |
 |---|---|---|
 | `status` | `read` / `unread` / `in_progress` / `all` | `all` |
-| `source` | `setagaya` / `audible_jp` / `kindle` / `all` | `all` |
+| `source` | `setagaya` / `audible_jp` / `kindle` / `paper` / `all` | `all` |
 | `q` | タイトル・著者の部分一致検索 | — |
 | `sort` | `loan_date_desc` / `completed_date_desc` / `percent_desc` / `title_asc` | `loan_date_desc` |
 | `limit` | 1〜200 | `50` |
 | `offset` | 0以上 | `0` |
+
+---
 
 ### Slack 連携
 
@@ -79,6 +188,8 @@ Slack Slash Command `/yonda` で読書記録を検索・確認できます。
 | `/yonda help` | ヘルプ |
 
 設定方法は「[Slack 連携セットアップ](#slack-連携セットアップ)」を参照。
+
+---
 
 ## 起動方法
 
@@ -99,6 +210,7 @@ python -m app
 | 世田谷区立図書館 | 利用者番号・パスワード（アカウント設定で登録） |
 | Audible Japan | `scripts/audible_auth.py` で認証し `data/auth_jp.json` を生成（トークン有効期限: 約60〜90日） |
 | Kindle | Amazon メール・パスワード、またはローカルファイル（BookData.sqlite） |
+| 紙の本 | アプリ内から手動登録（テキスト・写真・Amazon リンク） |
 
 ## Kindle の取得方法
 
@@ -129,7 +241,6 @@ Amazon メールアドレスとパスワードを入力します。2段階認証
 ### Cloud Run（yonda.ktrips.net）への反映
 
 ```bash
-# 更新された auth_jp.json の内容を確認
 cat data/auth_jp.json
 ```
 
@@ -150,9 +261,15 @@ GitHub リポジトリ → **Settings** → **Secrets and variables** → **Acti
 
 | ファイル | ソース |
 |----------|--------|
-| `library_books.json` | 図書館（`fetch_date` フィールドに最終取得日時を記録） |
-| `audible_books.json` | Audible（同上） |
-| `kindle_books.json` | Kindle（同上） |
+| `library_books.json` | 図書館 |
+| `audible_books.json` | Audible |
+| `kindle_books.json` | Kindle |
+| `paper_books.json` | 紙の本（手動登録） |
+| `amazon_list.json` | Amazon 欲しいものリスト |
+| `book_insights.json` | 書評ポイント（AI生成・手入力） |
+| `private_books.json` | 非公開フラグ（book_id リスト） |
+| `hidden_books.json` | 非表示フラグ（book_id リスト） |
+| `yonda_messages.json` | みんなのYonda コミュニティデータ |
 | `BookData.sqlite` | Kindle（ローカル同期用） |
 
 読書データは `yonda/data/`（環境変数 `YONDA_DATA_DIR` で変更可能）。
@@ -164,7 +281,7 @@ GitHub リポジトリ → **Settings** → **Secrets and variables** → **Acti
 | `ai_config.json` | AI（OpenAI/Gemini）API キー | `~/.config/yonda/ai_config.json` |
 | `credentials.json` | 図書館認証 | `~/.config/yonda/credentials.json` |
 
-環境変数 `YONDA_CONFIG_DIR` でディレクトリを変更、`YONDA_AI_CONFIG_PATH` / `YONDA_CREDS_PATH` で個別パスを指定可能。既存ファイルは初回起動時に自動移行されます。
+環境変数 `YONDA_CONFIG_DIR` でディレクトリを変更、`YONDA_AI_CONFIG_PATH` / `YONDA_CREDS_PATH` で個別パスを指定可能。
 
 ## 環境変数
 
@@ -183,15 +300,10 @@ GitHub リポジトリ → **Settings** → **Secrets and variables** → **Acti
 **ローカル起動時にクラウドのデータを参照する場合:**
 
 ```bash
-# GCSFUSEをインストール（macOS）
 brew install --cask google-cloud-sdk
 brew install gcsfuse
-
-# GCSバケットをマウント
 mkdir -p ~/yonda-gcs-mount
 gcsfuse airgo-trip-yonda-data ~/yonda-gcs-mount
-
-# アプリ起動
 export YONDA_DATA_DIR=~/yonda-gcs-mount
 python -m app
 ```
@@ -220,9 +332,9 @@ Google Cloud Run へのデプロイ方法は 2 通りあります。
 取得先エンドポイント: `POST https://yonda.ktrips.net/api/fetch` with `{"library_id": "all"}`
 
 > **Kindle の自動取得について**  
-> セッションが有効な場合、またはローカルファイル（`BookData.sqlite` / `KindleSyncMetadataCache.xml`）が利用可能な場合に自動取得されます。OTP は要求されません。  
+> セッションが有効な場合、またはローカルファイルが利用可能な場合に自動取得されます。  
 > - 初回のみ手動ログイン（OTP 入力）が必要。以降はセッションが自動再利用されます（有効期限: 7日間）  
-> - セッションが無効でローカルファイルもない場合はスキップされ、他ソースの取得は継続されます  
+> - セッションが無効でローカルファイルもない場合はスキップされます  
 > - GCS に `BookData.sqlite` を配置する場合は `YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite` を設定
 
 ### Slack 連携セットアップ
@@ -230,10 +342,9 @@ Google Cloud Run へのデプロイ方法は 2 通りあります。
 1. [Slack API](https://api.slack.com/apps) でアプリを作成
 2. **Slash Commands** → `/yonda` を追加、Request URL を `https://yonda.ktrips.net/slack/command` に設定
 3. **Basic Information** → **Signing Secret** をコピー
-4. 環境変数 `SLACK_SIGNING_SECRET` に設定（Cloud Run の場合は Secret Manager 経由で設定）
+4. 環境変数 `SLACK_SIGNING_SECRET` に設定
 
 ```bash
-# Cloud Run に環境変数を追加（ローカル deploy.sh 経由）
 gcloud run services update yonda \
   --region=asia-northeast1 \
   --update-env-vars="SLACK_SIGNING_SECRET=your_signing_secret"
@@ -241,33 +352,16 @@ gcloud run services update yonda \
 
 ### GitHub Actions セットアップ（初回のみ）
 
-GitHub Actions でデプロイするには、以下を設定してください。
-
-#### 1. ワークフロー配置
-
-ワークフローは **リポジトリルート** の `.github/workflows/yonda-deploy.yml` に配置されています。GitHub はこのパスのみを読み込むため、サブディレクトリ内のワークフローは実行されません。
-
-#### 2. GCP サービスアカウントの作成と GCP_SA_KEY の取得
-
-**Step 1: gcloud でログイン**
+#### 1. GCP サービスアカウントの作成
 
 ```bash
 gcloud auth login
 gcloud config set project YOUR_PROJECT_ID
-```
-
-**Step 2: サービスアカウントの作成**
-
-```bash
-export PROJECT_ID="your-gcp-project-id"   # 実際のプロジェクトIDに変更
+export PROJECT_ID="your-gcp-project-id"
 
 gcloud iam service-accounts create github-actions-yonda \
   --display-name="GitHub Actions for yonda"
-```
 
-**Step 3: 必要な権限の付与**
-
-```bash
 for role in "roles/run.admin" "roles/artifactregistry.admin" "roles/cloudbuild.builds.builder" \
   "roles/storage.admin" "roles/secretmanager.admin" "roles/iam.serviceAccountUser" \
   "roles/serviceusage.serviceUsageAdmin" "roles/logging.viewer" \
@@ -276,58 +370,27 @@ for role in "roles/run.admin" "roles/artifactregistry.admin" "roles/cloudbuild.b
     --member="serviceAccount:github-actions-yonda@${PROJECT_ID}.iam.gserviceaccount.com" \
     --role="$role" --quiet
 done
-```
 
-**Step 4: キー（JSON）のダウンロード**
-
-```bash
 gcloud iam service-accounts keys create ~/sa-key-yonda.json \
   --iam-account=github-actions-yonda@${PROJECT_ID}.iam.gserviceaccount.com
-```
-
-**Step 5: JSON の内容をコピー**
-
-```bash
 cat ~/sa-key-yonda.json
 ```
 
-表示された JSON を **最初の `{` から最後の `}` まで** すべてコピーします。この内容が `GCP_SA_KEY` です。
-
-> ⚠️ **注意**: この JSON は秘密情報です。Git にコミットしたり他人に共有しないでください。登録後は `~/sa-key-yonda.json` を削除して構いません。
-
-#### 3. GitHub Secrets の登録
+#### 2. GitHub Secrets の登録
 
 リポジトリ → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
 | Secret 名 | 値 | 必須 |
 |-----------|-----|------|
-| `GCP_PROJECT_ID` | GCP プロジェクト ID（例: `my-project-123`） | ✅ |
-| `GCP_SA_KEY` | Step 5 でコピーした JSON の全文を貼り付け | ✅ |
+| `GCP_PROJECT_ID` | GCP プロジェクト ID | ✅ |
+| `GCP_SA_KEY` | サービスアカウントキー JSON 全文 | ✅ |
 | `AUTH_JP_JSON` | `auth_jp.json` の内容 | ✅（Audible 利用時） |
-| `CREDENTIALS_JSON` | `.credentials.json` の内容 | 任意（図書館利用時） |
+| `CREDENTIALS_JSON` | `credentials.json` の内容 | 任意（図書館利用時） |
 
-**認証ファイルの取得例:**
-
-```bash
-# Audible 認証（auth_jp.json）— 再認証後に生成
-python3 scripts/audible_auth.py
-cat data/auth_jp.json   # この内容を AUTH_JP_JSON に登録
-
-# 図書館認証（.credentials.json）
-cat data/.credentials.json
-# または ~/.config/yonda に移行済みなら
-cat ~/.config/yonda/credentials.json
-```
-
-#### 4. 実行方法
-
-- **自動**: `main` ブランチに push するとフルデプロイが自動開始
-- **手動**: **Actions** タブ → **Deploy yonda to Cloud Run** → **Run workflow**（「イメージ更新のみ」を選択可能）
-
-#### 5. セットアップチェックリスト
+#### 3. セットアップチェックリスト
 
 - [ ] ワークフローが `.github/workflows/yonda-deploy.yml` に配置されている
 - [ ] `GCP_PROJECT_ID` を GitHub Secrets に登録
-- [ ] `GCP_SA_KEY` を GitHub Secrets に登録（サービスアカウントキー JSON の全文）
+- [ ] `GCP_SA_KEY` を GitHub Secrets に登録
 - [ ] `AUTH_JP_JSON` を GitHub Secrets に登録（Audible 利用時）
 - [ ] `CREDENTIALS_JSON` を GitHub Secrets に登録（図書館利用時、任意）

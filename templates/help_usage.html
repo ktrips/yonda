@@ -9,16 +9,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
-    .help-page { max-width: 640px; margin: 0 auto; padding: 2rem 1rem; }
+    .help-page { max-width: 680px; margin: 0 auto; padding: 2rem 1rem; }
     .help-page h1 { font-size: 1.4rem; margin-bottom: 1.5rem; color: var(--accent); }
-    .help-page h2 { font-size: 1rem; margin: 1.25rem 0 0.5rem; color: var(--text); }
-    .help-page p, .help-page ul { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
-    .help-page ul { padding-left: 1.25rem; }
+    .help-page h2 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; color: var(--text); border-left: 3px solid var(--accent); padding-left: 0.6rem; }
+    .help-page h3 { font-size: 0.95rem; margin: 1rem 0 0.4rem; color: var(--text); }
+    .help-page p, .help-page ul, .help-page ol { font-size: 0.9rem; color: var(--text-secondary); line-height: 1.7; margin-bottom: 0.75rem; }
+    .help-page ul, .help-page ol { padding-left: 1.4rem; }
     .help-page a { color: var(--accent); }
     .help-back { display: inline-block; margin-bottom: 1rem; font-size: 0.85rem; }
-    .help-nav { display: flex; gap: 1rem; margin-bottom: 1.5rem; font-size: 0.95rem; }
-    .help-nav a { text-decoration: none; }
-    .help-nav a:hover { text-decoration: underline; }
+    .help-nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    .help-nav a { text-decoration: none; padding: 0.2rem 0.6rem; border-radius: 1rem; background: var(--surface2); color: var(--text-secondary); }
+    .help-nav a:hover { background: var(--accent); color: #fff; text-decoration: none; }
+    .help-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 1rem; }
+    .help-table th, .help-table td { border: 1px solid var(--border); padding: 0.4rem 0.6rem; text-align: left; vertical-align: top; }
+    .help-table th { background: var(--surface2); font-weight: 600; }
+    .help-note { background: var(--surface2); border-left: 3px solid var(--accent); padding: 0.6rem 0.8rem; border-radius: 0 var(--radius) var(--radius) 0; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.75rem; }
   </style>
 </head>
 <body>
@@ -28,45 +33,197 @@
       <h1>Yondaの使い方</h1>
       <nav class="help-nav">
         <a href="#fetch">読書記録取込み</a>
-        <a href="#yonda">読んだ？</a>
-        <a href="#yomu">何読む？</a>
+        <a href="#yonda">Yonda（読んだ）</a>
+        <a href="#detail">本の詳細</a>
+        <a href="#community">みんなのYonda</a>
+        <a href="#yomu">Yomu（何読む）</a>
         <a href="#oshi">AI推し</a>
+        <a href="#settings">アプリ設定</a>
+        <a href="#flags">非公開・非表示</a>
       </nav>
 
+      <!-- ===== 読書記録取込み ===== -->
       <h2 id="fetch">読書記録取込み</h2>
-      <p>メニュー右上の「読書記録取込み」から各ソースのデータを取得します。</p>
+      <p>右上のハンバーガーメニュー（≡）から「読書記録取込み」を選択します。</p>
       <ul>
         <li>メニューを開くと、図書館・Audible・Kindle の<strong>最終取得日時</strong>がソースごとに表示されます</li>
-        <li>「読書記録取込み」をタップすると取得ソースを選択できます</li>
-        <li>Cloud Run 環境では <strong>毎日 06:00 / 12:00 / 18:00（JST）</strong>に図書館・Audible が自動取得されます（Kindle は手動取得）</li>
+        <li>取得したいソースを選択して「取込み開始」をタップ</li>
+        <li>Cloud Run 環境では <strong>毎日 06:00 / 12:00 / 18:00（JST）</strong>に自動取得されます</li>
+      </ul>
+      <table class="help-table">
+        <thead><tr><th>ソース</th><th>バッジ</th><th>取得方法</th></tr></thead>
+        <tbody>
+          <tr><td>世田谷区立図書館</td><td>図</td><td>利用者番号・パスワード</td></tr>
+          <tr><td>Audible Japan</td><td>A</td><td>audible_auth.py で認証（約60〜90日有効）</td></tr>
+          <tr><td>Kindle</td><td>K</td><td>Amazon ログイン または ローカルファイル</td></tr>
+          <tr><td>紙の本</td><td>P</td><td>アプリ内から手動登録</td></tr>
+        </tbody>
+      </table>
+
+      <!-- ===== Yonda ===== -->
+      <h2 id="yonda">Yonda（読んだ？）— 読書記録一覧</h2>
+
+      <h3>タブ構成</h3>
+      <ul>
+        <li><strong>Yonda</strong>: 自分の読んだ本・読中の本一覧</li>
+        <li><strong>みんなのYonda</strong>: ユーザー全体の読書コミュニティ</li>
       </ul>
 
-      <h2 id="yonda">読んだ？</h2>
-      <p>読書記録の表示・管理</p>
+      <h3>フィルター・並べ替え</h3>
       <ul>
-        <li>読んだ / ランキング / オススメのタブ切り替え</li>
-        <li>フィルター（検索、ソース、状態、並べ替え）</li>
-        <li>カード表示 / テーブル表示の切り替え</li>
-        <li>本の概要をカード・テーブルに表示</li>
-        <li>読書グラフ（月別・ジャンル別）</li>
-        <li>Yonda オススメ：読了本の傾向から AI で 5 冊推薦</li>
+        <li><strong>検索</strong>: タイトル・著者のリアルタイム検索</li>
+        <li><strong>ソース</strong>: 図書館 / Audible / Kindle / 紙の本</li>
+        <li><strong>状態</strong>: 読了 / 未読 / お気に入り / 評価（★）</li>
+        <li><strong>並べ替え</strong>: 取得日・読了日・著者・積読日数・評価など</li>
       </ul>
 
-      <h2 id="yomu">読む？</h2>
-      <p>次に読みたい本検索</p>
+      <h3>表示モード</h3>
       <ul>
-        <li>タイトル・著者で価格比較検索</li>
-        <li>写真を撮ると AI またはバーコード・OCR で本の情報を抽出して検索</li>
-        <li>Amazon、Kindle、Audible、メルカリ、ブックオフ、図書館の在庫・価格を一覧表示</li>
+        <li><strong>カード表示</strong>: 表紙・タイトル・概要をカード形式で表示</li>
+        <li><strong>テーブル表示</strong>: 詳細情報を列形式で一覧表示。右端に非公開・非表示のチェックボックスあり</li>
       </ul>
 
-      <h2 id="oshi">AI推し</h2>
-      <p>AI による本の提案</p>
+      <h3>マイ・ランキング</h3>
+      <p>Yonda タブ内に★評価順のランキングをインライン表示。年別フィルター付き。</p>
+
+      <!-- ===== 本の詳細 ===== -->
+      <h2 id="detail">本の詳細</h2>
+      <p>本のカードまたはテーブル行をタップすると詳細モーダルが開きます。</p>
       <ul>
-        <li>簡単質問推し：簡単な質問に答えて本を提案</li>
-        <li>MBTI推し：性格タイプに合った本を提案</li>
-        <li>強み診断推し：強み・得意なことに合った本を提案</li>
+        <li><strong>★評価</strong>: 個人評価を優先表示（Audible はカタログ評価にフォールバック）。タップするとレビューページへ</li>
+        <li><strong>レビュー</strong>: 見出しまたはコメントを星の横に表示</li>
+        <li><strong>Amazon・メルカリ</strong>: ボタンから外部サイトへ（アフィリエイトタグ付き）</li>
+        <li><strong>書評ポイント</strong>: AI生成または手入力のレビューポイント。📝 アイコンからレビューを書くページへ
+          <ul>
+            <li>「手入力」「AI生成」ボタンで追加・編集</li>
+            <li>各ポイントのコピーボタン付き</li>
+          </ul>
+        </li>
+        <li><strong>紙の本</strong>: 「編集」「削除」ボタンで管理</li>
+        <li><strong>非公開・非表示</strong>: モーダル右下のチェックボックスで設定（→ <a href="#flags">詳細</a>）</li>
       </ul>
+
+      <!-- ===== みんなのYonda ===== -->
+      <h2 id="community">みんなのYonda</h2>
+      <p>他のユーザーの読書記録を閲覧できるコミュニティタブ。</p>
+      <ul>
+        <li>直近の読書メッセージを最大10件表示（1件あたり5冊まで）</li>
+        <li><strong>ジャンル色</strong>: 本カードの背景・左ボーダー・丸バッジがジャンル色で表示</li>
+        <li><strong>表示順</strong>: ジャンルバッジ → ソースバッジ（図/A/K/P）→ 本の名前</li>
+        <li><strong>個人評価★</strong>・レビューがあれば著者の下に表示</li>
+        <li>本をタップすると詳細モーダルが開く</li>
+        <li><strong>非公開</strong>に設定した本はここに表示されません</li>
+      </ul>
+
+      <!-- ===== Yomu ===== -->
+      <h2 id="yomu">Yomu（何読む？）— 読みたい本検索</h2>
+      <p>タイトル・著者名で検索するか、本の写真を撮って情報を自動抽出します。</p>
+
+      <h3>検索</h3>
+      <ul>
+        <li>Amazon・Kindle・Audible・メルカリ・ブックオフ・図書館を横断リンク表示</li>
+        <li>検索結果がない場合も外部リンクと「+紙の本」ボタンを表示</li>
+      </ul>
+
+      <h3>写真から検索</h3>
+      <ul>
+        <li>カメラで撮影または写真ライブラリから選択</li>
+        <li>AI（OpenAI/Gemini）またはバーコード（ISBN）・OCR で本の情報を自動抽出</li>
+        <li>抽出した情報で検索・保存</li>
+      </ul>
+
+      <h3>+紙の本として保存</h3>
+      <ul>
+        <li>タイトルを入力またはヘッダー検索結果から「+紙の本」をタップ</li>
+        <li>Amazon リンクを貼ると著者・概要・表紙を自動取得</li>
+        <li>写真を表紙として使用可能（自動圧縮）</li>
+        <li>登録した本はYondaタブの一覧に表示（ソース: 紙の本）</li>
+      </ul>
+
+      <h3>Amazon 欲しいものリスト</h3>
+      <ul>
+        <li>アプリ設定 → Amazon設定 で Wishlist URL を登録すると本が表示されます</li>
+        <li>「+Amazonリスト」「+紙の本」ボタンで追加した本がここに表示されます</li>
+      </ul>
+
+      <!-- ===== AI推し ===== -->
+      <h2 id="oshi">AI推し — AI による本の提案</h2>
+      <p>4つのモードから好みの方法で本の提案を受けられます。</p>
+
+      <h3>簡単質問推し</h3>
+      <p>性別・年代・職業・ジャンル傾向・読書頻度をスライダーで設定。AI が質問しながら本を提案します。</p>
+
+      <h3>MBTI推し</h3>
+      <p>自分の性格タイプ（MBTI）を伝えると、それに合った本を提案します。</p>
+
+      <h3>強み診断推し</h3>
+      <p>StrengthsFinder などの強み・得意なことを伝えると、それを活かす本を提案します。</p>
+
+      <h3>読書履歴推し</h3>
+      <p>自分の読了本・未読本リストを AI に渡し、最適な本を<strong>推薦理由付き</strong>で提案します。</p>
+      <ul>
+        <li>API Key の設定が必要（アプリ設定 → AI設定）</li>
+        <li>読了本と未読本の両方がある場合に機能します</li>
+        <li>「もう一度おすすめを生成」で再提案可能</li>
+        <li>推薦理由は本カードの右横に表示</li>
+      </ul>
+      <div class="help-note">チャット入力エリアは「読書履歴推し」モードでは非表示になります。</div>
+
+      <!-- ===== アプリ設定 ===== -->
+      <h2 id="settings">アプリ設定</h2>
+      <p>右上のハンバーガーメニュー（≡）→「アプリ設定」から各種設定を変更できます。</p>
+
+      <h3>Amazon設定</h3>
+      <ul>
+        <li><strong>Wishlist URL</strong>: Amazon 欲しいものリストの URL を登録</li>
+        <li><strong>アフィリエイトタグ</strong>: 設定すると全 Amazon リンクに自動追加（例: <code>&tag=mytag-22</code>）</li>
+      </ul>
+
+      <h3>AI設定</h3>
+      <ul>
+        <li>OpenAI API Key または Gemini API Key を登録</li>
+        <li>書評ポイントの AI 生成・AI推しモードで使用</li>
+      </ul>
+
+      <h3>検索するアプリ</h3>
+      <ul>
+        <li>Amazon・Kindle・Audible・メルカリ・ブックオフ・図書館（所在地）のチェックで検索先を選択</li>
+        <li>「＋追加」でカスタムアプリ（名前＋URL テンプレート）を登録可能</li>
+        <li>設定はブラウザのローカルストレージに保存されます</li>
+      </ul>
+
+      <!-- ===== 非公開・非表示 ===== -->
+      <h2 id="flags">非公開・非表示フラグ</h2>
+      <p>全てのソース（図書館・Audible・Kindle・紙の本）の本に設定できます。デフォルトはブランク（公開・表示）。</p>
+
+      <table class="help-table">
+        <thead><tr><th>フラグ</th><th>効果</th><th>設定場所</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>非公開</strong></td>
+            <td>みんなのYondaに表示されない</td>
+            <td>本の詳細（右下）/ テーブル一覧（非公開列）</td>
+          </tr>
+          <tr>
+            <td><strong>非表示</strong></td>
+            <td>自分の一覧にも表示されない</td>
+            <td>本の詳細（右下）/ テーブル一覧（非表示列）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="help-note">
+        非表示にした本は、テーブルビューの「非表示」列でチェックを外すか、本の詳細から「非表示（一覧から隠す）」のチェックを外すと再表示できます。ただし非表示中は一覧に出ないため、テーブルビューで設定してください。
+      </div>
+
+      <h3>設定方法</h3>
+      <ol>
+        <li>本の詳細モーダルを開く（本をタップ）</li>
+        <li>モーダル右下の「非公開（みんなのYondaに非表示）」または「非表示（一覧から隠す）」をチェック</li>
+        <li>即座にサーバーに保存されます</li>
+      </ol>
+      <p>テーブル表示でも各行の右端にある「非公開」「非表示」列でチェックを変更できます。</p>
+
     </div>
   </div>
   <script>
