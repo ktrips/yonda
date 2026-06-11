@@ -60,6 +60,7 @@ AMAZON_LIST_PATH = DATA_DIR / "amazon_list.json"
 BOOK_INSIGHTS_PATH = DATA_DIR / "book_insights.json"
 YONDA_MESSAGES_PATH = DATA_DIR / "yonda_messages.json"
 PRIVATE_BOOKS_PATH = DATA_DIR / "private_books.json"
+HIDDEN_BOOKS_PATH = DATA_DIR / "hidden_books.json"
 
 _ENV_MAP = {
     "setagaya": ("SETAGAYA_USER_ID", "SETAGAYA_PASSWORD"),
@@ -313,8 +314,8 @@ _saved_cache_mtime: float = 0.0
 
 
 def _get_books_max_mtime() -> float:
-    """書籍JSONファイル群（+ 非公開設定）の最新 mtime を返す（キャッシュ有効性チェック用）"""
-    paths = list(_JSON_MAP.values()) + [PRIVATE_BOOKS_PATH]
+    """書籍JSONファイル群（+ 非公開・非表示設定）の最新 mtime を返す（キャッシュ有効性チェック用）"""
+    paths = list(_JSON_MAP.values()) + [PRIVATE_BOOKS_PATH, HIDDEN_BOOKS_PATH]
     return max(
         (p.stat().st_mtime for p in paths if p.exists()),
         default=0.0,
@@ -357,12 +358,15 @@ def _load_saved_uncached() -> Optional[dict]:
             logger.warning("JSON 読込失敗 (%s): %s", path, e)
     if not all_books:
         return None
-    # 非公開フラグを付与
+    # 非公開・非表示フラグを付与
     private_ids = load_private_book_ids()
-    if private_ids:
-        for b in all_books:
-            if b.get("book_id") in private_ids:
-                b["private"] = True
+    hidden_ids = load_hidden_book_ids()
+    for b in all_books:
+        bid = b.get("book_id")
+        if bid and bid in private_ids:
+            b["private"] = True
+        if bid and bid in hidden_ids:
+            b["hidden"] = True
     all_books.sort(key=lambda b: b.get("loan_date", ""), reverse=True)
     return {"sources": sources, "total": len(all_books), "books": all_books}
 
@@ -602,6 +606,31 @@ def set_book_private(book_id: str, private: bool) -> None:
         ids.discard(book_id)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     with open(PRIVATE_BOOKS_PATH, "w", encoding="utf-8") as f:
+        json.dump({"ids": sorted(ids)}, f, ensure_ascii=False, indent=2)
+    invalidate_saved_cache()
+
+
+def load_hidden_book_ids() -> set:
+    """非表示に設定された book_id の集合を返す"""
+    if not HIDDEN_BOOKS_PATH.exists():
+        return set()
+    try:
+        with open(HIDDEN_BOOKS_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return set(data.get("ids", []))
+    except Exception:
+        return set()
+
+
+def set_book_hidden(book_id: str, hidden: bool) -> None:
+    """指定 book_id の非表示フラグを設定・解除する"""
+    ids = load_hidden_book_ids()
+    if hidden:
+        ids.add(book_id)
+    else:
+        ids.discard(book_id)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    with open(HIDDEN_BOOKS_PATH, "w", encoding="utf-8") as f:
         json.dump({"ids": sorted(ids)}, f, ensure_ascii=False, indent=2)
     invalidate_saved_cache()
 

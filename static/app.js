@@ -21,6 +21,7 @@ const API = {
   updatePaperBook: (id) => `/api/paper-book/${id}`,
   deletePaperBook: (id) => `/api/paper-book/${id}`,
   setBookPrivate: '/api/book/set-private',
+  setBookHidden: '/api/book/set-hidden',
 };
 
 let allBooks = [];
@@ -1610,7 +1611,7 @@ function applyFilters() {
   const genre = document.getElementById('genreFilter').value;
   const rating = document.getElementById('ratingFilter').value;
 
-  let books = [...allBooks];
+  let books = allBooks.filter(b => !b.hidden);
 
   if (searchNorm) {
     books = books.filter(b =>
@@ -3763,16 +3764,25 @@ function openBookDetail(book) {
   document.getElementById('bookDetailFavorite').textContent = book.favorite ? '♥ お気に入り' : '';
   document.getElementById('bookDetailFavorite').style.display = book.favorite ? '' : 'none';
 
-  // 非公開チェックボックス
+  // 非公開・非表示チェックボックス
   const privateEl = document.getElementById('bookDetailPrivate');
   if (privateEl && book.book_id) {
-    privateEl.innerHTML = `<label class="book-detail-private-label">
-      <input type="checkbox" id="bookDetailPrivateChk" ${book.private ? 'checked' : ''}>
-      <span>非公開（みんなのYondaに表示しない）</span>
-    </label>`;
+    privateEl.innerHTML = `
+      <label class="book-detail-private-label">
+        <input type="checkbox" id="bookDetailPrivateChk" ${book.private ? 'checked' : ''}>
+        <span>非公開（みんなのYondaに非表示）</span>
+      </label>
+      <label class="book-detail-private-label" style="margin-left:1rem;">
+        <input type="checkbox" id="bookDetailHiddenChk" ${book.hidden ? 'checked' : ''}>
+        <span>非表示（一覧から隠す）</span>
+      </label>`;
     document.getElementById('bookDetailPrivateChk').addEventListener('change', (e) => {
       book.private = e.target.checked;
       toggleBookPrivate(book.book_id, e.target.checked);
+    });
+    document.getElementById('bookDetailHiddenChk').addEventListener('change', (e) => {
+      book.hidden = e.target.checked;
+      toggleBookHidden(book.book_id, e.target.checked);
     });
   } else if (privateEl) {
     privateEl.innerHTML = '';
@@ -4038,6 +4048,28 @@ async function savePaperBookEdit() {
   }
 }
 
+async function toggleBookHidden(bookId, makeHidden) {
+  try {
+    const res = await fetch(API.setBookHidden, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ book_id: bookId, hidden: makeHidden }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || '保存失敗');
+    const b = allBooks.find(x => x.book_id === bookId);
+    if (b) b.hidden = makeHidden;
+    if (makeHidden) {
+      // 非表示にしたらすぐ一覧から消す
+      applyFilters();
+      closeBookDetail();
+    }
+    showToast(makeHidden ? '一覧から非表示にしました' : '一覧に表示しました', 'success');
+  } catch (e) {
+    showToast('エラー: ' + e.message, 'error');
+  }
+}
+
 async function toggleBookPrivate(bookId, makePrivate) {
   try {
     const res = await fetch(API.setBookPrivate, {
@@ -4212,7 +4244,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
       if (sg !== lastSubGenre) {
         lastSubGenre = sg;
         const cnt = subGenreCounts[sg] || 0;
-        headerRow = `<tr class="rating-group-row"><td colspan="12" class="rating-group-header">${escapeHtml(sg)}（${cnt}冊）</td></tr>`;
+        headerRow = `<tr class="rating-group-row"><td colspan="13" class="rating-group-header">${escapeHtml(sg)}（${cnt}冊）</td></tr>`;
       }
     }
     const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}" data-filter-source="${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span>` : '';
@@ -4255,6 +4287,12 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
             <span class="private-check-icon">${book.private ? '🔒' : ''}</span>
           </label>` : ''}
         </td>
+        <td class="col-hidden" onclick="event.stopPropagation()">
+          ${book.book_id ? `<label class="private-check-label" title="${book.hidden ? '非表示' : '表示'}">
+            <input type="checkbox" class="hidden-checkbox" data-book-id="${escapeAttr(book.book_id)}" ${book.hidden ? 'checked' : ''}>
+            <span class="hidden-check-icon">${book.hidden ? '🙈' : ''}</span>
+          </label>` : ''}
+        </td>
       </tr>
     `;
   }).join('');
@@ -4275,6 +4313,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
           <th>ソース</th>
           <th class="col-ai-insight">書評ポイント</th>
           <th class="col-private" title="非公開にするとみんなのYondaに表示されません">非公開</th>
+          <th class="col-hidden" title="非表示にすると一覧から消えます">非表示</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -5470,14 +5509,24 @@ document.getElementById('bookInsightEditBtn')?.addEventListener('click', showBoo
 
 document.getElementById('bookList')?.addEventListener('change', (e) => {
   const cb = e.target.closest('.private-checkbox');
-  if (!cb) return;
-  e.stopPropagation();
-  const bookId = cb.dataset.bookId;
-  const makePrivate = cb.checked;
-  const icon = cb.closest('label')?.querySelector('.private-check-icon');
-  if (icon) icon.textContent = makePrivate ? '🔒' : '';
-  cb.closest('label')?.setAttribute('title', makePrivate ? '非公開' : '公開');
-  toggleBookPrivate(bookId, makePrivate);
+  if (cb) {
+    e.stopPropagation();
+    const makePrivate = cb.checked;
+    const icon = cb.closest('label')?.querySelector('.private-check-icon');
+    if (icon) icon.textContent = makePrivate ? '🔒' : '';
+    cb.closest('label')?.setAttribute('title', makePrivate ? '非公開' : '公開');
+    toggleBookPrivate(cb.dataset.bookId, makePrivate);
+    return;
+  }
+  const hb = e.target.closest('.hidden-checkbox');
+  if (hb) {
+    e.stopPropagation();
+    const makeHidden = hb.checked;
+    const icon = hb.closest('label')?.querySelector('.hidden-check-icon');
+    if (icon) icon.textContent = makeHidden ? '🙈' : '';
+    hb.closest('label')?.setAttribute('title', makeHidden ? '非表示' : '表示');
+    toggleBookHidden(hb.dataset.bookId, makeHidden);
+  }
 });
 
 document.getElementById('bookList')?.addEventListener('click', (e) => {

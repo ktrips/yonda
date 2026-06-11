@@ -3402,8 +3402,8 @@ header {
   font-size: 0.75rem; color: var(--text-muted); cursor: pointer;
 }
 .book-detail-private-label input[type="checkbox"] { accent-color: var(--accent); width: 0.85rem; height: 0.85rem; }
-/* テーブルビュー 非公開列 */
-.col-private { width: 3.2rem; text-align: center; }
+/* テーブルビュー 非公開・非表示列 */
+.col-private, .col-hidden { width: 3.2rem; text-align: center; }
 .private-check-label {
   display: inline-flex; align-items: center; gap: 0.2rem;
   cursor: pointer; font-size: 0.75rem;

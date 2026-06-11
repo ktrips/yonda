@@ -2229,6 +2229,22 @@ def api_delete_paper_book(book_id: str):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/book/set-hidden", methods=["POST"])
+def api_set_book_hidden():
+    """本の非表示フラグを設定・解除する"""
+    data = request.get_json(force=True) or {}
+    book_id = (data.get("book_id") or "").strip()
+    hidden = bool(data.get("hidden", False))
+    if not book_id:
+        return jsonify({"success": False, "error": "book_id が必要です"}), 400
+    try:
+        library_service.set_book_hidden(book_id, hidden)
+        return jsonify({"success": True})
+    except Exception as e:
+        logger.warning("api_set_book_hidden エラー: %s", e, exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/book/set-private", methods=["POST"])
 def api_set_book_private():
     """本の非公開フラグを設定・解除する"""
