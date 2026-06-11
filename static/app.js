@@ -75,6 +75,14 @@ function _showAllTabs() {
   if (hamburgerEl) hamburgerEl.style.display = '';
 }
 
+function switchBookTab(tabVal) {
+  activeBookTab = tabVal;
+  document.querySelectorAll('.book-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tabVal);
+  });
+  showFilters();
+}
+
 function _showPublicOnly() {
   // Yomu / Oshi タブを非表示
   ['mainTabYomu', 'mainTabOshi'].forEach(id => {
@@ -95,9 +103,29 @@ function _showPublicOnly() {
     yondaTab.classList.add('active');
     yondaTab.style.display = '';
   }
-  // コンテンツをみんなのYondaに切り替え
+
+  // メインコンテンツを Yonda に切り替え
   switchMainTab('yonda');
-  switchBookTab('community');
+
+  // コミュニティセクションを直接表示（タブ非表示のままコミュニティのみ）
+  activeBookTab = 'community';
+  const bookList = document.getElementById('bookList');
+  const pagination = document.getElementById('pagination');
+  const bookTabs = document.getElementById('bookTabs');
+  const filterWrapper = document.getElementById('filterWrapper');
+  const myRankingBar = document.getElementById('myRankingBar');
+  const rankingSection = document.getElementById('rankingSection');
+  const communitySection = document.getElementById('communitySection');
+  if (bookList) bookList.style.display = 'none';
+  if (pagination) pagination.style.display = 'none';
+  if (bookTabs) bookTabs.style.display = 'none';
+  if (filterWrapper) filterWrapper.style.display = 'none';
+  if (myRankingBar) myRankingBar.style.display = 'none';
+  if (rankingSection) rankingSection.style.display = 'none';
+  if (communitySection) {
+    communitySection.style.display = 'block';
+    renderCommunitySection();
+  }
 
   // ログインバナーを表示
   _showLoginBanner();
