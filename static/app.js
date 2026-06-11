@@ -35,11 +35,13 @@ function _applyAuthUI() {
   const menuUserAvatar = document.getElementById('menuUserAvatar');
   const menuUserName = document.getElementById('menuUserName');
   const menuLoginBtn = document.getElementById('menuLoginBtn');
+  const menuLoggedInSection = document.getElementById('menuLoggedInSection');
 
   if (!_oauthEnabled) {
     if (loginBtn) loginBtn.style.display = 'none';
     if (userEl) userEl.style.display = 'none';
     if (menuAuthSection) menuAuthSection.style.display = 'none';
+    if (menuLoggedInSection) menuLoggedInSection.style.display = '';
     _showAllTabs();
     return;
   }
@@ -57,13 +59,16 @@ function _applyAuthUI() {
     if (menuLoginBtn) menuLoginBtn.style.display = 'none';
     if (menuUserAvatar && _authUser.picture) menuUserAvatar.src = _authUser.picture;
     if (menuUserName) menuUserName.textContent = _authUser.name || _authUser.email || '';
+    // ログイン済みメニュー表示
+    if (menuLoggedInSection) menuLoggedInSection.style.display = '';
     _showAllTabs();
   } else {
     if (loginBtn) loginBtn.style.display = '';
     if (userEl) userEl.style.display = 'none';
-    // メニュー内: ログインボタン表示、ユーザー情報非表示
+    // メニュー内: ログインボタン表示、ユーザー情報非表示、機能メニュー非表示
     if (menuUserInfo) menuUserInfo.style.display = 'none';
     if (menuLoginBtn) menuLoginBtn.style.display = '';
+    if (menuLoggedInSection) menuLoggedInSection.style.display = 'none';
     _showPublicOnly();
   }
 }

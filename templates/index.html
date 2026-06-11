@@ -62,26 +62,32 @@
         <span></span><span></span><span></span>
       </button>
       <div class="hamburger-menu" id="hamburgerMenu">
-        <!-- ログイン状態（OAuth有効時） -->
+        <!-- 常に表示: Yondaの使い方 -->
+        <button type="button" class="menu-link menu-link-btn" data-help-url="{{ url_for('help_usage_page') }}" data-help-title="Yondaの使い方">Yondaの使い方</button>
+        <hr class="menu-separator">
+
+        <!-- OAuth有効時に表示 (ログイン状態に応じて内容が変わる) -->
         <div id="menuAuthSection" style="display:none;">
+          <!-- ログイン済み: ユーザー情報 + ログアウト -->
           <div id="menuUserInfo" class="menu-user-info" style="display:none;">
             <img id="menuUserAvatar" class="menu-user-avatar" src="" alt="" width="24" height="24">
             <span id="menuUserName" class="menu-user-name"></span>
-            <a href="/auth/logout" class="menu-logout-btn">ログアウト</a>
+            <button type="button" class="menu-logout-btn" onclick="confirmLogout()">ログアウト</button>
           </div>
+          <!-- 未ログイン: ログインボタンのみ -->
           <a href="/auth/login" id="menuLoginBtn" class="menu-item menu-login-btn" style="display:none;">Googleでログイン</a>
-          <hr class="menu-separator">
         </div>
-        <button type="button" class="menu-item" id="menuMessages">メッセージ</button>
-        <hr class="menu-separator">
-        <button type="button" class="menu-link menu-link-btn" data-help-url="{{ url_for('help_usage_page') }}" data-help-title="Yondaの使い方">Yondaの使い方</button>
-        <hr class="menu-separator">
-        <button type="button" class="menu-item menu-item-fetch" id="menuFetchDirect">読書記録取込み</button>
-        <div id="menuSyncDates" class="menu-sync-dates"></div>
-        <button type="button" class="menu-item" id="menuAmazonSettings">Amazon設定</button>
-        <button type="button" class="menu-item" id="menuAmazonAi">アプリ設定</button>
-        <hr class="menu-separator">
-        <button type="button" class="menu-link menu-link-btn" data-help-url="{{ url_for('help_page') }}" data-help-title="設定のヘルプ">設定ヘルプ</button>
+
+        <!-- ログイン済みのみ表示 -->
+        <div id="menuLoggedInSection" style="display:none;">
+          <button type="button" class="menu-item" id="menuMessages">メッセージ</button>
+          <hr class="menu-separator">
+          <button type="button" class="menu-item menu-item-fetch" id="menuFetchDirect">読書記録取込み</button>
+          <div id="menuSyncDates" class="menu-sync-dates"></div>
+          <button type="button" class="menu-item" id="menuAmazonSettings">Amazon設定</button>
+          <button type="button" class="menu-item" id="menuAmazonAi">アプリ設定</button>
+        </div>
+
         <select id="librarySelect" class="menu-select" style="display:none;" aria-hidden="true">
           <option value="setagaya">世田谷区立図書館</option>
           <option value="audible_jp">Audible Japan</option>
