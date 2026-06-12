@@ -5796,6 +5796,9 @@ document.querySelectorAll('.header-tab').forEach(tab => {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     });
+    // headerWelcomeBanner は Yonda タブのみ表示
+    const wb = document.getElementById('headerWelcomeBanner');
+    if (wb) wb.style.display = notLoggedIn && tabVal === 'yonda' ? '' : 'none';
     if (notLoggedIn && tabVal === 'yomu') {
       const el = document.getElementById('loginNoticeYomu');
       if (el) el.style.display = '';
