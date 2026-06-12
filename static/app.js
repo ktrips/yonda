@@ -86,6 +86,11 @@ function _showAllTabs() {
   if (hamburgerEl) hamburgerEl.style.display = '';
 }
 
+function switchMainTab(tab) {
+  activeMainTab = tab;
+  updateMainTabVisibility();
+}
+
 function switchBookTab(tabVal) {
   activeBookTab = tabVal;
   document.querySelectorAll('.book-tab').forEach(t => {
@@ -100,23 +105,28 @@ function _showPublicOnly() {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  // 検索・統計を非表示（ハンバーガーはログインボタンのため残す）
+  // 検索・統計を非表示
   const searchEl = document.querySelector('.header-search');
   if (searchEl) searchEl.style.display = 'none';
   const statsEl = document.getElementById('headerStats');
   if (statsEl) statsEl.style.display = 'none';
+  // ハンバーガーは表示（ログインボタンのため）
+  const hamburgerEl = document.getElementById('hamburgerBtn');
+  if (hamburgerEl) hamburgerEl.style.display = '';
 
-  // Yonda タブをコミュニティタブに切り替え
+  // Yonda タブをアクティブに
   const yondaTab = document.getElementById('mainTabYonda');
   if (yondaTab) {
     yondaTab.classList.add('active');
     yondaTab.style.display = '';
   }
 
-  // メインコンテンツを Yonda に切り替え
-  switchMainTab('yonda');
+  // mainContentYonda を表示（他のメインコンテンツは非表示）
+  document.querySelectorAll('.main-content').forEach(el => { el.style.display = 'none'; });
+  const mainYonda = document.getElementById('mainContentYonda');
+  if (mainYonda) mainYonda.style.display = 'block';
 
-  // コミュニティセクションを直接表示（タブ非表示のままコミュニティのみ）
+  // コミュニティセクションのみ表示、書籍リストは非表示
   activeBookTab = 'community';
   const bookList = document.getElementById('bookList');
   const pagination = document.getElementById('pagination');
