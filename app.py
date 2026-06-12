@@ -100,6 +100,8 @@ _OAUTH_ENABLED = bool(_GOOGLE_CLIENT_ID and _GOOGLE_CLIENT_SECRET)
 _ADMIN_EMAILS = {
     e.strip() for e in os.environ.get("YONDA_ADMIN_EMAILS", "").split(",") if e.strip()
 }
+# 内部自動取得用トークン（Secret Manager の YONDA_INTERNAL_TOKEN 環境変数）
+_INTERNAL_TOKEN = os.environ.get("YONDA_INTERNAL_TOKEN", "")
 
 oauth = OAuth(app)
 if _OAUTH_ENABLED:
@@ -131,7 +133,7 @@ def get_user_data_dir_for_session() -> Path:
 # OAuth 有効時に認証不要なパス（前方一致）
 _PUBLIC_PREFIXES = ("/auth/", "/static/", "/help")
 # OAuth 有効時に認証不要な完全一致パス
-_PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info"}
+_PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info", "/api/internal/auto-fetch"}
 
 
 @app.before_request
@@ -361,6 +363,63 @@ def api_admin_backfill_messages():
         json.dump(data, f, ensure_ascii=False, indent=2)
     logger.info("メッセージにユーザー情報を付与: %d件", updated)
     return jsonify({"success": True, "updated": updated, "user": user_info})
+
+
+@app.route("/api/internal/auto-fetch", methods=["POST"])
+def api_internal_auto_fetch():
+    """Cloud Scheduler から呼ばれる内部自動取得エンドポイント。
+    X-Internal-Token ヘッダーで認証。uid を指定してそのユーザーの書籍を取得する。"""
+    import hmac
+    token = request.headers.get("X-Internal-Token", "")
+    if not _INTERNAL_TOKEN or not hmac.compare_digest(token, _INTERNAL_TOKEN):
+        logger.warning("内部取得: 認証失敗 (IP=%s)", request.remote_addr)
+        return jsonify({"error": "unauthorized"}), 401
+
+    body = request.get_json(silent=True) or {}
+    uid = body.get("uid", "").strip()
+    sources = body.get("sources") or ["kindle"]
+
+    if not uid:
+        return jsonify({"error": "uid は必須です"}), 400
+
+    # ユーザーデータディレクトリを強制セット
+    user_data_dir = library_service.DATA_DIR / "users" / uid
+    if not user_data_dir.exists():
+        return jsonify({"error": f"uid={uid} のデータディレクトリが見つかりません"}), 404
+    library_service.set_user_data_dir(user_data_dir)
+
+    results = {}
+    errors = {}
+    for source in sources:
+        try:
+            logger.info("自動取得開始: source=%s uid=%s", source, uid)
+            if source == "kindle":
+                from kindle import KindleAdapter  # noqa: PLC0415
+                adapter = KindleAdapter(str(user_data_dir))
+                payload = adapter.fetch()
+                library_service._save_json("kindle", payload)
+                results[source] = {"total": payload.get("total", 0)}
+            elif source == "audible":
+                from audible import AudibleAdapter  # noqa: PLC0415
+                adapter = AudibleAdapter(str(user_data_dir))
+                payload = adapter.fetch()
+                library_service._save_json("audible_jp", payload)
+                results[source] = {"total": payload.get("total", 0)}
+            elif source == "setagaya":
+                from setagaya import SetagayaAdapter  # noqa: PLC0415
+                adapter = SetagayaAdapter(str(user_data_dir))
+                payload = adapter.fetch()
+                library_service._save_json("setagaya", payload)
+                results[source] = {"total": payload.get("total", 0)}
+            else:
+                errors[source] = "未対応のソースです"
+        except Exception as e:
+            logger.error("自動取得エラー: source=%s uid=%s error=%s", source, uid, e, exc_info=True)
+            errors[source] = str(e)
+
+    status = "ok" if not errors else ("partial" if results else "error")
+    logger.info("自動取得完了: uid=%s results=%s errors=%s", uid, results, errors)
+    return jsonify({"status": status, "results": results, "errors": errors})
 
 
 @app.route("/")
