@@ -64,6 +64,17 @@ def get_user_data_dir() -> Path:
     """現在スレッドのユーザーデータディレクトリを返す（未セットなら DATA_DIR）"""
     return getattr(_tls, 'user_data_dir', DATA_DIR)
 
+
+def get_current_uid() -> Optional[str]:
+    """ログイン中ユーザーの UID を返す。未ログイン / 取得不可時は None。"""
+    d = get_user_data_dir()
+    try:
+        rel = d.relative_to(DATA_DIR / "users")
+        uid = str(rel).split("/")[0].split("\\")[0]
+        return uid if uid else None
+    except ValueError:
+        return None
+
 def _get_json_map() -> dict[str, Path]:
     d = get_user_data_dir()
     return {
@@ -358,7 +369,28 @@ def invalidate_saved_cache() -> None:
 
 
 def _load_saved_uncached() -> Optional[dict]:
-    """キャッシュなしで全ソースの JSON を統合読み込み（内部用）"""
+    """全ソースを統合読み込み。Firestore が利用可能な場合はそちらを優先。"""
+    # ── Firestore 優先読み込み ──────────────────────────────────────
+    uid = get_current_uid()
+    if uid:
+        try:
+            import firestore_service  # noqa: PLC0415
+            result = firestore_service.load_books(uid)
+            if result:
+                # 非公開・非表示フラグを付与
+                private_ids = load_private_book_ids()
+                hidden_ids = load_hidden_book_ids()
+                for b in result.get("books", []):
+                    bid = b.get("book_id")
+                    if bid and bid in private_ids:
+                        b["private"] = True
+                    if bid and bid in hidden_ids:
+                        b["hidden"] = True
+                return result
+        except Exception as e:
+            logger.warning("Firestore読み込み失敗、JSONにフォールバック: %s", e)
+
+    # ── JSON フォールバック ───────────────────────────────────────
     all_books: list[dict] = []
     sources: list[dict] = []
     json_map = _get_json_map()
@@ -476,6 +508,15 @@ def add_paper_book(book_data: dict) -> dict:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     invalidate_saved_cache()
 
+    # Firestore にも書き込み
+    uid = get_current_uid()
+    if uid:
+        try:
+            import firestore_service  # noqa: PLC0415
+            firestore_service.save_single_book(uid, book_data)
+        except Exception as e:
+            logger.warning("Firestore paper追加エラー: %s", e)
+
     return {"duplicate": False, "book": book_data}
 
 
@@ -507,6 +548,14 @@ def update_paper_book(book_id: str, updates: dict) -> dict:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, ensure_ascii=False, indent=2)
             invalidate_saved_cache()
+            # Firestore にも更新
+            uid = get_current_uid()
+            if uid:
+                try:
+                    import firestore_service  # noqa: PLC0415
+                    firestore_service.save_single_book(uid, book)
+                except Exception as e:
+                    logger.warning("Firestore paper更新エラー: %s", e)
             return {"success": True, "book": book}
 
     return {"success": False, "error": "本が見つかりません"}
@@ -530,6 +579,17 @@ def delete_paper_book(book_id: str) -> dict:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     invalidate_saved_cache()
+
+    # Firestore からも削除
+    uid = get_current_uid()
+    if uid:
+        deleted = next((b for b in books if b.get("book_id") == book_id), None)
+        if deleted:
+            try:
+                import firestore_service  # noqa: PLC0415
+                firestore_service.delete_single_book(uid, deleted)
+            except Exception as e:
+                logger.warning("Firestore paper削除エラー: %s", e)
 
     return {"success": True}
 
@@ -1142,6 +1202,21 @@ def _save_json(library_id: str, payload: dict) -> None:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     invalidate_saved_cache()
     logger.info("JSON 保存: %s (%d 冊)", path, payload["total"])
+
+    # Firestore にも書き込み（ライトスルー）
+    uid = get_current_uid()
+    if uid:
+        try:
+            import firestore_service  # noqa: PLC0415
+            meta = {
+                "library_id":   payload.get("library_id", library_id),
+                "library_name": payload.get("library_name", library_id),
+                "fetch_date":   payload.get("fetch_date", ""),
+                "total":        payload.get("total", len(payload.get("books", []))),
+            }
+            firestore_service.save_books(uid, library_id, payload.get("books", []), meta)
+        except Exception as e:
+            logger.warning("Firestore書き込みエラー（JSONは保存済み）: %s", e)
 
 
 def enrich_library_books_missing_genre(
