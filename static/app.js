@@ -4638,6 +4638,30 @@ function closeAdminUsersModal() {
   if (modal) modal.style.display = 'none';
 }
 
+document.getElementById('adminBackfillBtn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('adminBackfillBtn');
+  const resultEl = document.getElementById('adminBackfillResult');
+  if (btn) btn.disabled = true;
+  if (resultEl) resultEl.textContent = '処理中…';
+  try {
+    const res = await fetch('/api/admin/backfill-messages', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ email: _authUser?.email }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      if (resultEl) resultEl.textContent = `✅ ${data.updated}件のメッセージに「${data.user?.name || data.user?.email}」を設定しました`;
+    } else {
+      if (resultEl) resultEl.textContent = `❌ ${data.error || 'エラー'}`;
+    }
+  } catch (e) {
+    if (resultEl) resultEl.textContent = `❌ ${e.message}`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+});
+
 async function loadAdminUsers() {
   const listEl = document.getElementById('adminUsersList');
   const loadingEl = document.getElementById('adminUsersLoading');

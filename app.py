@@ -326,6 +326,43 @@ def api_admin_users():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/admin/backfill-messages", methods=["POST"])
+def api_admin_backfill_messages():
+    """ユーザー情報が未設定のメッセージに現在のユーザー情報を付与（管理者のみ）"""
+    user = get_current_user()
+    if not _is_admin(user):
+        return jsonify({"error": "管理者権限が必要です"}), 403
+    if not user:
+        return jsonify({"error": "ログインが必要です"}), 401
+    user_info = {
+        "name":    user.get("name", ""),
+        "picture": user.get("picture", ""),
+        "email":   user.get("email", ""),
+    }
+    target_email = request.json.get("email") if request.is_json else None
+    data = library_service.load_yonda_messages()
+    messages = data.get("messages", [])
+    updated = 0
+    for msg in messages:
+        # user フィールドがない、または email が空のメッセージを対象
+        existing_user = msg.get("user") or {}
+        if not existing_user.get("email"):
+            if target_email:
+                msg["user"] = {**user_info, "email": target_email}
+            else:
+                msg["user"] = user_info
+            updated += 1
+    # 更新を保存
+    import json
+    from pathlib import Path
+    msgs_path = library_service.YONDA_MESSAGES_PATH
+    msgs_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(msgs_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    logger.info("メッセージにユーザー情報を付与: %d件", updated)
+    return jsonify({"success": True, "updated": updated, "user": user_info})
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
