@@ -394,22 +394,13 @@ def api_internal_auto_fetch():
         try:
             logger.info("自動取得開始: source=%s uid=%s", source, uid)
             if source == "kindle":
-                from kindle import KindleAdapter  # noqa: PLC0415
-                adapter = KindleAdapter(str(user_data_dir))
-                payload = adapter.fetch()
-                library_service._save_json("kindle", payload)
+                payload = library_service.fetch_and_save("kindle")
                 results[source] = {"total": payload.get("total", 0)}
             elif source == "audible":
-                from audible import AudibleAdapter  # noqa: PLC0415
-                adapter = AudibleAdapter(str(user_data_dir))
-                payload = adapter.fetch()
-                library_service._save_json("audible_jp", payload)
+                payload = library_service.fetch_and_save("audible_jp")
                 results[source] = {"total": payload.get("total", 0)}
             elif source == "setagaya":
-                from setagaya import SetagayaAdapter  # noqa: PLC0415
-                adapter = SetagayaAdapter(str(user_data_dir))
-                payload = adapter.fetch()
-                library_service._save_json("setagaya", payload)
+                payload = library_service.fetch_and_save("setagaya")
                 results[source] = {"total": payload.get("total", 0)}
             else:
                 errors[source] = "未対応のソースです"
