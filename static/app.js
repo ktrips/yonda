@@ -63,6 +63,7 @@ function _applyAuthUI() {
     // ログイン済みメニュー表示
     if (menuLoggedInSection) menuLoggedInSection.style.display = '';
     document.getElementById('headerWelcomeBanner')?.style.setProperty('display', 'none');
+    document.getElementById('hamburgerBtn')?.style.setProperty('display', '');
     _showAllTabs();
   } else {
     if (loginBtn) loginBtn.style.display = '';
@@ -72,6 +73,8 @@ function _applyAuthUI() {
     if (menuLoginBtn) menuLoginBtn.style.display = '';
     if (menuLoggedInSection) menuLoggedInSection.style.display = 'none';
     document.getElementById('headerWelcomeBanner')?.style.setProperty('display', '');
+    // 未ログイン時はハンバーガーを非表示
+    document.getElementById('hamburgerBtn')?.style.setProperty('display', 'none');
     _showPublicOnly();
   }
 }
@@ -108,13 +111,13 @@ function _showPublicOnly() {
     const el = document.getElementById(id);
     if (el) el.style.display = '';
   });
-  // 検索・統計は非表示（データなし）、ハンバーガーは表示
+  // 検索・統計は非表示（データなし）、ハンバーガーも未ログイン時は非表示
   const searchEl = document.querySelector('.header-search');
   if (searchEl) searchEl.style.display = 'none';
   const statsEl = document.getElementById('headerStats');
   if (statsEl) statsEl.style.display = 'none';
   const hamburgerEl = document.getElementById('hamburgerBtn');
-  if (hamburgerEl) hamburgerEl.style.display = '';
+  if (hamburgerEl) hamburgerEl.style.display = 'none';
 
   // mainContentYonda を表示（他のメインコンテンツは非表示）
   document.querySelectorAll('.main-content').forEach(el => { el.style.display = 'none'; });
