@@ -100,70 +100,51 @@ function switchBookTab(tabVal) {
 }
 
 function _showPublicOnly() {
-  // Yomu / Oshi タブを非表示
-  ['mainTabYomu', 'mainTabOshi'].forEach(id => {
+  // ヘッダーのタブは全て表示（Yonda/Yomu/Oshi）
+  ['mainTabYonda', 'mainTabYomu', 'mainTabOshi'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
+    if (el) el.style.display = '';
   });
-  // 検索・統計を非表示
+  // 検索・統計は非表示（データなし）、ハンバーガーは表示
   const searchEl = document.querySelector('.header-search');
   if (searchEl) searchEl.style.display = 'none';
   const statsEl = document.getElementById('headerStats');
   if (statsEl) statsEl.style.display = 'none';
-  // ハンバーガーは表示（ログインボタンのため）
   const hamburgerEl = document.getElementById('hamburgerBtn');
   if (hamburgerEl) hamburgerEl.style.display = '';
-
-  // Yonda タブをアクティブに
-  const yondaTab = document.getElementById('mainTabYonda');
-  if (yondaTab) {
-    yondaTab.classList.add('active');
-    yondaTab.style.display = '';
-  }
 
   // mainContentYonda を表示（他のメインコンテンツは非表示）
   document.querySelectorAll('.main-content').forEach(el => { el.style.display = 'none'; });
   const mainYonda = document.getElementById('mainContentYonda');
   if (mainYonda) mainYonda.style.display = 'block';
 
-  // コミュニティセクションのみ表示、書籍リストは非表示
+  // 読書記録なし・エラーメッセージは非表示
+  const emptyState = document.getElementById('emptyState');
+  if (emptyState) emptyState.style.display = 'none';
+  const errorEl = document.getElementById('error');
+  if (errorEl) errorEl.style.display = 'none';
+
+  // フィルター・書籍リスト・ランキング等を非表示
+  ['bookList', 'pagination', 'bookTabs', 'filterWrapper', 'myRankingBar', 'rankingSection'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+
+  // ウェルカムバナーを表示
+  const welcomeBanner = document.getElementById('publicWelcomeBanner');
+  if (welcomeBanner) welcomeBanner.style.display = '';
+
+  // コミュニティセクションを表示
   activeBookTab = 'community';
-  const bookList = document.getElementById('bookList');
-  const pagination = document.getElementById('pagination');
-  const bookTabs = document.getElementById('bookTabs');
-  const filterWrapper = document.getElementById('filterWrapper');
-  const myRankingBar = document.getElementById('myRankingBar');
-  const rankingSection = document.getElementById('rankingSection');
   const communitySection = document.getElementById('communitySection');
-  if (bookList) bookList.style.display = 'none';
-  if (pagination) pagination.style.display = 'none';
-  if (bookTabs) bookTabs.style.display = 'none';
-  if (filterWrapper) filterWrapper.style.display = 'none';
-  if (myRankingBar) myRankingBar.style.display = 'none';
-  if (rankingSection) rankingSection.style.display = 'none';
   if (communitySection) {
     communitySection.style.display = 'block';
     renderCommunitySection();
   }
-
-  // ログインバナーを表示
-  _showLoginBanner();
 }
 
 function _showLoginBanner() {
-  const bannerId = 'publicLoginBanner';
-  if (document.getElementById(bannerId)) return;
-  const banner = document.createElement('div');
-  banner.id = bannerId;
-  banner.className = 'public-login-banner';
-  banner.innerHTML = `
-    <p>📚 <strong>Yonda</strong>へようこそ！Googleアカウントでログインすると、自分の読書記録を管理できます。</p>
-    <a href="/auth/login" class="btn btn-primary">Googleでログイン</a>
-  `;
-  const communityList = document.getElementById('communityMessageList');
-  if (communityList && communityList.parentNode) {
-    communityList.parentNode.insertBefore(banner, communityList);
-  }
+  // publicWelcomeBanner に統合済み。後方互換のため残す（何もしない）
 }
 
 const API = {
@@ -5799,6 +5780,11 @@ document.getElementById('bookList')?.addEventListener('keydown', (e) => {
 document.querySelectorAll('.header-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     const tabVal = tab.dataset.mainTab;
+    // 未ログイン時に Yomu/Oshi をクリック → ログイン誘導
+    if (_oauthEnabled && !_authUser && tabVal !== 'yonda') {
+      location.href = '/auth/login';
+      return;
+    }
     if (tabVal === activeMainTab && tabVal !== 'yonda') return;
     activeMainTab = tabVal;
     document.getElementById('hamburgerMenu')?.classList.remove('open');

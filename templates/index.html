@@ -203,6 +203,11 @@
           <p>読書記録がありません。</p>
           <p>メニューから「読書記録を取込み」を実行してください。</p>
         </div>
+        <!-- 未ログイン時ウェルカムバナー -->
+        <div id="publicWelcomeBanner" style="display:none;" class="public-welcome-banner">
+          <p>📚 <strong>Yonda</strong>へようこそ！Googleアカウントでログインすると、自分の読書記録を管理できます。</p>
+          <a href="/auth/login" class="btn btn-primary">Googleでログイン</a>
+        </div>
         <div id="bookTabs" class="book-tabs" style="display:none;">
           <button type="button" class="book-tab active" id="tabRead" data-tab="read">Yonda</button>
           <button type="button" class="book-tab" id="tabCommunity" data-tab="community">みんなのYonda</button>

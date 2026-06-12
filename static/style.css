@@ -3458,6 +3458,13 @@ header {
   margin-bottom: 1rem; font-size: 0.88rem;
 }
 .public-login-banner p { margin: 0; }
+.public-welcome-banner {
+  background: var(--bg-card); border: 1px solid var(--accent);
+  border-radius: var(--radius); padding: 1.1rem 1.2rem;
+  margin: 1rem 0; text-align: center; font-size: 0.92rem;
+}
+.public-welcome-banner p { margin: 0 0 0.85rem; }
+.public-welcome-banner .btn { min-width: 180px; }
 
 /* 非公開チェックボックス（詳細画面・右下） */
 .book-detail-private-bottom {
