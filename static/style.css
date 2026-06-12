@@ -69,6 +69,21 @@ header {
   font-size: 0.85rem;
   color: var(--text);
 }
+.tab-login-notice {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+  background: var(--surface2, #f5ede8);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.6rem 1rem; margin-bottom: 1rem;
+  font-size: 0.83rem; color: var(--text);
+}
+.tab-login-notice .notice-sep { color: var(--text-secondary); }
+.btn-notice-login {
+  display: inline-block; padding: 0.2rem 0.65rem;
+  background: var(--accent); color: #fff;
+  border-radius: 1rem; font-size: 0.8rem; font-weight: 600;
+  text-decoration: none; white-space: nowrap;
+}
+.btn-notice-login:hover { opacity: 0.85; text-decoration: none; color: #fff; }
 
 .header-title {
   text-decoration: none;

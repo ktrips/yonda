@@ -244,6 +244,12 @@
 
       <!-- Yomu: これから検索 -->
       <div id="mainContentYomu" class="main-content" style="display:none;">
+        <!-- 未ログイン時のログイン案内 -->
+        <div id="loginNoticeYomu" class="tab-login-notice" style="display:none;">
+          <span>📚 読みたい本の検索はできます。</span>
+          <span class="notice-sep">リストへの保存・Amazon連携には</span>
+          <a href="/auth/login" class="btn-notice-login">Googleログイン</a>が必要です。
+        </div>
         <div class="book-search-section" id="bookSearchSection">
           <p class="book-search-headline"><strong>読みたい本検索</strong></p>
           <p class="book-search-description">読みたい本の名前か著者、本の写真をアップして下さい。情報を収集して、一番お得な方法を探します。</p>
@@ -283,6 +289,12 @@
 
       <!-- Oshi: AI推し -->
       <div id="mainContentOshi" class="main-content" style="display:none;">
+        <!-- 未ログイン時のログイン案内 -->
+        <div id="loginNoticeOshi" class="tab-login-notice" style="display:none;">
+          <span>🤖 AI推し本機能を使うには</span>
+          <a href="/auth/login" class="btn-notice-login">Googleログイン</a>後、
+          <span class="notice-sep">アプリ設定でAI APIキーの設定が必要です。</span>
+        </div>
         <div class="ai-recommend-section" id="aiRecommendSection">
           <p class="ai-recommend-headline"><strong>AIであなたにぴったりな推し本をオススメ</strong></p>
           <div class="ai-recommend-mode-menu" id="aiRecommendModeMenu">

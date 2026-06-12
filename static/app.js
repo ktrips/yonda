@@ -5786,15 +5786,24 @@ document.getElementById('bookList')?.addEventListener('keydown', (e) => {
 document.querySelectorAll('.header-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     const tabVal = tab.dataset.mainTab;
-    // 未ログイン時に Yomu/Oshi をクリック → ログイン誘導
-    if (_oauthEnabled && !_authUser && tabVal !== 'yonda') {
-      location.href = '/auth/login';
-      return;
-    }
     if (tabVal === activeMainTab && tabVal !== 'yonda') return;
     activeMainTab = tabVal;
     document.getElementById('hamburgerMenu')?.classList.remove('open');
     document.getElementById('filterMenuPanel')?.classList.remove('open');
+    // 未ログイン時の案内バナー表示制御
+    const notLoggedIn = _oauthEnabled && !_authUser;
+    ['loginNoticeYomu', 'loginNoticeOshi'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+    if (notLoggedIn && tabVal === 'yomu') {
+      const el = document.getElementById('loginNoticeYomu');
+      if (el) el.style.display = '';
+    }
+    if (notLoggedIn && tabVal === 'oshi') {
+      const el = document.getElementById('loginNoticeOshi');
+      if (el) el.style.display = '';
+    }
     if (tabVal === 'yonda') {
       document.getElementById('sourceFilter').value = 'all';
       document.getElementById('genreFilter').value = 'all';
