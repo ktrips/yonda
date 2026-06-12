@@ -275,6 +275,12 @@ def auth_callback():
         "picture": user_info.get("picture"),
     }
     _migrate_root_data_to_user(uid_safe)
+    # Firestore にユーザープロフィールを作成/更新
+    try:
+        import firestore_service  # noqa: PLC0415
+        firestore_service.upsert_user_profile(uid_safe, dict(session["user"]))
+    except Exception as e:
+        logger.warning("ユーザープロフィール作成スキップ: %s", e)
     return redirect(url_for("index"))
 
 

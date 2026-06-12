@@ -158,3 +158,37 @@ def delete_single_book(uid: str, book: dict) -> None:
         db.collection("users").document(uid).collection("books").document(bid).delete()
     except Exception as e:
         logger.error("Firestore 単冊削除エラー: %s", e)
+
+
+def upsert_user_profile(uid: str, user_info: dict) -> None:
+    """
+    ログイン時にユーザープロフィールを Firestore に作成/更新する。
+    - 初回ログイン: created_at を含む全フィールドを作成
+    - 2回目以降: last_login と name/picture だけ更新
+    """
+    db = get_db()
+    if not db:
+        return
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        user_ref = db.collection("users").document(uid)
+        doc = user_ref.get()
+        if doc.exists:
+            user_ref.update({
+                "last_login": now,
+                "name":       user_info.get("name", ""),
+                "picture":    user_info.get("picture", ""),
+            })
+            logger.info("ユーザープロフィール更新: %s", uid)
+        else:
+            user_ref.set({
+                "uid":        uid,
+                "email":      user_info.get("email", ""),
+                "name":       user_info.get("name", ""),
+                "picture":    user_info.get("picture", ""),
+                "created_at": now,
+                "last_login": now,
+            })
+            logger.info("ユーザープロフィール新規作成: %s", uid)
+    except Exception as e:
+        logger.warning("ユーザープロフィール作成/更新失敗: %s", e)
