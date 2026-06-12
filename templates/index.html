@@ -51,16 +51,17 @@
         </a>
       </div>
 
-      <!-- ログイン状態表示 -->
-      <div class="header-user" id="headerUser" style="display:none;" onclick="confirmLogout()" title="タップでログアウト">
-        <img class="header-user-avatar" id="headerUserAvatar" src="" alt="" width="28" height="28">
-        <span class="header-user-name" id="headerUserName"></span>
-      </div>      </div>
-      <a href="/auth/login" class="header-login-btn" id="headerLoginBtn" style="display:none;">Googleでログイン</a>
-
-      <button type="button" class="hamburger-btn" id="hamburgerBtn" aria-label="メニュー">
-        <span></span><span></span><span></span>
-      </button>
+      <!-- ログイン状態表示・ログインボタン・ハンバーガー（右端グループ） -->
+      <div class="header-right">
+        <div class="header-user" id="headerUser" style="display:none;" onclick="confirmLogout()" title="タップでログアウト">
+          <img class="header-user-avatar" id="headerUserAvatar" src="" alt="" width="28" height="28">
+          <span class="header-user-name" id="headerUserName"></span>
+        </div>
+        <a href="/auth/login" class="header-login-btn" id="headerLoginBtn" style="display:none;">Googleでログイン</a>
+        <button type="button" class="hamburger-btn" id="hamburgerBtn" aria-label="メニュー">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
       <div class="hamburger-menu" id="hamburgerMenu">
         <!-- 常に表示: Yondaの使い方 -->
         <button type="button" class="menu-link menu-link-btn" data-help-url="{{ url_for('help_usage_page') }}" data-help-title="Yondaの使い方">Yondaの使い方</button>
@@ -95,6 +96,11 @@
         </select>
       </div>
     </header>
+
+    <!-- 未ログイン時ウェルカムバナー（ヘッダー直下） -->
+    <div id="headerWelcomeBanner" class="header-welcome-banner" style="display:none;">
+      📚 <strong>Yonda</strong>へようこそ！Googleアカウントでログインすると、自分の読書記録を管理できます。
+    </div>
 
     <div id="content">
       <!-- Yonda: 読んだ・途中・ランキング -->
@@ -202,11 +208,6 @@
         <div id="emptyState" class="empty-state">
           <p>読書記録がありません。</p>
           <p>メニューから「読書記録を取込み」を実行してください。</p>
-        </div>
-        <!-- 未ログイン時ウェルカムバナー -->
-        <div id="publicWelcomeBanner" style="display:none;" class="public-welcome-banner">
-          <p>📚 <strong>Yonda</strong>へようこそ！Googleアカウントでログインすると、自分の読書記録を管理できます。</p>
-          <a href="/auth/login" class="btn btn-primary">Googleでログイン</a>
         </div>
         <div id="bookTabs" class="book-tabs" style="display:none;">
           <button type="button" class="book-tab active" id="tabRead" data-tab="read">Yonda</button>

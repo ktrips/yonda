@@ -42,6 +42,7 @@ function _applyAuthUI() {
     if (userEl) userEl.style.display = 'none';
     if (menuAuthSection) menuAuthSection.style.display = 'none';
     if (menuLoggedInSection) menuLoggedInSection.style.display = '';
+    document.getElementById('headerWelcomeBanner')?.style.setProperty('display', 'none');
     _showAllTabs();
     return;
   }
@@ -61,6 +62,7 @@ function _applyAuthUI() {
     if (menuUserName) menuUserName.textContent = _authUser.name || _authUser.email || '';
     // ログイン済みメニュー表示
     if (menuLoggedInSection) menuLoggedInSection.style.display = '';
+    document.getElementById('headerWelcomeBanner')?.style.setProperty('display', 'none');
     _showAllTabs();
   } else {
     if (loginBtn) loginBtn.style.display = '';
@@ -69,6 +71,7 @@ function _applyAuthUI() {
     if (menuUserInfo) menuUserInfo.style.display = 'none';
     if (menuLoginBtn) menuLoginBtn.style.display = '';
     if (menuLoggedInSection) menuLoggedInSection.style.display = 'none';
+    document.getElementById('headerWelcomeBanner')?.style.setProperty('display', '');
     _showPublicOnly();
   }
 }
@@ -133,7 +136,6 @@ function _showPublicOnly() {
   // ウェルカムバナーを表示
   const welcomeBanner = document.getElementById('publicWelcomeBanner');
   if (welcomeBanner) welcomeBanner.style.display = '';
-
   // コミュニティセクションを表示
   activeBookTab = 'community';
   const communitySection = document.getElementById('communitySection');
@@ -1613,16 +1615,17 @@ function renderCommunitySection() {
           </div>`;
         }).join('');
         const more = (msg.books || []).length > 5 ? `<div class="community-more">他 ${(msg.books || []).length - 5} 冊</div>` : '';
-        // ユーザー情報＋日付を1行で
+        // 日付の右にユーザー名
         const msgUser = msg.user || {};
         const avatarHtml = msgUser.picture
-          ? `<img src="${escapeHtml(msgUser.picture)}" alt="" class="community-user-avatar" width="18" height="18">`
+          ? `<img src="${escapeHtml(msgUser.picture)}" alt="" class="community-user-avatar" width="16" height="16">`
           : '';
-        const nameHtml = msgUser.name ? `<span class="community-user-name">${escapeHtml(msgUser.name)}</span>` : '';
-        const sepHtml = msgUser.name ? `<span class="community-date-sep">·</span>` : '';
+        const userNameHtml = msgUser.name
+          ? `<span class="community-date-sep">·</span>${avatarHtml}<span class="community-user-name">${escapeHtml(msgUser.name)}</span>`
+          : '';
         return `<div class="community-message-card">
           <div class="community-message-header">
-            ${avatarHtml}${nameHtml}${sepHtml}<span class="community-message-date">${escapeHtml(dateText)}</span>
+            <span class="community-message-date">${escapeHtml(dateText)}</span>${userNameHtml}
           </div>
           <div class="community-books-row">${bookItems}${more}</div>
         </div>`;
