@@ -2335,12 +2335,25 @@ function setAiRecommendMode(mode) {
   if (formEl) {
     formEl.style.display = (mode === '5questions') ? '' : 'none';
   }
+  const isHistory = mode === 'history';
   // 読書履歴推しではチャット・入力エリアを非表示
   const chatEl2 = document.getElementById('aiRecommendChat');
   const inputRow = document.querySelector('.ai-recommend-input-row');
-  const isHistory = mode === 'history';
   if (chatEl2) chatEl2.style.display = isHistory ? 'none' : '';
   if (inputRow) inputRow.style.display = isHistory ? 'none' : '';
+  // 読書履歴推しセクションの制御
+  const histSection = document.getElementById('historyRecommendSection');
+  if (isHistory) {
+    if (histSection) histSection.style.display = 'block';
+    renderHistoryRecommend();
+  } else {
+    // 他モードに切り替えたらセクションをリセット・非表示
+    if (histSection) histSection.style.display = 'none';
+    const listEl = document.getElementById('historyRecommendList');
+    if (listEl) listEl.innerHTML = '';
+    const refreshBtn = document.getElementById('historyRecommendRefreshBtn');
+    if (refreshBtn) refreshBtn.style.display = 'none';
+  }
   if (descEl) {
     const base = AI_RECOMMEND_MODE_DESCRIPTIONS[mode] || AI_RECOMMEND_MODE_DESCRIPTIONS['5questions'];
     const providerEl = document.getElementById('aiRecommendProvider');
@@ -2372,11 +2385,14 @@ function initAiRecommendIfNeeded() {
   }
   try {
     const saved = localStorage.getItem('yonda_aiRecommendMode');
+    // history モードは初期化時に自動ロードしない（ボタン押下時のみ実行）
     if (saved && ['5questions', 'mbti', 'strength'].includes(saved)) {
       aiRecommendMode = saved;
       setAiRecommendMode(saved);
     } else {
-      setAiRecommendMode(aiRecommendMode);
+      // history が保存されていても初期表示は 5questions に戻す
+      aiRecommendMode = '5questions';
+      setAiRecommendMode('5questions');
     }
   } catch (_) {
     setAiRecommendMode(aiRecommendMode);
@@ -4576,11 +4592,6 @@ document.getElementById('recommendGenerateBtn')?.addEventListener('click', () =>
 });
 document.getElementById('recommendRefreshBtn')?.addEventListener('click', () => {
   if (activeBookTab === 'recommend') renderYondaRecommend();
-});
-document.getElementById('historyRecommendBtn')?.addEventListener('click', () => {
-  const section = document.getElementById('historyRecommendSection');
-  if (section) section.style.display = 'block';
-  renderHistoryRecommend();
 });
 document.getElementById('messagesRefreshBtn')?.addEventListener('click', loadMessages);
 
