@@ -369,7 +369,17 @@ def _load_saved_uncached() -> Optional[dict]:
             continue
         try:
             with open(path, encoding="utf-8") as f:
-                data = json.load(f)
+                raw = f.read()
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as je:
+                # "Extra data" の場合は先頭の有効 JSON オブジェクトだけ使う
+                if "Extra data" in str(je):
+                    decoder = json.JSONDecoder()
+                    data, _ = decoder.raw_decode(raw.lstrip())
+                    logger.warning("JSON 部分読込 (%s): Extra data を無視して先頭オブジェクトを使用", path)
+                else:
+                    raise
             books = data.get("books", [])
             for b in books:
                 if not b.get("source"):
@@ -418,7 +428,16 @@ def load_saved_for(library_id: str) -> Optional[dict]:
     if not path.exists():
         return None
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        raw = f.read()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as je:
+        if "Extra data" in str(je):
+            decoder = json.JSONDecoder()
+            data, _ = decoder.raw_decode(raw.lstrip())
+            logger.warning("JSON 部分読込 (%s): Extra data を無視", path)
+            return data
+        raise
 
 
 def add_paper_book(book_data: dict) -> dict:
