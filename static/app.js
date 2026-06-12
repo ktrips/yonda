@@ -1561,7 +1561,7 @@ async function renderHistoryRecommend() {
 }
 document.getElementById('historyRecommendRefreshBtn')?.addEventListener('click', renderHistoryRecommend);
 
-/** みんなのYonda タブ: 直近メッセージをシンプル表示 */
+/** みんなのYonda タブ: Instagram風フィード表示 */
 function renderCommunitySection() {
   const listEl = document.getElementById('communityMessageList');
   const loadingEl = document.getElementById('communityLoading');
@@ -1573,77 +1573,97 @@ function renderCommunitySection() {
     .then(r => r.json())
     .then(data => {
       if (loadingEl) loadingEl.style.display = 'none';
-      const messages = (data.messages || []).slice(0, 10);
+      const messages = (data.messages || []).slice(0, 20);
       if (messages.length === 0) {
-        listEl.innerHTML = '<p class="recommend-empty">メッセージがまだありません。</p>';
+        listEl.innerHTML = '<p class="recommend-empty">まだ投稿がありません。</p>';
         return;
       }
-      // book データをキャッシュして後でクリック時に参照
+
       const communityBookCache = {};
+
       listEl.innerHTML = messages.map((msg, idx) => {
+        const msgUser = msg.user || {};
         const dateText = msg.created_at ? formatSyncDate(msg.created_at) : '日時不明';
-        const books = (msg.books || []).slice(0, 5);
-        const bookItems = books.map((item, bidx) => {
+        const avatarSrc = msgUser.picture || '';
+        const userName  = msgUser.name || msgUser.email || '匿名';
+
+        const avatarHtml = avatarSrc
+          ? `<img src="${escapeHtml(avatarSrc)}" class="ig-avatar" alt="" loading="lazy">`
+          : `<div class="ig-avatar ig-avatar-placeholder">${escapeHtml(userName[0] || '?')}</div>`;
+
+        const books = (msg.books || []).filter(item => {
+          const b = item.book || item;
+          if (!b.title) return false;
+          const myBook = b.book_id
+            ? allBooks.find(x => x.book_id === b.book_id)
+            : allBooks.find(x => x.title === b.title && x.author === b.author);
+          return !(myBook && myBook.private);
+        });
+
+        const bookCards = books.slice(0, 6).map((item, bidx) => {
           const book = item.book || item;
           const cacheKey = `${idx}-${bidx}`;
           communityBookCache[cacheKey] = book;
-          // allBooks から個人評価・レビューを取得（非公開チェックも）
+
           const myBook = book.book_id
             ? allBooks.find(b => b.book_id === book.book_id)
             : allBooks.find(b => b.title === book.title && b.author === book.author);
-          // 非公開の本はコミュニティに表示しない
-          if (myBook && myBook.private) return '';
           const myRating = myBook ? displayRating(myBook) : 0;
           const myReview = myBook ? (myBook.review_headline || myBook.comment || '') : '';
-          const starsStr = myRating > 0
-            ? `<span class="community-book-stars">${starsHtml(myRating)}</span>`
-            : '';
-          const reviewStr = myReview
-            ? `<span class="community-book-review">${escapeHtml(myReview)}</span>`
-            : '';
+
           const cover = book.cover_url || NO_COVER;
-          const srcShort = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' }[book.source] || '';
-          const srcBadge = srcShort ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short">${srcShort}</span>` : '';
-          // ジャンルカラー（左ボーダー＋頭文字バッジ＋背景色）
           const genreCanonical = normalizeGenre(book.genre || '');
           const genreCol = (CAT_COLORS[genreCanonical] || CAT_COLORS['その他']).read;
-          const genreLabel = genreCanonical || (book.genre || '');
-          const genreInitial = genreLabel ? [...genreLabel][0] : '?';
-          const genreBadge = `<span class="community-genre-badge" style="background:${genreCol};" title="${escapeHtml(genreLabel)}">${escapeHtml(genreInitial)}</span>`;
-          const bgColor = genreCol + '18'; // 約10%透明度の背景
-          return `<div class="community-book-item" data-cache-key="${cacheKey}" style="cursor:pointer;border-left:3px solid ${genreCol};background:${bgColor};">
-            <img src="${escapeHtml(cover)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'" class="community-book-cover">
-            <div class="community-book-info">
-              <div class="community-book-title">${genreBadge}${srcBadge}${escapeHtml(book.title || '—')}</div>
-              <div class="community-book-author">${escapeHtml(book.author || '')}</div>
-              ${starsStr || reviewStr ? `<div class="community-book-rating-row">${starsStr}${reviewStr}</div>` : ''}
+          const srcLabel = { setagaya: '図書館', audible_jp: 'Audible', audible: 'Audible', kindle: 'Kindle', paper: '紙の本' }[book.source] || book.source || '';
+
+          const starsHtml5 = myRating > 0
+            ? `<div class="ig-book-stars">${'★'.repeat(myRating)}${'☆'.repeat(5 - myRating)}</div>`
+            : '';
+          const reviewHtml = myReview
+            ? `<div class="ig-book-review">"${escapeHtml(myReview.substring(0, 60))}${myReview.length > 60 ? '…' : ''}"</div>`
+            : '';
+          const srcHtml = srcLabel
+            ? `<span class="ig-book-src" style="background:${genreCol}20;color:${genreCol};">${escapeHtml(srcLabel)}</span>`
+            : '';
+
+          return `<div class="ig-book-card" data-cache-key="${idx}-${bidx}" style="border-top:3px solid ${genreCol};">
+            <div class="ig-book-cover-wrap">
+              <img src="${escapeHtml(cover)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'" class="ig-book-cover">
+            </div>
+            <div class="ig-book-body">
+              ${srcHtml}
+              <div class="ig-book-title">${escapeHtml(book.title || '—')}</div>
+              <div class="ig-book-author">${escapeHtml(book.author || '')}</div>
+              ${starsHtml5}
+              ${reviewHtml}
             </div>
           </div>`;
         }).join('');
-        const more = (msg.books || []).length > 5 ? `<div class="community-more">他 ${(msg.books || []).length - 5} 冊</div>` : '';
-        // 日付の右にユーザー名
-        const msgUser = msg.user || {};
-        const avatarHtml = msgUser.picture
-          ? `<img src="${escapeHtml(msgUser.picture)}" alt="" class="community-user-avatar" width="16" height="16">`
+
+        const moreCount = books.length > 6 ? books.length - 6 : 0;
+        const moreHtml = moreCount > 0
+          ? `<div class="ig-more-badge">+${moreCount}冊</div>`
           : '';
-        const userNameHtml = msgUser.name
-          ? `<span class="community-date-sep">·</span>${avatarHtml}<span class="community-user-name">${escapeHtml(msgUser.name)}</span>`
-          : '';
-        return `<div class="community-message-card">
-          <div class="community-message-header">
-            <span class="community-message-date">${escapeHtml(dateText)}</span>${userNameHtml}
+
+        return `<div class="ig-post-card">
+          <div class="ig-post-header">
+            ${avatarHtml}
+            <div class="ig-post-meta">
+              <div class="ig-user-name">${escapeHtml(userName)}</div>
+              <div class="ig-post-date">${escapeHtml(dateText)}</div>
+            </div>
+            <div class="ig-post-count">${books.length}冊</div>
           </div>
-          <div class="community-books-row">${bookItems}${more}</div>
+          <div class="ig-books-grid">${bookCards}${moreHtml}</div>
         </div>`;
       }).join('');
 
-      // クリックで詳細モーダルを開く
-      listEl.querySelectorAll('.community-book-item').forEach(el => {
+      // クリックで詳細モーダル
+      listEl.querySelectorAll('.ig-book-card').forEach(el => {
         el.addEventListener('click', () => {
           const key = el.dataset.cacheKey;
           const msgBook = communityBookCache[key];
           if (!msgBook) return;
-          // allBooks から book_id で一致する本を探す（より詳細なデータがある場合）
           const found = msgBook.book_id
             ? allBooks.find(b => b.book_id === msgBook.book_id)
             : allBooks.find(b => b.title === msgBook.title && b.author === msgBook.author);

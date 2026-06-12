@@ -172,10 +172,12 @@ def list_users() -> list[dict]:
         users = []
         for doc in db.collection("users").stream():
             profile = doc.to_dict() or {}
-            # books 件数を sources から合算（個別にカウントせず高速に）
             book_total = 0
+            source_ids = []
             for src_doc in doc.reference.collection("sources").stream():
-                book_total += (src_doc.to_dict() or {}).get("total", 0)
+                src_data = src_doc.to_dict() or {}
+                book_total += src_data.get("total", 0)
+                source_ids.append(src_doc.id)
             users.append({
                 "uid":        doc.id,
                 "email":      profile.get("email", ""),
@@ -184,7 +186,7 @@ def list_users() -> list[dict]:
                 "created_at": profile.get("created_at", ""),
                 "last_login": profile.get("last_login", ""),
                 "book_total": book_total,
-                "sources":    [s.id for s in doc.reference.collection("sources").stream()],
+                "sources":    source_ids,
             })
         users.sort(key=lambda u: u.get("created_at", ""), reverse=True)
         return users

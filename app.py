@@ -302,24 +302,14 @@ def auth_me():
 
 
 def _is_admin(user: Optional[dict]) -> bool:
-    """管理者かどうかを判定する。YONDA_ADMIN_EMAILS 環境変数で設定、未設定なら最初のユーザーが管理者。"""
+    """管理者かどうかを判定する。YONDA_ADMIN_EMAILS 環境変数で設定、未設定なら全ログインユーザーが管理者扱い。"""
     if not user:
         return False
     email = user.get("email", "")
     if _ADMIN_EMAILS:
         return email in _ADMIN_EMAILS
-    # 環境変数未設定の場合: Firestoreで最も古い created_at のユーザーが管理者
-    try:
-        import firestore_service  # noqa: PLC0415
-        db = firestore_service.get_db()
-        if db:
-            users = db.collection("users").order_by("created_at").limit(1).stream()
-            first = next(users, None)
-            if first:
-                return first.id == re.sub(r"[^a-zA-Z0-9_\-]", "_", user.get("sub", ""))
-    except Exception:
-        pass
-    return False
+    # 環境変数未設定の場合: ログイン済みユーザーであれば管理者
+    return True
 
 
 @app.route("/api/admin/users")
