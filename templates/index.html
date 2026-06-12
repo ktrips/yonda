@@ -87,6 +87,11 @@
           <div id="menuSyncDates" class="menu-sync-dates"></div>
           <button type="button" class="menu-item" id="menuAmazonSettings">Amazon設定</button>
           <button type="button" class="menu-item" id="menuAmazonAi">アプリ設定</button>
+          <!-- 管理者のみ表示 -->
+          <div id="menuAdminSection" style="display:none;">
+            <hr class="menu-separator">
+            <button type="button" class="menu-item menu-item-admin" id="menuAdminUsers">👥 ユーザー管理</button>
+          </div>
         </div>
 
         <select id="librarySelect" class="menu-select" style="display:none;" aria-hidden="true">
@@ -711,6 +716,20 @@
             <button type="button" class="btn btn-primary" id="paperEditSaveBtn">保存</button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ユーザー管理モーダル（管理者のみ） -->
+  <div class="modal-overlay" id="adminUsersModal" style="display:none;" onclick="if(event.target===this)closeAdminUsersModal()">
+    <div class="modal-content modal-admin-users">
+      <div class="modal-header">
+        <h2>👥 ユーザー管理</h2>
+        <button type="button" class="modal-close" onclick="closeAdminUsersModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="adminUsersLoading" class="recommend-loading" style="display:none;">読み込み中…</div>
+        <div id="adminUsersList"></div>
       </div>
     </div>
   </div>

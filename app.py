@@ -96,6 +96,10 @@ _GOOGLE_REDIRECT_URI = os.environ.get(
     "https://yonda-305586484898.asia-northeast1.run.app/auth/callback"
 )
 _OAUTH_ENABLED = bool(_GOOGLE_CLIENT_ID and _GOOGLE_CLIENT_SECRET)
+# 管理者メールアドレス（カンマ区切りで複数指定可）
+_ADMIN_EMAILS = {
+    e.strip() for e in os.environ.get("YONDA_ADMIN_EMAILS", "").split(",") if e.strip()
+}
 
 oauth = OAuth(app)
 if _OAUTH_ENABLED:
@@ -293,7 +297,43 @@ def auth_logout():
 @app.route("/auth/me")
 def auth_me():
     user = get_current_user()
-    return jsonify({"user": user, "oauth_enabled": _OAUTH_ENABLED})
+    is_admin = _is_admin(user)
+    return jsonify({"user": user, "oauth_enabled": _OAUTH_ENABLED, "is_admin": is_admin})
+
+
+def _is_admin(user: Optional[dict]) -> bool:
+    """管理者かどうかを判定する。YONDA_ADMIN_EMAILS 環境変数で設定、未設定なら最初のユーザーが管理者。"""
+    if not user:
+        return False
+    email = user.get("email", "")
+    if _ADMIN_EMAILS:
+        return email in _ADMIN_EMAILS
+    # 環境変数未設定の場合: Firestoreで最も古い created_at のユーザーが管理者
+    try:
+        import firestore_service  # noqa: PLC0415
+        db = firestore_service.get_db()
+        if db:
+            users = db.collection("users").order_by("created_at").limit(1).stream()
+            first = next(users, None)
+            if first:
+                return first.id == re.sub(r"[^a-zA-Z0-9_\-]", "_", user.get("sub", ""))
+    except Exception:
+        pass
+    return False
+
+
+@app.route("/api/admin/users")
+def api_admin_users():
+    """登録済みユーザー一覧を返す（管理者のみ）"""
+    user = get_current_user()
+    if not _is_admin(user):
+        return jsonify({"error": "管理者権限が必要です"}), 403
+    try:
+        import firestore_service  # noqa: PLC0415
+        users = firestore_service.list_users()
+        return jsonify({"users": users, "total": len(users)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/")

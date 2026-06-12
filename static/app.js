@@ -3,6 +3,7 @@
 // ---- 認証状態 ----
 let _authUser = null;      // ログイン中ユーザー情報 (null = 未ログイン or OAuth 無効)
 let _oauthEnabled = false; // サーバーで OAuth が設定されているか
+let _isAdmin = false;      // 管理者フラグ
 
 function confirmLogout() {
   if (confirm('ログアウトしますか？')) {
@@ -16,9 +17,11 @@ async function initAuth() {
     const data = await res.json();
     _oauthEnabled = data.oauth_enabled || false;
     _authUser = data.user || null;
+    _isAdmin = data.is_admin || false;
   } catch (_) {
     _oauthEnabled = false;
     _authUser = null;
+    _isAdmin = false;
   }
   _applyAuthUI();
 }
@@ -62,6 +65,9 @@ function _applyAuthUI() {
     if (menuUserName) menuUserName.textContent = _authUser.name || _authUser.email || '';
     // ログイン済みメニュー表示
     if (menuLoggedInSection) menuLoggedInSection.style.display = '';
+    // 管理者メニュー表示制御
+    const adminSection = document.getElementById('menuAdminSection');
+    if (adminSection) adminSection.style.display = _isAdmin ? '' : 'none';
     document.getElementById('headerWelcomeBanner')?.style.setProperty('display', 'none');
     document.getElementById('hamburgerBtn')?.style.setProperty('display', '');
     _showAllTabs();
@@ -4591,6 +4597,91 @@ document.getElementById('recommendRefreshBtn')?.addEventListener('click', () => 
   if (activeBookTab === 'recommend') renderYondaRecommend();
 });
 document.getElementById('messagesRefreshBtn')?.addEventListener('click', loadMessages);
+document.getElementById('menuAdminUsers')?.addEventListener('click', () => {
+  closeHamburger();
+  openAdminUsersModal();
+});
+
+/* ============================================================
+   ユーザー管理モーダル（管理者のみ）
+   ============================================================ */
+
+function openAdminUsersModal() {
+  const modal = document.getElementById('adminUsersModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  loadAdminUsers();
+}
+
+function closeAdminUsersModal() {
+  const modal = document.getElementById('adminUsersModal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function loadAdminUsers() {
+  const listEl = document.getElementById('adminUsersList');
+  const loadingEl = document.getElementById('adminUsersLoading');
+  if (!listEl) return;
+  if (loadingEl) loadingEl.style.display = 'block';
+  listEl.innerHTML = '';
+  try {
+    const res = await fetch('/api/admin/users');
+    const data = await res.json();
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (!res.ok) {
+      listEl.innerHTML = `<p class="recommend-error">${escapeHtml(data.error || 'エラー')}</p>`;
+      return;
+    }
+    const users = data.users || [];
+    if (users.length === 0) {
+      listEl.innerHTML = '<p class="recommend-empty">登録ユーザーがいません</p>';
+      return;
+    }
+    listEl.innerHTML = `
+      <div class="admin-users-summary">
+        <strong>登録ユーザー数: ${users.length}人</strong>
+        &nbsp;/&nbsp;
+        <strong>総書籍数: ${users.reduce((s, u) => s + (u.book_total || 0), 0).toLocaleString()}冊</strong>
+      </div>
+      <table class="admin-users-table">
+        <thead>
+          <tr>
+            <th>ユーザー</th>
+            <th>登録日</th>
+            <th>最終ログイン</th>
+            <th>書籍数</th>
+            <th>ソース</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${users.map(u => {
+            const avatar = u.picture
+              ? `<img src="${escapeHtml(u.picture)}" class="admin-user-avatar" width="28" height="28">`
+              : '<span class="admin-user-avatar-placeholder">👤</span>';
+            const created = u.created_at ? u.created_at.substring(0, 10) : '—';
+            const lastLogin = u.last_login ? u.last_login.substring(0, 10) : '—';
+            const sources = (u.sources || []).join(', ') || '—';
+            return `<tr>
+              <td class="admin-user-name-cell">
+                ${avatar}
+                <span>
+                  <div>${escapeHtml(u.name || '—')}</div>
+                  <div class="admin-user-email">${escapeHtml(u.email || '—')}</div>
+                </span>
+              </td>
+              <td>${created}</td>
+              <td>${lastLogin}</td>
+              <td>${(u.book_total || 0).toLocaleString()}冊</td>
+              <td class="admin-user-sources">${escapeHtml(sources)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    if (loadingEl) loadingEl.style.display = 'none';
+    listEl.innerHTML = `<p class="recommend-error">エラー: ${escapeHtml(e.message)}</p>`;
+  }
+}
 
 /* ============================================================
    タグ傾向分析 v2 — カテゴリ別タグクラウド

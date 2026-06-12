@@ -318,6 +318,20 @@ header {
 .menu-item:hover { background: var(--accent-light); }
 .menu-item:last-child { margin-bottom: 0; }
 .menu-item-fetch { font-weight: 600; color: var(--accent); }
+.menu-item-admin { font-weight: 600; color: #7c3aed; }
+
+/* ユーザー管理モーダル */
+.modal-admin-users { max-width: 720px; width: 95vw; max-height: 80vh; overflow-y: auto; }
+.admin-users-summary { padding: 0.5rem 0 1rem; font-size: 0.95rem; color: var(--text-secondary); }
+.admin-users-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.admin-users-table th { background: var(--bg-secondary); padding: 0.5rem 0.75rem; text-align: left; font-weight: 600; border-bottom: 2px solid var(--border); }
+.admin-users-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.admin-users-table tr:hover td { background: var(--bg-secondary); }
+.admin-user-name-cell { display: flex; align-items: center; gap: 0.5rem; }
+.admin-user-avatar { border-radius: 50%; object-fit: cover; }
+.admin-user-avatar-placeholder { font-size: 1.5rem; }
+.admin-user-email { font-size: 0.78rem; color: var(--text-secondary); }
+.admin-user-sources { font-size: 0.78rem; color: var(--text-secondary); }
 .menu-sync-dates {
   padding: 0.1rem 0.75rem 0.4rem;
 }

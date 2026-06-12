@@ -160,6 +160,39 @@ def delete_single_book(uid: str, book: dict) -> None:
         logger.error("Firestore 単冊削除エラー: %s", e)
 
 
+def list_users() -> list[dict]:
+    """
+    Firestore に登録されている全ユーザーのプロフィール一覧を返す。
+    管理者用。各ユーザーの books 件数も集計して返す。
+    """
+    db = get_db()
+    if not db:
+        return []
+    try:
+        users = []
+        for doc in db.collection("users").stream():
+            profile = doc.to_dict() or {}
+            # books 件数を sources から合算（個別にカウントせず高速に）
+            book_total = 0
+            for src_doc in doc.reference.collection("sources").stream():
+                book_total += (src_doc.to_dict() or {}).get("total", 0)
+            users.append({
+                "uid":        doc.id,
+                "email":      profile.get("email", ""),
+                "name":       profile.get("name", ""),
+                "picture":    profile.get("picture", ""),
+                "created_at": profile.get("created_at", ""),
+                "last_login": profile.get("last_login", ""),
+                "book_total": book_total,
+                "sources":    [s.id for s in doc.reference.collection("sources").stream()],
+            })
+        users.sort(key=lambda u: u.get("created_at", ""), reverse=True)
+        return users
+    except Exception as e:
+        logger.error("ユーザー一覧取得エラー: %s", e)
+        return []
+
+
 def upsert_user_profile(uid: str, user_info: dict) -> None:
     """
     ログイン時にユーザープロフィールを Firestore に作成/更新する。
