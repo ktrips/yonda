@@ -368,21 +368,36 @@ function titleSupplementHtml(book) {
   return '';
 }
 
-/** カード内の著者行の下: 星 + 個人レビュー */
-function bookRatingRowHtml(book) {
+/** カード内の著者行の下: 星 + 個人レビュー + 未レビューボタン */
+function bookRatingRowHtml(book, { showUnrated = false } = {}) {
   const rating = displayRating(book) || 0;
   const comment = (book.source === 'audible_jp' ? book.review_headline : book.comment) || '';
-  if (!rating && !comment.trim()) return '';
+  const reviewText = comment.trim();
+  const hasReview = rating > 0 || !!reviewText;
+
+  // 未レビューボタン（完了済み & レビューなし & showUnrated=true のみ表示）
+  const unratedBtn = (showUnrated && book.completed && !hasReview)
+    ? (() => {
+        const url = reviewUrlForBook(book);
+        return url
+          ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"
+               class="btn-unrated btn-unrated-card" title="レビューを入力"
+               onclick="event.stopPropagation()">未レビュー</a>`
+          : `<span class="btn-unrated btn-unrated-card" onclick="event.stopPropagation();openBookDetail(allBooks.find(b=>b.book_id==='${escapeHtml(book.book_id||'')}'))">未レビュー</span>`;
+      })()
+    : '';
+
+  if (!hasReview && !unratedBtn) return '';
+
   const stars = rating > 0
     ? (book.source === 'audible_jp'
         ? starsHtml(rating, { asLink: true, source: book.source, detailUrl: getAudibleRatingUrl(book) })
         : starsHtml(rating))
     : '';
-  const reviewText = comment.trim();
   const reviewHtml = reviewText
     ? `<span class="card-review-text">"${escapeHtml(reviewText.length > 60 ? reviewText.substring(0, 60) + '…' : reviewText)}"</span>`
     : '';
-  return `<div class="book-card-rating-row">${stars}${reviewHtml}</div>`;
+  return `<div class="book-card-rating-row">${stars}${reviewHtml}${unratedBtn}</div>`;
 }
 
 const AUDIBLE_LIBRARY_URL = 'https://www.audible.co.jp/library/audiobooks';
@@ -1670,7 +1685,7 @@ function renderCommunitySection() {
               <div class="book-card-top-row">${genreHtml}${srcBadge}</div>
               <div class="book-card-title">${escapeHtml(merged.title || '—')}</div>
               <div class="book-card-author">${escapeHtml(merged.author || '')}${authorExtra}${completedExtra}</div>
-              ${bookRatingRowHtml(merged)}
+              ${bookRatingRowHtml(merged, { showUnrated: !!myBook && !!_authUser })}
               ${summaryHtml}
             </div>
           </div>`;
@@ -4459,7 +4474,7 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
           <div class="book-card-top-row">${genreHtml}${srcBadge}${favoriteBadge}</div>
           <div class="book-card-title">${escapeHtml(book.title)}</div>
           <div class="book-card-author">${escapeHtml(book.author || '')}${authorExtra}${completedExtra}</div>
-          ${bookRatingRowHtml(book)}
+          ${bookRatingRowHtml(book, { showUnrated: !!_authUser })}
           ${progressBarHtml}
           ${progressMeta}
           ${summaryHtml}

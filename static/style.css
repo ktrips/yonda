@@ -2215,8 +2215,12 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .btn-unrated:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
 .btn-unrated-card {
   margin-top: 0; margin-left: 0.3rem;
-  font-size: 0.55rem; padding: 0.08rem 0.28rem;
+  font-size: 0.62rem; padding: 0.1rem 0.35rem;
   vertical-align: middle;
+  cursor: pointer;
+  background: transparent;
+  color: var(--accent);
+  border-color: var(--accent);
 }
 .book-table .col-summary { min-width: 180px; max-width: 320px; font-size: 0.72rem; color: var(--text-secondary); line-height: 1.3; }
 .book-table .col-asin { font-size: 0.7rem; font-family: monospace; color: var(--text-muted); }
