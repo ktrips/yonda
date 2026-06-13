@@ -4454,7 +4454,6 @@ function renderBookCardHtml(book, { extraClass = '', extraAttrs = '', showUnrate
   const genreCanonical = book._normalizedGenre || normalizeGenre(book.genre || '');
   const genreColors = CAT_COLORS[genreCanonical] || CAT_COLORS['その他'];
   const cardBg = genreColors.unread + '55';
-  const genreHtml = book.genre ? genreBadgeHtml(book, true) : '';
 
   const authorExtra = (book.runtime_length_min || 0) > 0 ? ` · ${formatRuntime(book.runtime_length_min)}` : '';
   const completedExtra = book.completed
@@ -4475,7 +4474,7 @@ function renderBookCardHtml(book, { extraClass = '', extraAttrs = '', showUnrate
         ${bookRatingRowHtml(book, { showUnrated })}
         ${progressBarHtml}
         ${progressMeta}
-        <div class="book-card-top-row">${genreHtml}${srcBadge}${favoriteBadge}</div>
+        <div class="book-card-top-row">${srcBadge}${favoriteBadge}</div>
         ${summaryHtml}
       </div>
     </div>`;
