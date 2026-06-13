@@ -3307,13 +3307,19 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .community-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-bottom: 0.75rem;
 }
-.community-title {
-  font-weight: 600;
-  font-size: 0.9rem;
+.community-date-group {
+  margin-bottom: 1.5rem;
+}
+.community-date-header {
+  font-size: 0.88rem;
+  font-weight: 700;
   color: var(--accent);
+  border-bottom: 2px solid var(--accent);
+  padding-bottom: 0.25rem;
+  margin-bottom: 0.75rem;
 }
 .btn-sm {
   font-size: 0.75rem;
