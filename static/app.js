@@ -146,13 +146,13 @@ function _showPublicOnly() {
     if (el) el.style.display = 'none';
   });
 
-  // ウェルカムバナーを表示（コミュニティセクションは表示しない）
+  // ウェルカムバナーを表示（publicWelcomeBanner は HTML に存在しないため headerWelcomeBanner で対応済み）
   const welcomeBanner = document.getElementById('publicWelcomeBanner');
   if (welcomeBanner) welcomeBanner.style.display = '';
-  // bookTabs を表示（みんなのYondaタブを押せる状態に）
-  const bookTabsEl = document.getElementById('bookTabs');
-  if (bookTabsEl) bookTabsEl.style.display = '';
-  activeBookTab = null;
+  // bookTabs は表示しない（タブ名不要）。みんなのYondaコンテンツを直接表示
+  const communitySection = document.getElementById('communitySection');
+  if (communitySection) communitySection.style.display = 'block';
+  activeBookTab = 'community';
 }
 
 function _showLoginBanner() {
