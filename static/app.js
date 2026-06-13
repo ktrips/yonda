@@ -4477,6 +4477,7 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
     const genreCanonical = book._normalizedGenre || normalizeGenre(book.genre || '');
     const genreColors = CAT_COLORS[genreCanonical] || CAT_COLORS['その他'];
     const cardBg = genreColors.unread + '55'; // ~33% opacity
+    const genreHtml = book.genre ? genreBadgeHtml(book, true) : '';
     const cardStyle = `style="background: ${cardBg};"`;
 
     // 著者行: 著者 · 時間 · 完了日
