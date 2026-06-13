@@ -1024,7 +1024,7 @@ function genreTags(genre) {
 /** ジャンル選択時: 詳細分類（/ の2番目）でグループ表示用のキーを返す */
 function getSubGenreForGrouping(book, selectedGenre) {
   const tags = genreTags(book.genre || '');
-  const disp = displayGenre(book.genre || '');
+  const disp = normalizeGenre(book.genre || '');
   if (disp !== selectedGenre) return null;
   if (tags.length <= 1) return selectedGenre;
   return tags[1];
@@ -1476,7 +1476,7 @@ function getRankingByGenre() {
   }
   const byGenre = {};
   for (const b of books) {
-    const g = rankingGenre(b.genre) || 'その他';
+    const g = normalizeGenre(b.genre) || 'その他';
     if (!byGenre[g]) byGenre[g] = [];
     byGenre[g].push(b);
   }
@@ -3210,8 +3210,8 @@ function renderRelationChart() {
     const genres = [...new Set(books.flatMap(b => [b._normalizedGenre || 'その他']))]
       .filter(Boolean)
       .sort((a, b) => {
-        const ca = books.filter(bk => (displayGenre(bk.genre) || 'その他') === a).length;
-        const cb = books.filter(bk => (displayGenre(bk.genre) || 'その他') === b).length;
+        const ca = books.filter(bk => (normalizeGenre(bk.genre) || 'その他') === a).length;
+        const cb = books.filter(bk => (normalizeGenre(bk.genre) || 'その他') === b).length;
         return cb - ca;
       })
       .slice(0, 10);
