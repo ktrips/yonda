@@ -202,7 +202,6 @@ let bookInsightsCache = {};
 let yondaMessages = [];
 let archivedMessages = [];
 let messageBookRefs = [];
-let messageInsightRefs = [];
 let activeMessageId = null;
 let chartMode = 'count';  // 'count' | 'runtime'
 let relationChartMode = 'genre_rating';  // 'genre_rating' | 'author_genre'
@@ -3581,45 +3580,6 @@ function reviewUrlForBook(book) {
   return '';
 }
 
-function renderMessageInsight(insight, bookIndex) {
-  const points = Array.isArray(insight?.points) ? insight.points : [];
-  if (!points.length) {
-    const errMsg = insight?.error
-      ? `<span class="message-insight-error" title="${escapeAttr(insight.error)}">⚠ 生成エラー</span>`
-      : '';
-    return `
-      <div class="message-insight-empty-row">
-        ${errMsg}
-        <button type="button" class="btn-table-ai-insight message-ai-generate-link" data-message-book-index="${bookIndex}">AI生成</button>
-      </div>
-    `;
-  }
-  return `
-    <div class="message-insight-preview message-detail-open" data-message-book-index="${bookIndex}" role="button" tabindex="0" title="詳細で書評ポイントを確認">
-      <ol class="message-insight-points">
-      ${points.slice(0, 5).map(point => `
-        <li>
-          <strong>${escapeHtml(point.heading || 'ポイント')}</strong>
-          <span>${escapeHtml(point.text || '')}</span>
-        </li>
-      `).join('')}
-      </ol>
-    </div>
-  `;
-}
-
-function renderMessageInsightActions(insight, book) {
-  const points = Array.isArray(insight?.points) ? insight.points : [];
-  const reviewUrl = reviewUrlForBook(book);
-  const insightIndex = messageInsightRefs.push(insight) - 1;
-  return `
-    <div class="message-insight-actions">
-      ${points.length ? `<button type="button" class="btn-copy-insight btn-copy-insight-message" data-message-insight-index="${insightIndex}" title="書評ポイントをコピー" aria-label="書評ポイントをコピー">⧉</button>` : ''}
-      ${reviewUrl ? `<a href="${escapeAttr(reviewUrl)}" target="_blank" rel="noopener" class="btn-review-insight btn-review-insight-message" title="レビューを書く" aria-label="レビューを書く">📖</a>` : ''}
-    </div>
-  `;
-}
-
 function messageId(message, idx) {
   return message.id || `${message.created_at || 'message'}-${idx}`;
 }
@@ -3674,7 +3634,10 @@ function renderMessageSummaryRow(message, idx) {
 }
 
 function renderMessageBookItem(item) {
-  const book = item.book || {};
+  const rawBook = item.book || {};
+  // allBooks からレーティング・レビューを補完（最新データを使用）
+  const fullBook = findBookFromMessage(rawBook);
+  const book = fullBook ? { ...rawBook, ...fullBook } : rawBook;
   const messageInsight = item.insight || {};
   const cachedInsight = findBookInsight(book);
   const insight = Array.isArray(messageInsight.points) && messageInsight.points.length > 0
@@ -3689,14 +3652,28 @@ function renderMessageBookItem(item) {
   const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span>` : '';
   const tsundoku = getTsundokuDays(book);
   const tsundokuStr = tsundoku != null ? tsundoku + '日' : '—';
-  const supplementHtml = titleSupplementHtml(book);
-  const hasRating = (displayRating(book) || 0) > 0;
-  const hasComment = !!ratingCommentText(book);
+
+  // レビュー列: 星 + 個人レビュー（または未レビューボタン）
+  const dispRating = displayRating(book);
+  const hasRating = dispRating > 0;
+  const personalReview = ((book.source === 'audible_jp' ? book.review_headline : book.comment) || '').trim();
   const reviewUrl = reviewUrlForBook(book);
-  const unratedBtn = book.completed && !hasComment && reviewUrl
-    ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener"
-          class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`
-    : '';
+  let reviewCellHtml = '';
+  if (hasRating) {
+    reviewCellHtml += `<div class="table-review-stars">${starsHtml(dispRating)}</div>`;
+  }
+  if (personalReview) {
+    const truncated = personalReview.length > 50 ? personalReview.slice(0, 50) + '…' : personalReview;
+    reviewCellHtml += `<div class="table-review-text">${escapeHtml(truncated)}</div>`;
+  }
+  if (!hasRating && !personalReview) {
+    if (book.source === 'paper' && book.book_id && !!_authUser) {
+      reviewCellHtml = `<button type="button" class="btn-unrated" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</button>`;
+    } else if (reviewUrl) {
+      reviewCellHtml = `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`;
+    }
+  }
+
   return `
     <tr class="message-book-row">
       <td class="col-cover"><img src="${escapeHtml(book.cover_url || NO_COVER)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'"></td>
@@ -3704,10 +3681,10 @@ function renderMessageBookItem(item) {
         <button type="button" class="message-book-title-link message-detail-open" data-message-book-index="${refIndex}">
           ${completedBadge}${favoriteBadge}${escapeHtml(book.title || '不明なタイトル')}
         </button>
-        ${supplementHtml ? `<div class="title-supplement-cell">${supplementHtml}</div>` : ''}
-        ${unratedBtn}
       </td>
       <td class="col-author" title="${escapeHtml(book.author || '')}">${escapeHtml(book.author || '')}</td>
+      <td class="col-review" onclick="event.stopPropagation()">${reviewCellHtml}</td>
+      <td class="col-ai-insight">${renderTableInsightCell(book)}</td>
       <td class="col-summary" title="${summary ? escapeHtml(summary) : ''}">${summaryCell}</td>
       <td class="col-genre">${genre}</td>
       <td class="col-runtime">${(book.runtime_length_min || 0) > 0 ? formatRuntime(book.runtime_length_min) : '—'}</td>
@@ -3715,8 +3692,6 @@ function renderMessageBookItem(item) {
       <td>${book.completed ? formatDateOnly(book.completed_date) : (formatProgress(book) || '—')}</td>
       <td class="col-tsundoku">${tsundokuStr}</td>
       <td>${srcBadge}</td>
-      <td class="col-ai-insight">${renderMessageInsight(insight, refIndex)}</td>
-      <td class="col-message-actions">${renderMessageInsightActions(insight, book)}</td>
     </tr>
   `;
 }
@@ -3757,6 +3732,8 @@ function renderMessageDetail(message) {
                 <th class="col-cover"></th>
                 <th class="col-title">タイトル</th>
                 <th class="col-author">著者</th>
+                <th class="col-review">レビュー</th>
+                <th class="col-ai-insight">書評ポイント</th>
                 <th class="col-summary">概要</th>
                 <th class="col-genre">ジャンル</th>
                 <th class="col-runtime">再生時間</th>
@@ -3764,8 +3741,6 @@ function renderMessageDetail(message) {
                 <th>読了日</th>
                 <th>積読</th>
                 <th>ソース</th>
-                <th class="col-ai-insight">書評ポイント</th>
-                <th class="col-message-actions">操作</th>
               </tr>
             </thead>
             <tbody>${groupedBooks.map(renderMessageBookItem).join('')}</tbody>
@@ -3780,7 +3755,6 @@ function renderMessages() {
   const listEl = document.getElementById('messagesList');
   if (!listEl) return;
   messageBookRefs = [];
-  messageInsightRefs = [];
   if (!yondaMessages.length && !archivedMessages.length) {
     listEl.innerHTML = '<p class="messages-empty">まだメッセージはありません。</p>';
     return;
@@ -3828,16 +3802,6 @@ function renderMessages() {
       e.preventDefault();
       const idx = parseInt(btn.getAttribute('data-message-book-index'), 10);
       openMessageBookDetail(idx);
-    });
-  });
-  listEl.querySelectorAll('.message-ai-generate-link').forEach(btn => {
-    btn.addEventListener('click', () => generateMessageBookInsight(btn));
-  });
-  listEl.querySelectorAll('.btn-copy-insight-message').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const idx = parseInt(btn.getAttribute('data-message-insight-index'), 10);
-      const insight = messageInsightRefs[idx];
-      if (insight) copyBookInsightText(insight, btn);
     });
   });
 }
