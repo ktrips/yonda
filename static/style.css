@@ -2003,6 +2003,26 @@ header {
 .book-card-author {
   font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.3rem;
 }
+.book-card-rating-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.25rem;
+}
+.book-card-rating-row .star-rating {
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.card-review-text {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 .book-card-meta {
   display: flex; flex-wrap: wrap; gap: 0.4rem;
   font-size: 0.7rem; color: var(--text-secondary);

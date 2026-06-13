@@ -343,7 +343,7 @@ function ratingCommentText(book, maxLen = 40) {
   return trimmed.length > maxLen ? trimmed.substring(0, maxLen) + '…' : trimmed;
 }
 
-/** タイトル横に表示する補足: 評価・コメントがあればそれ、なければ概要サマリー */
+/** タイトル横に表示する補足: 評価・コメントがなければ概要サマリーのみ（カード内では使わない） */
 function titleSupplementHtml(book) {
   const hasRating = (displayRating(book) || 0) > 0;
   const comment = ratingCommentText(book);
@@ -362,6 +362,23 @@ function titleSupplementHtml(book) {
     return `<span class="title-supplement title-supplement-summary">${escapeHtml(short)}</span>`;
   }
   return '';
+}
+
+/** カード内の著者行の下: 星 + 個人レビュー */
+function bookRatingRowHtml(book) {
+  const rating = displayRating(book) || 0;
+  const comment = (book.source === 'audible_jp' ? book.review_headline : book.comment) || '';
+  if (!rating && !comment.trim()) return '';
+  const stars = rating > 0
+    ? (book.source === 'audible_jp'
+        ? starsHtml(rating, { asLink: true, source: book.source, detailUrl: getAudibleRatingUrl(book) })
+        : starsHtml(rating))
+    : '';
+  const reviewText = comment.trim();
+  const reviewHtml = reviewText
+    ? `<span class="card-review-text">"${escapeHtml(reviewText.length > 60 ? reviewText.substring(0, 60) + '…' : reviewText)}"</span>`
+    : '';
+  return `<div class="book-card-rating-row">${stars}${reviewHtml}</div>`;
 }
 
 const AUDIBLE_LIBRARY_URL = 'https://www.audible.co.jp/library/audiobooks';
@@ -1641,8 +1658,8 @@ function renderCommunitySection() {
                  onerror="this.src='${NO_COVER}'">
             <div class="book-card-body">
               <div class="book-card-title">${srcBadge}${completedBadge}${escapeHtml(merged.title || '—')}</div>
-              ${supplementHtml ? `<div class="book-card-title-supplement">${supplementHtml}</div>` : ''}
               <div class="book-card-author">${escapeHtml(merged.author || '')}${authorExtra}${completedExtra}</div>
+              ${bookRatingRowHtml(merged)}
               <div class="book-card-genre-row">${genreHtml}</div>
               ${summaryHtml}
             </div>
@@ -4426,8 +4443,8 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
              onerror="this.src='${NO_COVER}'">
         <div class="book-card-body">
           <div class="book-card-title">${titleSrcBadge}${favoriteBadge}${escapeHtml(book.title)}</div>
-          ${supplementHtml ? `<div class="book-card-title-supplement">${supplementHtml}${unratedBtn}</div>` : unratedBtn}
           <div class="book-card-author">${escapeHtml(book.author || '')}${(book.runtime_length_min || 0) > 0 ? ` · ${formatRuntime(book.runtime_length_min)}` : ''}${book.completed ? ` · <span class="badge-completed badge-short" title="読了" data-filter-source="${escapeHtml(book.source || '')}">完</span>${book.completed_date ? ` ${formatDateOnly(book.completed_date)}` : ''}` : ''}</div>
+          ${bookRatingRowHtml(book)}
           <div class="book-card-genre-row">${genreHtml}</div>
           ${progressBarHtml}
           ${!book.completed ? `<div class="book-card-meta">${formatProgress(book) ? `<span>進捗: ${formatProgress(book)}</span>` : `<span>${formatDate(book.loan_date)}</span>`}</div>` : ''}
