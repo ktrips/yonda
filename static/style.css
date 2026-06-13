@@ -3452,6 +3452,18 @@ header {
   aspect-ratio: 3/4;
   min-height: 70px;
 }
+
+/* コミュニティ: 通常カードスタイルのラッパー */
+.community-cards-wrap {
+  padding: 0.5rem 0.75rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.community-cards-wrap .book-card {
+  border-left-width: 3px;
+  margin-bottom: 0;
+}
 .modal-paper-edit {
   max-width: 640px;
   width: 95%;
