@@ -2613,6 +2613,11 @@ def api_update_paper_book(book_id: str):
             updates["completed_date"] = (body["completed_date"] or "").strip()
         if "detail_url" in body:
             updates["detail_url"] = (body["detail_url"] or "").strip()
+        if "rating" in body:
+            raw_rating = body["rating"]
+            updates["rating"] = int(raw_rating) if raw_rating is not None and str(raw_rating).isdigit() else None
+        if "comment" in body:
+            updates["comment"] = (body["comment"] or "").strip()
         # 旧データ（book_id 未設定）の title+author フォールバック用
         updates["_title"] = body.get("_title", "")
         updates["_author"] = body.get("_author", "")

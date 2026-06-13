@@ -707,6 +707,22 @@
               <label>Amazon / 商品リンク</label>
               <input type="url" id="paperEditDetailUrl" class="paper-edit-input" placeholder="https://www.amazon.co.jp/dp/...">
             </div>
+            <div class="paper-edit-field">
+              <label>評価（★）</label>
+              <div class="paper-edit-stars" id="paperEditStars" role="group" aria-label="評価">
+                <button type="button" class="paper-star-btn" data-value="1">★</button>
+                <button type="button" class="paper-star-btn" data-value="2">★</button>
+                <button type="button" class="paper-star-btn" data-value="3">★</button>
+                <button type="button" class="paper-star-btn" data-value="4">★</button>
+                <button type="button" class="paper-star-btn" data-value="5">★</button>
+                <button type="button" class="paper-star-clear" id="paperEditStarClear">クリア</button>
+              </div>
+              <input type="hidden" id="paperEditRating" value="">
+            </div>
+            <div class="paper-edit-field">
+              <label>書評・コメント</label>
+              <textarea id="paperEditComment" class="paper-edit-input paper-edit-textarea" rows="3" placeholder="感想・メモを入力"></textarea>
+            </div>
           </div>
         </div>
         <div class="paper-edit-actions">

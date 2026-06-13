@@ -4160,6 +4160,15 @@ function closeBookDetail() {
 
 let _paperEditBook = null;
 
+/** 紙の本編集モーダルの星UIを設定 */
+function _setPaperEditStars(rating) {
+  const btns = document.querySelectorAll('#paperEditStars .paper-star-btn');
+  btns.forEach(btn => {
+    const v = parseInt(btn.dataset.value, 10);
+    btn.classList.toggle('active', v <= rating);
+  });
+}
+
 function openPaperBookEdit(book) {
   _paperEditBook = book;
   const NO_COVER = 'data:image/svg+xml,' + encodeURIComponent(
@@ -4197,6 +4206,15 @@ function openPaperBookEdit(book) {
   // Amazonリンク
   const detailUrlEl = document.getElementById('paperEditDetailUrl');
   if (detailUrlEl) detailUrlEl.value = book.detail_url || '';
+
+  // 評価（★）
+  const rating = book.rating || 0;
+  document.getElementById('paperEditRating').value = rating || '';
+  _setPaperEditStars(rating);
+
+  // 書評・コメント
+  const commentEl = document.getElementById('paperEditComment');
+  if (commentEl) commentEl.value = book.comment || '';
 
   // 表紙
   const coverUrl = book.cover_url || '';
@@ -4260,10 +4278,14 @@ async function savePaperBookEdit() {
   }
 
   const bookId = _paperEditBook.book_id || '';
+  const ratingVal = parseInt(document.getElementById('paperEditRating')?.value || '0', 10) || null;
+  const commentVal = (document.getElementById('paperEditComment')?.value || '').trim();
   const body = {
     title, author, genre, summary, cover_url: coverUrl,
     status, completed_date: completedDate,
     detail_url: (document.getElementById('paperEditDetailUrl')?.value || '').trim(),
+    rating: ratingVal,
+    comment: commentVal,
     _title: _paperEditBook.title || '',
     _author: _paperEditBook.author || '',
   };
@@ -5838,6 +5860,18 @@ document.getElementById('paperEditDeleteBtn')?.addEventListener('click', () => {
 });
 document.getElementById('paperEditStatus')?.addEventListener('change', function() {
   _toggleCompletedDateField(this.value);
+});
+// 評価星ボタン
+document.getElementById('paperEditStars')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.paper-star-btn');
+  if (!btn) return;
+  const v = parseInt(btn.dataset.value, 10);
+  document.getElementById('paperEditRating').value = v;
+  _setPaperEditStars(v);
+});
+document.getElementById('paperEditStarClear')?.addEventListener('click', () => {
+  document.getElementById('paperEditRating').value = '';
+  _setPaperEditStars(0);
 });
 // 表紙ファイル選択のプレビュー
 document.getElementById('paperEditCoverFile')?.addEventListener('change', function() {
