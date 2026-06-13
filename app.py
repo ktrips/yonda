@@ -53,7 +53,7 @@ def _get_stable_secret_key() -> str:
     # Google Client Secret から派生（全インスタンスで同値になる）
     g_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
     if g_secret:
-        import hashlib
+        import hashlib  # noqa: PLC0415 - lazy import for startup performance
         return hashlib.sha256(f"yonda-session-v1-{g_secret}".encode()).hexdigest()
     # フォールバック: data/.secret_key ファイル（ローカル開発用）
     key_file = Path(os.environ.get("YONDA_DATA_DIR", "data")) / ".secret_key"
@@ -354,8 +354,6 @@ def api_admin_backfill_messages():
                 msg["user"] = user_info
             updated += 1
     # 更新を保存
-    import json
-    from pathlib import Path
     msgs_path = library_service.YONDA_MESSAGES_PATH
     msgs_path.parent.mkdir(parents=True, exist_ok=True)
     with open(msgs_path, "w", encoding="utf-8") as f:
@@ -2820,7 +2818,6 @@ def api_amazon_list_add():
     asin = (body.get("asin") or "").strip()
     cover_url = (body.get("cover_url") or "").strip()
 
-    import hashlib
     entry_id = asin if asin else hashlib.md5(f"{title}__{author}".encode()).hexdigest()[:12]
 
     data = library_service.load_amazon_list()

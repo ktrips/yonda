@@ -155,10 +155,6 @@ function _showPublicOnly() {
   activeBookTab = 'community';
 }
 
-function _showLoginBanner() {
-  // publicWelcomeBanner に統合済み。後方互換のため残す（何もしない）
-}
-
 const API = {
   books: '/api/books',
   fetch: '/api/fetch',
@@ -190,7 +186,7 @@ function _rebuildBookIndexMap() {
   allBooks.forEach((b, i) => _bookIndexMap.set(b, i));
 }
 function _bookIndex(book) {
-  return _bookIndexMap.has(book) ? _bookIndexMap.get(book) : _bookIndex(book);
+  return _bookIndexMap.has(book) ? _bookIndexMap.get(book) : allBooks.indexOf(book);
 }
 let currentPage = 0;
 let activeMainTab = 'yonda'; // 'yonda' | 'yomu' | 'oshi'
@@ -494,22 +490,6 @@ async function manualFetchSource(sourceId) {
     btn.textContent = originalText;
     btn.style.opacity = '1';
   }
-}
-
-function showToast(message, type = 'info') {
-  const toast = document.createElement('div');
-  toast.className = `toast toast-${type}`;
-  toast.textContent = message;
-  toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);' +
-    'background:#333;color:#fff;padding:12px 24px;border-radius:8px;z-index:10000;' +
-    'box-shadow:0 4px 12px rgba(0,0,0,0.3);animation:slideUp 0.3s ease;';
-  if (type === 'success') toast.style.background = '#4caf50';
-  if (type === 'error') toast.style.background = '#f44336';
-  document.body.appendChild(toast);
-  setTimeout(() => {
-    toast.style.animation = 'slideDown 0.3s ease';
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
 }
 
 const AFFILIATE_TAG_KEY = 'yonda_affiliate_tag';
@@ -856,9 +836,6 @@ function normalizeGenre(genreStr) {
   return 'その他';
 }
 
-/** フィルター・グラフ・ランキングのジャンル表示（normalizeGenre に委譲） */
-function displayGenre(genre) { return normalizeGenre(genre); }
-function rankingGenre(genre)  { return normalizeGenre(genre); }
 
 /** 紙の本追加確認モーダルを開く */
 function openPaperAddConfirm(title, author, coverUrl, summary, genre, detailUrl = '') {
@@ -1232,14 +1209,22 @@ async function submitFetchOtp() {
 
 /* --- Stats --- */
 
-function updateStats() {
+function _computeBookStats() {
   const year = new Date().getFullYear();
-  const completed = allBooks.filter(b => b.completed).length;
-  const inProgress = allBooks.filter(b => isInProgress(b)).length;
-  const yearlyCompleted = allBooks.filter(b =>
-    b.completed && b.completed_date && b.completed_date.startsWith(String(year))
-  ).length;
-  const favorite = allBooks.filter(b => b.favorite).length;
+  const yearStr = String(year);
+  return {
+    year,
+    completed:       allBooks.filter(b => b.completed).length,
+    inProgress:      allBooks.filter(b => isInProgress(b)).length,
+    unread:          allBooks.filter(b => isUnread(b)).length,
+    yearlyCompleted: allBooks.filter(b => b.completed && b.completed_date && b.completed_date.startsWith(yearStr)).length,
+    favorite:        allBooks.filter(b => b.favorite).length,
+    all:             allBooks.length,
+  };
+}
+
+function updateStats() {
+  const s = _computeBookStats();
 
   // 最新メッセージに新規読了があればヘッダー読了数に (N) を追加
   const latestNewCount = yondaMessages.length > 0
@@ -1248,15 +1233,15 @@ function updateStats() {
   const ratedEl = document.getElementById('statRatedVal');
   if (ratedEl) {
     ratedEl.innerHTML = latestNewCount > 0
-      ? `${completed}<span class="stat-new-badge" id="statNewBadge">(${latestNewCount})</span>`
-      : String(completed);
+      ? `${s.completed}<span class="stat-new-badge" id="statNewBadge">(${latestNewCount})</span>`
+      : String(s.completed);
   }
 
-  document.getElementById('statTsundokuVal').textContent = inProgress;
-  document.getElementById('statYearlyVal').textContent = yearlyCompleted;
-  document.getElementById('statYearlyLabel').textContent = year + '年';
-  document.getElementById('statFavoriteVal').textContent = favorite;
-  updateBookTabLabels();
+  document.getElementById('statTsundokuVal').textContent = s.inProgress;
+  document.getElementById('statYearlyVal').textContent = s.yearlyCompleted;
+  document.getElementById('statYearlyLabel').textContent = s.year + '年';
+  document.getElementById('statFavoriteVal').textContent = s.favorite;
+  updateBookTabLabels(s);
 }
 
 function loadReadMessageIds() {
@@ -1289,16 +1274,10 @@ function markMessageRead(id) {
   updateBookTabLabels();
 }
 
-function updateBookTabLabels() {
-  const readCount = allBooks.filter(b => b.completed).length;
-  const inProgressCount = allBooks.filter(b => isInProgress(b)).length;
-  const unreadCount = allBooks.filter(b => isUnread(b)).length;
-  const year = new Date().getFullYear();
-  const yearlyCount = allBooks.filter(b =>
-    b.completed && b.completed_date && b.completed_date.startsWith(String(year))
-  ).length;
-  const favoriteCount = allBooks.filter(b => b.favorite).length;
-  const allCount = allBooks.length;
+function updateBookTabLabels(s) {
+  if (!s) s = _computeBookStats();
+  const { completed: readCount, inProgress: inProgressCount, unread: unreadCount,
+          year, yearlyCompleted: yearlyCount, favorite: favoriteCount, all: allCount } = s;
   const rating = document.getElementById('ratingFilter')?.value || 'completed';
   const tabRead = document.getElementById('tabRead');
   const tabRanking = document.getElementById('tabRanking');
@@ -1726,9 +1705,6 @@ function renderCommunitySection() {
             const b = item.book || item;
             if (!b.title || seenTitles.has(b.title)) return false;
             seenTitles.add(b.title);
-            const myBook = b.book_id
-              ? allBooks.find(x => x.book_id === b.book_id)
-              : allBooks.find(x => x.title === b.title && x.author === b.author);
             return true;
           }));
 
@@ -3535,6 +3511,30 @@ async function copyBookInsightText(insight, button = null) {
   }
 }
 
+/** レビュー列HTML: 星 + 個人レビュー。レビューがなければ未レビューボタン。テーブル共通 */
+function buildReviewCellHtml(book) {
+  const dispRating = displayRating(book);
+  const hasRating = dispRating > 0;
+  const personalReview = ((book.source === 'audible_jp' ? book.review_headline : book.comment) || '').trim();
+  const reviewUrl = reviewUrlForBook(book);
+  let html = '';
+  if (hasRating) {
+    html += `<div class="table-review-stars">${starsHtml(dispRating)}</div>`;
+  }
+  if (personalReview) {
+    const truncated = personalReview.length > 50 ? personalReview.slice(0, 50) + '…' : personalReview;
+    html += `<div class="table-review-text">${escapeHtml(truncated)}</div>`;
+  }
+  if (!personalReview) {
+    if (book.source === 'paper' && book.book_id && !!_authUser) {
+      html += `<button type="button" class="btn-unrated" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</button>`;
+    } else if (reviewUrl) {
+      html += `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`;
+    }
+  }
+  return html;
+}
+
 function renderTableInsightCell(book) {
   const insight = findBookInsight(book);
   const editBtn = book.source === 'paper' && book.book_id && !!_authUser
@@ -3654,25 +3654,7 @@ function renderMessageBookItem(item) {
   const tsundokuStr = tsundoku != null ? tsundoku + '日' : '—';
 
   // レビュー列: 星 + 個人レビュー（または未レビューボタン）
-  const dispRating = displayRating(book);
-  const hasRating = dispRating > 0;
-  const personalReview = ((book.source === 'audible_jp' ? book.review_headline : book.comment) || '').trim();
-  const reviewUrl = reviewUrlForBook(book);
-  let reviewCellHtml = '';
-  if (hasRating) {
-    reviewCellHtml += `<div class="table-review-stars">${starsHtml(dispRating)}</div>`;
-  }
-  if (personalReview) {
-    const truncated = personalReview.length > 50 ? personalReview.slice(0, 50) + '…' : personalReview;
-    reviewCellHtml += `<div class="table-review-text">${escapeHtml(truncated)}</div>`;
-  }
-  if (!personalReview) {
-    if (book.source === 'paper' && book.book_id && !!_authUser) {
-      reviewCellHtml += `<button type="button" class="btn-unrated" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</button>`;
-    } else if (reviewUrl) {
-      reviewCellHtml += `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`;
-    }
-  }
+  const reviewCellHtml = buildReviewCellHtml(book);
 
   return `
     <tr class="message-book-row">
@@ -4555,25 +4537,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
     const tsundokuStr = tsundoku != null ? tsundoku + '日' : '—';
 
     // レビュー列: 星 + 個人レビュー（または未レビューボタン）
-    const dispRating = displayRating(book);
-    const hasRating = dispRating > 0;
-    const personalReview = ((book.source === 'audible_jp' ? book.review_headline : book.comment) || '').trim();
-    const reviewUrl = reviewUrlForBook(book);
-    let reviewCellHtml = '';
-    if (hasRating) {
-      reviewCellHtml += `<div class="table-review-stars">${starsHtml(dispRating)}</div>`;
-    }
-    if (personalReview) {
-      const truncated = personalReview.length > 50 ? personalReview.slice(0, 50) + '…' : personalReview;
-      reviewCellHtml += `<div class="table-review-text">${escapeHtml(truncated)}</div>`;
-    }
-    if (!personalReview) {
-      if (book.source === 'paper' && book.book_id && !!_authUser) {
-        reviewCellHtml += `<button type="button" class="btn-unrated" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</button>`;
-      } else if (reviewUrl) {
-        reviewCellHtml += `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`;
-      }
-    }
+    const reviewCellHtml = buildReviewCellHtml(book);
 
     return headerRow + `
       <tr class="book-row-clickable ${book.completed ? 'row-completed' : ''}" data-book-index="${i}" role="button" tabindex="0">

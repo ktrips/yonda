@@ -8,6 +8,12 @@ import re
 import threading
 import time
 import uuid
+
+_DEFAULT_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/120.0.0.0 Safari/537.36"
+)
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -89,10 +95,6 @@ def _amazon_list_path() -> Path:
 
 def _book_insights_path() -> Path:
     return get_user_data_dir() / "book_insights.json"
-
-# 後方互換エイリアス（既存コードが直接参照している場合向け）
-def _json_map_compat():
-    return _get_json_map()
 
 _ENV_MAP = {
     "setagaya": ("SETAGAYA_USER_ID", "SETAGAYA_PASSWORD"),
@@ -185,9 +187,7 @@ def test_login(library_id: str) -> bool:
         if creds and creds.get("user_id") and creds.get("password"):
             session = requests.Session()
             session.headers.update({
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                              "AppleWebKit/537.36 (KHTML, like Gecko) "
-                              "Chrome/120.0.0.0 Safari/537.36",
+                "User-Agent": _DEFAULT_UA,
             })
             return adapter.login(session, LibraryCredentials(
                 user_id=creds["user_id"], password=creds["password"]
@@ -197,11 +197,7 @@ def test_login(library_id: str) -> bool:
         return adapter.login(None, None)
     creds = _get_credentials(library_id)
     session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/120.0.0.0 Safari/537.36",
-    })
+    session.headers.update({"User-Agent": _DEFAULT_UA})
     return adapter.login(session, creds)
 
 
@@ -236,9 +232,7 @@ def fetch_and_save(library_id: str) -> dict:
         if creds and creds.get("user_id") and creds.get("password"):
             session = requests.Session()
             session.headers.update({
-                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                              "AppleWebKit/537.36 (KHTML, like Gecko) "
-                              "Chrome/120.0.0.0 Safari/537.36",
+                "User-Agent": _DEFAULT_UA,
                 "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
             })
 
@@ -311,11 +305,7 @@ def fetch_and_save(library_id: str) -> dict:
     elif adapter.needs_credentials:
         creds = _get_credentials(library_id)
         session = requests.Session()
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/120.0.0.0 Safari/537.36",
-        })
+        session.headers.update({"User-Agent": _DEFAULT_UA})
         if not adapter.login(session, creds):
             raise RuntimeError(f"{adapter.library_name} へのログインに失敗しました")
         records: list[BookRecord] = adapter.fetch_history(session)
@@ -344,6 +334,21 @@ def fetch_and_save(library_id: str) -> dict:
 # ユーザーディレクトリをキーにしたキャッシュ辞書
 _saved_caches: dict[str, Optional[dict]] = {}
 _saved_cache_mtimes: dict[str, float] = {}
+
+
+def _load_json_file(path) -> dict:
+    """JSON ファイルを読み込む。'Extra data' エラー時は先頭の有効オブジェクトを返す。"""
+    with open(path, encoding="utf-8") as f:
+        raw = f.read()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as je:
+        if "Extra data" in str(je):
+            decoder = json.JSONDecoder()
+            data, _ = decoder.raw_decode(raw.lstrip())
+            logger.warning("JSON 部分読込 (%s): Extra data を無視して先頭オブジェクトを使用", path)
+            return data
+        raise
 
 
 def _get_books_max_mtime() -> float:
@@ -385,18 +390,7 @@ def _load_saved_uncached() -> Optional[dict]:
         if not path or not path.exists():
             continue
         try:
-            with open(path, encoding="utf-8") as f:
-                raw = f.read()
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError as je:
-                # "Extra data" の場合は先頭の有効 JSON オブジェクトだけ使う
-                if "Extra data" in str(je):
-                    decoder = json.JSONDecoder()
-                    data, _ = decoder.raw_decode(raw.lstrip())
-                    logger.warning("JSON 部分読込 (%s): Extra data を無視して先頭オブジェクトを使用", path)
-                else:
-                    raise
+            data = _load_json_file(path)
             books = data.get("books", [])
             for b in books:
                 if not b.get("source"):
@@ -435,17 +429,10 @@ def load_saved_for(library_id: str) -> Optional[dict]:
     path = _json_path_for(library_id)
     if not path.exists():
         return None
-    with open(path, encoding="utf-8") as f:
-        raw = f.read()
     try:
-        return json.loads(raw)
-    except json.JSONDecodeError as je:
-        if "Extra data" in str(je):
-            decoder = json.JSONDecoder()
-            data, _ = decoder.raw_decode(raw.lstrip())
-            logger.warning("JSON 部分読込 (%s): Extra data を無視", path)
-            return data
-        raise
+        return _load_json_file(path)
+    except (json.JSONDecodeError, OSError):
+        return None
 
 
 def add_paper_book(book_data: dict) -> dict:
@@ -671,10 +658,6 @@ def book_insight_key(book: dict) -> str:
     import hashlib
     return "book:" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
 
-
-
-def set_book_private(book_id: str, private: bool) -> None:
-    pass  # 非公開機能は削除済み。後方互換のため関数名のみ残す。
 
 
 
