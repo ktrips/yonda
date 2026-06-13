@@ -2069,7 +2069,6 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .genre-badge {
   display: inline-block;
   cursor: pointer;
-}
   font-size: 0.65rem; font-weight: 600;
   padding: 0.15rem 0.45rem;
   border-radius: 3px;
