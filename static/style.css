@@ -2138,6 +2138,20 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .badge-audible_jp { background: var(--audible-light); color: var(--audible-accent); }
 .badge-kindle { background: #ddeeff; color: #3366aa; }
 .badge-paper  { background: #e8f5e9; color: #2e7d32; }
+@media (max-width: 600px) {
+  .badge-source[data-short] {
+    font-size: 0;        /* テキストを非表示 */
+    padding: 0.06rem 0.28rem;
+    min-width: 1.4em;
+    text-align: center;
+  }
+  .badge-source[data-short]::before {
+    content: attr(data-short);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+}
 .badge-favorite { color: #c45c6a; font-size: 0.75rem; }
 .badge-short {
   padding: 0.06rem 0.25rem;

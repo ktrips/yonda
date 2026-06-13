@@ -407,7 +407,16 @@ function getAudibleRatingUrl(book) {
 }
 
 const SOURCE_LABELS = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'Kindle', paper: 'Paper' };
+const SOURCE_SHORT_LABELS = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' };
 function sourceLabel(source) { return SOURCE_LABELS[source] || source || ''; }
+function sourceShortLabel(source) { return SOURCE_SHORT_LABELS[source] || SOURCE_LABELS[source] || source || ''; }
+function sourceBadgeHtml(source, extraClass = '') {
+  if (!source) return '';
+  const label = escapeHtml(sourceLabel(source));
+  const short = escapeHtml(sourceShortLabel(source));
+  const cls = `badge-source badge-${escapeHtml(source)}${extraClass ? ' ' + extraClass : ''}`;
+  return `<span class="${cls}" data-short="${short}">${label}</span>`;
+}
 
 function formatSyncDate(isoStr) {
   if (!isoStr) return '未取得';
@@ -3649,7 +3658,7 @@ function renderMessageBookItem(item) {
   const summary = (book.summary || '').trim();
   const summaryCell = summary ? escapeHtml(summary.length > 80 ? summary.substring(0, 80) + '…' : summary) : '—';
   const genre = book.genre ? genreBadgeHtml(book, true) : '—';
-  const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span>` : '';
+  const srcBadge = book.source ? sourceBadgeHtml(book.source) : '';
   const tsundoku = getTsundokuDays(book);
   const tsundokuStr = tsundoku != null ? tsundoku + '日' : '—';
 
@@ -4018,12 +4027,12 @@ function openBookDetail(book) {
   // ソースバッジ + ジャンル（Amazon/メルカリボタンの下）
   const srcBadgeEl = document.getElementById('bookDetailSrcBadge');
   if (srcBadgeEl) {
-    const srcLabel = sourceLabel(book.source) || '';
-    if (srcLabel) {
-      srcBadgeEl.className = `badge-source badge-${escapeHtml(book.source)} badge-detail-src`;
-      srcBadgeEl.textContent = srcLabel;
-      srcBadgeEl.title = srcLabel;
+    if (book.source) {
+      srcBadgeEl.outerHTML = sourceBadgeHtml(book.source, 'badge-detail-src').replace(
+        'class="', `id="bookDetailSrcBadge" class="`
+      );
     } else {
+      srcBadgeEl.className = '';
       srcBadgeEl.textContent = '';
     }
   }
@@ -4423,8 +4432,9 @@ function renderBookCardHtml(book, { extraClass = '', extraAttrs = '', showUnrate
     ? (cardDetailUrl
         ? `<a href="${escapeHtml(cardDetailUrl)}" target="_blank" rel="noopener"
              class="badge-source badge-${escapeHtml(book.source)} badge-card-top"
+             data-short="${escapeHtml(sourceShortLabel(book.source))}"
              title="${escapeHtml(srcFullLabel)}" onclick="event.stopPropagation()">${escapeHtml(srcFullLabel)}</a>`
-        : `<span class="badge-source badge-${escapeHtml(book.source)} badge-card-top">${escapeHtml(srcFullLabel)}</span>`)
+        : sourceBadgeHtml(book.source, 'badge-card-top'))
     : '';
   const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
   const completedBadge = book.completed
@@ -4527,7 +4537,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
         headerRow = `<tr class="rating-group-row"><td colspan="12" class="rating-group-header">${escapeHtml(sg)}（${cnt}冊）</td></tr>`;
       }
     }
-    const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}" data-filter-source="${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span>` : '';
+    const srcBadge = book.source ? `<span class="badge-source badge-${escapeHtml(book.source)}" data-short="${escapeHtml(sourceShortLabel(book.source))}" data-filter-source="${escapeHtml(book.source)}">${escapeHtml(sourceLabel(book.source))}</span>` : '';
     const completedBadge = book.completed ? `<span class="badge-completed" data-filter-source="${escapeHtml(book.source || '')}">読了</span> ` : '';
     const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
     const genre = book.genre ? genreBadgeHtml(book, true) : '—';
