@@ -2195,7 +2195,7 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .book-table .my-rating-under-title-cell .stars { color: var(--star); letter-spacing: -1px; }
 .book-table .my-rating-under-title-cell .my-rating-comment { margin-left: 0.25rem; }
 .book-table .col-author { max-width: 100px; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.book-table .col-genre { max-width: 200px; }
+.book-table .col-genre { max-width: 140px; }
 .genre-badge { font-size: 0.6rem; }
 .genre-original { font-size: 0.56rem; }
 
