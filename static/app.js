@@ -4515,12 +4515,12 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
         <img class="book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
              onerror="this.src='${NO_COVER}'">
         <div class="book-card-body">
-          <div class="book-card-top-row">${genreHtml}${srcBadge}${favoriteBadge}</div>
           <div class="book-card-title">${escapeHtml(book.title)}</div>
           <div class="book-card-author">${escapeHtml(book.author || '')}${authorExtra}${completedExtra}</div>
           ${bookRatingRowHtml(book, { showUnrated: !!_authUser })}
           ${progressBarHtml}
           ${progressMeta}
+          <div class="book-card-top-row">${genreHtml}${srcBadge}${favoriteBadge}</div>
           ${summaryHtml}
         </div>
       </div>
