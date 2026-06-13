@@ -872,11 +872,11 @@ function normalizeGenre(genreStr) {
 function displayGenre(genre) { return normalizeGenre(genre); }
 function rankingGenre(genre)  { return normalizeGenre(genre); }
 
-/** 紙の本として既読登録 */
-async function addPaperBook(title, author, coverUrl, summary, genre, detailUrl = '') {
+/** 紙の本追加確認モーダルを開く */
+function openPaperAddConfirm(title, author, coverUrl, summary, genre, detailUrl = '') {
   if (!title) return;
 
-  // フロントエンドで事前重複チェック（タイトルの正規化一致）
+  // フロントエンドで事前重複チェック
   const titleNorm = title.trim().toLowerCase();
   const existing = allBooks.find(b => (b.title || '').trim().toLowerCase() === titleNorm);
   if (existing) {
@@ -885,29 +885,80 @@ async function addPaperBook(title, author, coverUrl, summary, genre, detailUrl =
     return;
   }
 
-  // カバー画像：撮影写真がある場合は常に優先（外部URLより鮮明な実物写真を使う）
   const effectiveCover = window._lastBookPhotoCover || coverUrl || '';
-  // 著者・概要：引数が空の場合は自動取得データで補完
   const bookInfo = window._lastBookInfo || {};
   const effectiveAuthor = author || bookInfo.author || '';
   const effectiveSummary = summary || bookInfo.summary || '';
 
+  // モーダルに情報をセット
+  document.getElementById('paperConfirmTitle').value  = title;
+  document.getElementById('paperConfirmAuthor').value = effectiveAuthor;
+  document.getElementById('paperConfirmStatus').value = 'completed';
+  document.getElementById('paperConfirmRating').value = '';
+  document.getElementById('paperConfirmComment').value = '';
+  _setPaperConfirmStars(0);
+
+  const img = document.getElementById('paperConfirmCoverImg');
+  const NO_COVER_SVG = 'data:image/svg+xml,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="90" height="126" viewBox="0 0 90 126">' +
+    '<rect fill="#f0e6d8" width="90" height="126"/>' +
+    '<text x="45" y="68" text-anchor="middle" fill="#8a7968" font-size="11" font-family="sans-serif">No Cover</text></svg>'
+  );
+  img.src = effectiveCover || NO_COVER_SVG;
+  img.onerror = () => { img.src = NO_COVER_SVG; };
+
+  // 一時データを保存してボタン押下時に参照
+  document.getElementById('paperAddConfirmModal')._pendingData = {
+    title, author: effectiveAuthor, coverUrl: effectiveCover,
+    summary: effectiveSummary, genre, detailUrl,
+  };
+
+  document.getElementById('paperAddConfirmModal').classList.add('open');
+}
+
+function _setPaperConfirmStars(rating) {
+  document.querySelectorAll('#paperConfirmStars .paper-star-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.value, 10) <= rating);
+  });
+}
+
+function closePaperAddConfirm() {
+  document.getElementById('paperAddConfirmModal').classList.remove('open');
+}
+
+async function _submitPaperBookAdd() {
+  const modal = document.getElementById('paperAddConfirmModal');
+  const pending = modal._pendingData || {};
+  const saveBtn = document.getElementById('paperConfirmSaveBtn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = '追加中…';
+
+  const title      = document.getElementById('paperConfirmTitle').value.trim();
+  const author     = document.getElementById('paperConfirmAuthor').value.trim();
+  const status     = document.getElementById('paperConfirmStatus').value;
+  const ratingVal  = parseInt(document.getElementById('paperConfirmRating').value || '0', 10) || null;
+  const commentVal = document.getElementById('paperConfirmComment').value.trim();
+
   const today = new Date();
   const pad = n => String(n).padStart(2, '0');
-  const jstOffset = '+09:00';
-  const completedDate = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}T${pad(today.getHours())}:${pad(today.getMinutes())}:${pad(today.getSeconds())}${jstOffset}`;
+  const jst = '+09:00';
+  const completedDate = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}T${pad(today.getHours())}:${pad(today.getMinutes())}:${pad(today.getSeconds())}${jst}`;
+
   try {
     const res = await fetch(API.addPaperBook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title,
-        author: effectiveAuthor,
-        cover_url: effectiveCover,
-        summary: effectiveSummary,
-        genre,
-        completed_date: completedDate,
-        detail_url: detailUrl || '',
+        author,
+        cover_url: pending.coverUrl || '',
+        summary: pending.summary || '',
+        genre: pending.genre || '',
+        completed_date: status === 'completed' ? completedDate : '',
+        status,
+        detail_url: pending.detailUrl || '',
+        rating: ratingVal,
+        comment: commentVal,
       }),
     });
     const data = await res.json();
@@ -919,7 +970,7 @@ async function addPaperBook(title, author, coverUrl, summary, genre, detailUrl =
       showToast(`登録失敗: ${data.error || '不明なエラー'}`, 'error');
       return;
     }
-    showToast(`「${title}」を紙の本として登録しました`, 'success');
+    closePaperAddConfirm();
     window._lastBookPhotoCover = null;
     window._lastBookInfo = null;
     if (data.books) {
@@ -929,17 +980,31 @@ async function addPaperBook(title, author, coverUrl, summary, genre, detailUrl =
       applyFilters();
       if (activeMainTab === 'yomu') renderBookSearchResults();
     }
-    // Yomuの気になる本リストにも追加
-    const savedBook = data.book || {};
-    addToAmazonList({
-      title: savedBook.title || title,
-      author: savedBook.author || effectiveAuthor,
-      cover_url: (savedBook.cover_url || effectiveCover || '').startsWith('data:') ? '' : (savedBook.cover_url || ''),
-      asin: '',
-    }).then(() => loadAmazonList()).catch(() => {});
+    // 保存後に編集モーダルを開いて追加情報を入力できるようにする
+    const savedBook = data.book;
+    if (savedBook) {
+      showToast(`「${title}」を登録しました。追加情報を入力できます`, 'success');
+      setTimeout(() => openPaperBookEdit(savedBook), 250);
+      addToAmazonList({
+        title: savedBook.title || title,
+        author: savedBook.author || author,
+        cover_url: (savedBook.cover_url || '').startsWith('data:') ? '' : (savedBook.cover_url || ''),
+        asin: '',
+      }).then(() => loadAmazonList()).catch(() => {});
+    } else {
+      showToast(`「${title}」を紙の本として登録しました`, 'success');
+    }
   } catch (e) {
     showToast('登録中にエラーが発生しました', 'error');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = '追加する';
   }
+}
+
+/** 紙の本として既読登録（確認モーダルを経由） */
+async function addPaperBook(title, author, coverUrl, summary, genre, detailUrl = '') {
+  openPaperAddConfirm(title, author, coverUrl, summary, genre, detailUrl);
 }
 
 /** トースト通知 */
@@ -5855,6 +5920,25 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && document.getElementById('paperBookEditModal')?.classList.contains('open')) {
     closePaperBookEdit();
   }
+});
+
+// 紙の本 追加確認モーダル イベントリスナー
+document.getElementById('paperAddConfirmClose')?.addEventListener('click', closePaperAddConfirm);
+document.getElementById('paperAddConfirmModal')?.addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closePaperAddConfirm();
+});
+document.getElementById('paperConfirmCancelBtn')?.addEventListener('click', closePaperAddConfirm);
+document.getElementById('paperConfirmSaveBtn')?.addEventListener('click', _submitPaperBookAdd);
+document.getElementById('paperConfirmStars')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.paper-star-btn');
+  if (!btn) return;
+  const v = parseInt(btn.dataset.value, 10);
+  document.getElementById('paperConfirmRating').value = v;
+  _setPaperConfirmStars(v);
+});
+document.getElementById('paperConfirmStarClear')?.addEventListener('click', () => {
+  document.getElementById('paperConfirmRating').value = '';
+  _setPaperConfirmStars(0);
 });
 
 // 紙の本 編集モーダル イベントリスナー

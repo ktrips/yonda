@@ -637,6 +637,61 @@
   </div>
 
   <!-- 紙の本 編集モーダル -->
+  <!-- 紙の本 追加確認モーダル -->
+  <div class="modal-overlay" id="paperAddConfirmModal">
+    <div class="modal modal-paper-confirm">
+      <div class="modal-header">
+        <h2>📚 紙の本を追加</h2>
+        <button type="button" class="modal-close" id="paperAddConfirmClose" aria-label="閉じる">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="paper-confirm-layout">
+          <div class="paper-confirm-cover">
+            <img id="paperConfirmCoverImg" src="" alt="表紙">
+          </div>
+          <div class="paper-confirm-fields">
+            <div class="paper-edit-field">
+              <label>タイトル</label>
+              <input type="text" id="paperConfirmTitle" class="paper-edit-input">
+            </div>
+            <div class="paper-edit-field">
+              <label>著者</label>
+              <input type="text" id="paperConfirmAuthor" class="paper-edit-input">
+            </div>
+            <div class="paper-edit-field">
+              <label>読書状態</label>
+              <select id="paperConfirmStatus" class="paper-edit-input">
+                <option value="completed" selected>読了</option>
+                <option value="in_progress">読書中</option>
+                <option value="unread">未読</option>
+              </select>
+            </div>
+            <div class="paper-edit-field">
+              <label>評価（★）</label>
+              <div class="paper-edit-stars" id="paperConfirmStars" role="group" aria-label="評価">
+                <button type="button" class="paper-star-btn" data-value="1">★</button>
+                <button type="button" class="paper-star-btn" data-value="2">★</button>
+                <button type="button" class="paper-star-btn" data-value="3">★</button>
+                <button type="button" class="paper-star-btn" data-value="4">★</button>
+                <button type="button" class="paper-star-btn" data-value="5">★</button>
+                <button type="button" class="paper-star-clear" id="paperConfirmStarClear">クリア</button>
+              </div>
+              <input type="hidden" id="paperConfirmRating" value="">
+            </div>
+            <div class="paper-edit-field">
+              <label>書評・コメント</label>
+              <textarea id="paperConfirmComment" class="paper-edit-input paper-edit-textarea" rows="2" placeholder="感想・メモを入力（任意）"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="paper-confirm-actions">
+          <button type="button" class="btn btn-secondary" id="paperConfirmCancelBtn">キャンセル</button>
+          <button type="button" class="btn btn-primary" id="paperConfirmSaveBtn">追加する</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="paperBookEditModal">
     <div class="modal modal-paper-edit">
       <div class="modal-header">
