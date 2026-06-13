@@ -4007,21 +4007,16 @@ function openBookDetail(book) {
     }
   }
 
-  // タイトル: detail URLがあればリンクにする、ソースバッジも付ける
+  // タイトル（ソースバッジはボタン下に移動したのでタイトルには含めない）
   const titleEl = document.getElementById('bookDetailTitle');
-  const srcShortMap = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' };
-  const srcShortDetail = srcShortMap[book.source] || '';
-  const srcBadgeDetail = srcShortDetail
-    ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short badge-detail-src" title="${escapeHtml(sourceLabel(book.source))}">${srcShortDetail}</span> `
-    : '';
   const titleText = escapeHtml(book.title || '—');
   if (detailHref) {
-    titleEl.innerHTML = `${srcBadgeDetail}<a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener" class="book-detail-title-link">${titleText}</a>`;
+    titleEl.innerHTML = `<a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener" class="book-detail-title-link">${titleText}</a>`;
   } else {
-    titleEl.innerHTML = `${srcBadgeDetail}${titleText}`;
+    titleEl.innerHTML = titleText;
   }
 
-  // 著者: detail URLがあればリンクにする
+  // 著者
   const authorEl = document.getElementById('bookDetailAuthor');
   if (book.author && detailHref) {
     authorEl.innerHTML = `<a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener" class="book-detail-meta-link">著者: ${escapeHtml(book.author)}</a>`;
@@ -4029,6 +4024,38 @@ function openBookDetail(book) {
     authorEl.textContent = book.author ? `著者: ${book.author}` : '';
   }
 
+  // ナレーター（Audible: book.comment から "ナレーター: XXX" を抽出）
+  const narratorEl = document.getElementById('bookDetailNarrator');
+  if (narratorEl) {
+    let narratorText = '';
+    if (book.source === 'audible_jp' && book.comment) {
+      const m = book.comment.match(/ナレーター:\s*([^/\n]+)/);
+      if (m) narratorText = `ナレーター: ${m[1].trim()}`;
+    }
+    narratorEl.textContent = narratorText;
+    narratorEl.style.display = narratorText ? '' : 'none';
+  }
+
+  // 再生時間（Audible の runtime_length_min）
+  const runtimeEl = document.getElementById('bookDetailRuntime');
+  if (runtimeEl) {
+    const rt = book.runtime_length_min ? formatRuntime(book.runtime_length_min) : '';
+    runtimeEl.textContent = rt || '';
+    runtimeEl.style.display = rt ? '' : 'none';
+  }
+
+  // ソースバッジ + ジャンル（Amazon/メルカリボタンの下）
+  const srcBadgeEl = document.getElementById('bookDetailSrcBadge');
+  if (srcBadgeEl) {
+    const srcLabel = sourceLabel(book.source) || '';
+    if (srcLabel) {
+      srcBadgeEl.className = `badge-source badge-${escapeHtml(book.source)} badge-detail-src`;
+      srcBadgeEl.textContent = srcLabel;
+      srcBadgeEl.title = srcLabel;
+    } else {
+      srcBadgeEl.textContent = '';
+    }
+  }
   const genreEl = document.getElementById('bookDetailGenre');
   if (book.genre) {
     const canonical = normalizeGenre(book.genre);
@@ -4061,27 +4088,37 @@ function openBookDetail(book) {
 
   const ratingEl = document.getElementById('bookDetailRating');
   const reviewUrl = reviewUrlForBook(book);
-  const dispRating = displayRating(book); // 一覧と同じ: Audibleはcatalog_rating優先
-  const reviewText = book.review_headline || book.comment || '';
+  const dispRating = displayRating(book);
+  // 個人レビューテキスト: Audible は review_headline、それ以外は comment
+  const personalReview = (book.source === 'audible_jp'
+    ? (book.review_headline || '')
+    : (book.comment || '')).trim();
+  // この本がログインユーザー自身のものか
+  const isOwnBook = !!_authUser && allBooks.some(b => b.book_id && b.book_id === book.book_id);
 
   if (dispRating > 0) {
-    // 星あり → クリックでレビュー画面へ
     const starsContent = starsHtml(dispRating);
     ratingEl.innerHTML = reviewUrl
       ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="rating-link stars-link" title="レビュー画面へ">${starsContent}</a>`
       : starsContent;
-  } else if (!reviewText && reviewUrl) {
-    // 星なし + コメントなし → 未レビューボタン
-    ratingEl.innerHTML = `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-no-review">未レビュー</a>`;
+  } else if (isOwnBook && !personalReview) {
+    // 自分の本で未レビューの場合のみ「未レビュー」ボタンを表示
+    if (book.source === 'paper') {
+      ratingEl.innerHTML = `<button type="button" class="btn-no-review" onclick="closeBookDetail();openPaperBookEditToRate('${escapeHtml(book.book_id || '')}')">未レビュー</button>`;
+    } else if (reviewUrl) {
+      ratingEl.innerHTML = `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-no-review">未レビュー</a>`;
+    } else {
+      ratingEl.innerHTML = '';
+    }
   } else {
     ratingEl.innerHTML = '';
   }
 
-  // 個人レビュー（見出し or コメント）を星の右横にインライン表示
+  // 個人レビューをインライン表示
   const reviewInlineEl = document.getElementById('bookDetailReviewInline');
   if (reviewInlineEl) {
-    reviewInlineEl.textContent = reviewText;
-    reviewInlineEl.style.display = reviewText ? '' : 'none';
+    reviewInlineEl.textContent = personalReview;
+    reviewInlineEl.style.display = personalReview ? '' : 'none';
   }
 
   document.getElementById('bookDetailLoanDate').textContent =
@@ -4108,7 +4145,7 @@ function openBookDetail(book) {
     compEl.style.display = 'none';
   }
 
-  // コメントはrating行のインラインレビューで表示済みのため非表示
+  // コメント欄は rating 行で表示済みのため非表示
   document.getElementById('bookDetailComment').textContent = '';
   document.getElementById('bookDetailComment').style.display = 'none';
   document.getElementById('bookDetailCover').src = book.cover_url || NO_COVER;
@@ -4127,7 +4164,7 @@ function openBookDetail(book) {
     mercariEl.style.display = searchQ ? '' : 'none';
   }
 
-  // 概要: detail URLがあればリンクにする + ソースバッジを概要見出しに追加
+  // 概要
   const summaryText = book.full_summary || book.summary || '';
   const summaryEl = document.getElementById('bookDetailSummary');
   if (summaryText && detailHref) {
@@ -4135,16 +4172,11 @@ function openBookDetail(book) {
   } else {
     summaryEl.textContent = summaryText || '（概要なし）';
   }
-  // 概要セクションのヘッダーにソースバッジを追加
+  // 概要ヘッダーをリセット（以前付けていたソースバッジを削除）
   const summaryWrap = summaryEl.closest('.book-detail-summary-wrap');
   if (summaryWrap) {
-    let summaryH3 = summaryWrap.querySelector('h3');
-    if (summaryH3) {
-      const srcBadgeSummary = detailHref
-        ? `<a href="${escapeHtml(detailHref)}" target="_blank" rel="noopener" class="badge-source badge-${escapeHtml(book.source)} badge-summary-src" title="${escapeHtml(sourceLabel(book.source))}" style="margin-left:0.5rem;font-size:0.72rem;">${escapeHtml(sourceLabel(book.source))}</a>`
-        : `<span class="badge-source badge-${escapeHtml(book.source)} badge-summary-src" style="margin-left:0.5rem;font-size:0.72rem;">${escapeHtml(sourceLabel(book.source))}</span>`;
-      summaryH3.innerHTML = `概要 ${srcBadgeSummary}`;
-    }
+    const h3 = summaryWrap.querySelector('h3');
+    if (h3) h3.textContent = '概要';
   }
 
   // 書評ポイント横「レビューを書く」ボタン
