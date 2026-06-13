@@ -481,6 +481,72 @@ class KindleAdapter(LibraryAdapter):
             logger.debug("_fetch_reading_progress 全体エラー (無視します): %s", e)
             return {}
 
+    # Amazon オーナーシップ API のエンドポイント候補（新旧の名前変更に対応）
+    _OWNERSHIP_ENDPOINTS = [
+        "/gp/digital/fiona/manage/features/order-history/ajax/queryOwnership_refactored2.html",
+        "/gp/digital/fiona/manage/features/order-history/ajax/queryOwnership_refactored.html",
+        "/gp/digital/fiona/manage/features/order-history/ajax/queryOwnership.html",
+    ]
+
+    def _preflight_and_csrf(self, session: requests.Session) -> str:
+        """管理ページへプリフライトしてセッションを確立し、CSRF トークンを返す。"""
+        csrf_token = ""
+        for url in [
+            AMAZON_JP + "/hz/mycd/digital-console",
+            AMAZON_JP + "/gp/digital/fiona/manage",
+        ]:
+            try:
+                r = session.get(url, timeout=30, allow_redirects=True)
+                r.raise_for_status()
+                final_url = r.url.lower()
+                logger.debug("プリフライト OK: %s → %s", url.split("/")[-1], final_url[:80])
+                if "signin" in final_url and "digital" not in final_url and "fiona" not in final_url:
+                    self.clear_session()
+                    raise RuntimeError(
+                        "Amazon ログインセッションが無効になっています。"
+                        "Amazon設定から再ログインしてください。"
+                    )
+                # CSRF トークンを抽出（複数パターン対応）
+                for pattern in [
+                    r'"anti-csrftoken"\s*[,:\s]+value="([^"]+)"',
+                    r'anti-csrftoken["\s]*[:=]\s*["\']([^"\']+)["\']',
+                    r'"csrfToken"\s*:\s*"([^"]+)"',
+                    r'csrfToken["\s]*=\s*["\']([^"\']+)["\']',
+                    r'"token"\s*:\s*"([A-Za-z0-9+/=]{20,})"',
+                ]:
+                    m = re.search(pattern, r.text)
+                    if m:
+                        csrf_token = m.group(1)
+                        break
+                return csrf_token
+            except requests.RequestException as e:
+                logger.debug("プリフライト %s 失敗: %s（次を試します）", url.split("/")[-1], e)
+        return csrf_token
+
+    def _resolve_ownership_endpoint(
+        self, session: requests.Session, ajax_headers: dict
+    ) -> str | None:
+        """使用可能なオーナーシップ API エンドポイントを返す。見つからない場合は None。"""
+        for path in self._OWNERSHIP_ENDPOINTS:
+            url = AMAZON_JP + path
+            try:
+                r = session.post(
+                    url,
+                    data={"offset": 0, "count": 1},
+                    headers=ajax_headers,
+                    timeout=20,
+                )
+                r.raise_for_status()
+                raw = re.sub(r"[\x00-\x1f]", "", r.text).strip()
+                if raw.startswith("{"):
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, dict):
+                        logger.info("Kindle API エンドポイント確定: %s", path.split("/")[-1])
+                        return url
+            except Exception as e:
+                logger.debug("エンドポイント %s 失敗: %s（次を試します）", path.split("/")[-1], type(e).__name__)
+        return None
+
     def _fetch_from_amazon(self, session: requests.Session) -> list[BookRecord]:
         """Amazon FIONA API から購入済み Kindle タイトルを取得（読書進捗情報を含む）"""
         raw_items: list[dict] = []
@@ -488,27 +554,30 @@ class KindleAdapter(LibraryAdapter):
         count = 100
         seen_asins: set[str] = set()
 
-        # FIONA 管理ページにアクセスしてセッションを確立（API 呼び出し前に必要）
-        try:
-            r = session.get(AMAZON_JP + "/gp/digital/fiona/manage", timeout=30)
-            r.raise_for_status()
-            logger.debug("FIONA 管理ページアクセス成功: %s", r.url)
-            if "signin" in r.url.lower() and "fiona" not in r.url.lower():
-                logger.warning("FIONA アクセス時にサインインページにリダイレクトされました")
-                self.clear_session()
-                raise RuntimeError(
-                    "Amazon ログインセッションが無効になっています。"
-                    "もう一度「読書記録を取得」から OTP を入力してログインしてください。"
-                )
-        except requests.RequestException as e:
-            logger.warning("FIONA 管理ページ取得エラー: %s", e)
+        # プリフライト + CSRF トークン取得
+        csrf_token = self._preflight_and_csrf(session)
 
-        api_url = AMAZON_JP + "/gp/digital/fiona/manage/features/order-history/ajax/queryOwnership_refactored2.html"
-        ajax_headers = {
+        ajax_headers: dict[str, str] = {
             "X-Requested-With": "XMLHttpRequest",
             "Accept": "application/json, text/javascript, */*; q=0.01",
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         }
+        if csrf_token:
+            ajax_headers["anti-csrftoken"] = csrf_token
+            logger.debug("CSRF トークンをヘッダーに設定")
+
+        # 使用可能なエンドポイントを探す
+        api_url = self._resolve_ownership_endpoint(session, ajax_headers)
+        if not api_url:
+            path = self._find_data_path()
+            if path:
+                logger.info("全 API エンドポイント失敗。ローカルファイルから取得: %s", path)
+                return self._fetch_from_xml(path) if path.suffix == ".xml" else self._fetch_from_sqlite(path)
+            raise RuntimeError(
+                "Amazon の Kindle API に接続できませんでした。"
+                "Amazon の仕様変更またはログインセッションの期限切れの可能性があります。"
+                "Amazon設定から再ログインしてください。"
+            )
 
         # ステップ 1: オーナーシップ API からすべてのアイテムを収集
         while True:
@@ -523,24 +592,18 @@ class KindleAdapter(LibraryAdapter):
                 raw = re.sub(r"[\x00-\x1f]", "", r.text)
                 raw_stripped = raw.strip()
                 if raw_stripped.startswith("<") or "<!DOCTYPE" in raw_stripped[:50]:
-                    raise ValueError(
-                        "API が HTML を返しました（ログインが必要な可能性）。"
-                        "Kindle for Mac を起動して蔵書を同期した後、ローカルファイルから取得する方法も試してください。"
-                    )
+                    raise ValueError("API が HTML を返しました（ログインセッション切れの可能性）")
                 data = json.loads(raw)
             except (json.JSONDecodeError, requests.RequestException, ValueError) as e:
                 logger.exception("FIONA API 取得失敗: %s", e)
                 if not raw_items:
-                    msg = str(e) if isinstance(e, ValueError) else ""
                     path = self._find_data_path()
                     if path:
                         logger.info("FIONA API 失敗。ローカルファイルから取得を試行: %s", path)
                         return self._fetch_from_xml(path) if path.suffix == ".xml" else self._fetch_from_sqlite(path)
                     raise RuntimeError(
                         "Amazon から Kindle 蔵書を取得できませんでした。"
-                        "ログイン状態を確認するか、Amazon の仕様変更の可能性があります。"
-                        "Kindle for Mac を起動して蔵書を同期し、ローカルファイル（BookData.sqlite）から取得する方法も試してください。"
-                        + (" " + msg if msg else "")
+                        "Amazon設定から再ログインしてください。"
                     ) from e
                 break
 

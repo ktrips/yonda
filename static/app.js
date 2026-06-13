@@ -469,31 +469,23 @@ async function manualFetchSource(sourceId) {
 
     if (data.success) {
       showToast(`${sourceId}の取得が完了しました`, 'success');
-      // データを再読み込み
       if (typeof loadBooks === 'function') await loadBooks();
       await loadMessages();
     } else if (data.needs_otp) {
-      // Kindle OTP が必要な場合
-      const otp = prompt('Kindle の2段階認証コード（OTP）を入力してください:');
-      if (otp) {
-        const otpResponse = await fetch('/api/fetch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            library_id: 'kindle',
-            session_id: data.session_id,
-            otp: otp
-          })
-        });
-        const otpData = await otpResponse.json();
-        if (otpData.success) {
-          showToast('Kindleの取得が完了しました', 'success');
-          if (typeof loadBooks === 'function') await loadBooks();
-          await loadMessages();
-        } else {
-          showToast(`エラー: ${otpData.error || '取得に失敗しました'}`, 'error');
-        }
-      }
+      // Kindle OTP が必要: インラインモーダルで入力
+      btn.disabled = false;
+      btn.textContent = originalText;
+      btn.style.opacity = '1';
+      _kindleOtpPendingSessionId = data.session_id;
+      _kindleOtpPendingSourceBtn = null;
+      const modal = document.getElementById('kindleOtpModal');
+      const input = document.getElementById('kindleOtpInput');
+      const errEl = document.getElementById('kindleOtpError');
+      if (errEl) errEl.style.display = 'none';
+      if (input) input.value = '';
+      if (modal) modal.style.display = 'flex';
+      if (input) input.focus();
+      return; // finaly でボタン復元しない
     } else {
       showToast(`エラー: ${data.error || '取得に失敗しました'}`, 'error');
     }
@@ -4765,6 +4757,62 @@ document.getElementById('recommendRefreshBtn')?.addEventListener('click', () => 
   if (activeBookTab === 'recommend') renderYondaRecommend();
 });
 document.getElementById('messagesRefreshBtn')?.addEventListener('click', loadMessages);
+
+/* --- Kindle OTP モーダル --- */
+(function () {
+  const modal = document.getElementById('kindleOtpModal');
+  const input = document.getElementById('kindleOtpInput');
+  const submitBtn = document.getElementById('kindleOtpSubmitBtn');
+  const cancelBtn = document.getElementById('kindleOtpCancelBtn');
+  const closeBtn = document.getElementById('kindleOtpClose');
+  const errEl = document.getElementById('kindleOtpError');
+
+  function closeKindleOtpModal() {
+    if (modal) modal.style.display = 'none';
+    _kindleOtpPendingSessionId = null;
+    if (input) input.value = '';
+    if (errEl) errEl.style.display = 'none';
+  }
+
+  async function submitKindleOtpFetch() {
+    const otp = (input?.value || '').trim();
+    if (!otp) {
+      if (errEl) { errEl.textContent = 'コードを入力してください。'; errEl.style.display = ''; }
+      return;
+    }
+    if (!_kindleOtpPendingSessionId) {
+      if (errEl) { errEl.textContent = 'セッションが期限切れです。再度取り込みをお試しください。'; errEl.style.display = ''; }
+      return;
+    }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '送信中…'; }
+    try {
+      const res = await fetch('/api/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ library_id: 'kindle', session_id: _kindleOtpPendingSessionId, otp }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        closeKindleOtpModal();
+        showToast('Kindle の取得が完了しました', 'success');
+        if (typeof loadBooks === 'function') await loadBooks();
+        await loadMessages();
+      } else {
+        if (errEl) { errEl.textContent = data.error || 'OTP が正しくありません。再度お試しください。'; errEl.style.display = ''; }
+      }
+    } catch (e) {
+      if (errEl) { errEl.textContent = '通信エラー: ' + e.message; errEl.style.display = ''; }
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = '送信'; }
+    }
+  }
+
+  submitBtn?.addEventListener('click', submitKindleOtpFetch);
+  cancelBtn?.addEventListener('click', closeKindleOtpModal);
+  closeBtn?.addEventListener('click', closeKindleOtpModal);
+  input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitKindleOtpFetch(); });
+  modal?.addEventListener('click', (e) => { if (e.target === modal) closeKindleOtpModal(); });
+})();
 document.getElementById('menuAdminUsers')?.addEventListener('click', () => {
   closeHamburger();
   openAdminUsersModal();
@@ -5439,6 +5487,7 @@ async function loadCredentialForModal() {
 }
 
 let _kindleOtpSessionId = null;
+let _kindleOtpPendingSessionId = null; // manualFetchSource OTP フロー用
 
 async function testAndSaveCredentials() {
   const libraryId = document.getElementById('credLibrarySelect').value;

@@ -639,6 +639,25 @@
   <!-- 紙の本 編集モーダル -->
   <!-- 紙の本 追加確認モーダル -->
   <div class="modal-overlay" id="paperAddConfirmModal">
+
+  <!-- Kindle OTP モーダル -->
+  <div class="modal-overlay" id="kindleOtpModal" style="display:none;">
+    <div class="modal" style="max-width:360px;padding:24px 20px;">
+      <div class="modal-header" style="margin-bottom:16px;">
+        <h2 style="font-size:1.1rem;">🔐 Kindle 2段階認証</h2>
+        <button type="button" class="modal-close" id="kindleOtpClose" aria-label="閉じる">&times;</button>
+      </div>
+      <p style="font-size:0.88rem;color:#555;margin-bottom:14px;">Amazon から届いた確認コード（OTP）を入力してください。</p>
+      <input type="text" id="kindleOtpInput" inputmode="numeric" maxlength="8"
+             class="filter-select" style="width:100%;font-size:1.2rem;letter-spacing:0.2em;text-align:center;padding:10px;"
+             placeholder="000000" autocomplete="one-time-code">
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button type="button" class="btn btn-secondary" id="kindleOtpCancelBtn" style="flex:1;">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="kindleOtpSubmitBtn" style="flex:2;">送信</button>
+      </div>
+      <p id="kindleOtpError" style="color:#c0392b;font-size:0.84rem;margin-top:8px;display:none;"></p>
+    </div>
+  </div>
     <div class="modal modal-paper-confirm">
       <div class="modal-header">
         <h2>📚 紙の本を追加</h2>
