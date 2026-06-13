@@ -56,12 +56,16 @@ function _applyAuthUI() {
   if (_authUser) {
     if (loginBtn) loginBtn.style.display = 'none';
     if (userEl) userEl.style.display = '';
-    if (avatarEl && _authUser.picture) avatarEl.src = _authUser.picture;
+    if (avatarEl && _authUser.picture) {
+      avatarEl.src = _authUser.picture.includes('=s') ? _authUser.picture : _authUser.picture + '=s64-c';
+    }
     if (nameEl) nameEl.textContent = _authUser.name || _authUser.email || '';
     // メニュー内: ユーザー情報表示、ログインボタン非表示
     if (menuUserInfo) menuUserInfo.style.display = '';
     if (menuLoginBtn) menuLoginBtn.style.display = 'none';
-    if (menuUserAvatar && _authUser.picture) menuUserAvatar.src = _authUser.picture;
+    if (menuUserAvatar && _authUser.picture) {
+      menuUserAvatar.src = _authUser.picture.includes('=s') ? _authUser.picture : _authUser.picture + '=s64-c';
+    }
     if (menuUserName) menuUserName.textContent = _authUser.name || _authUser.email || '';
     // ログイン済みメニュー表示
     if (menuLoggedInSection) menuLoggedInSection.style.display = '';
@@ -1603,10 +1607,16 @@ function renderCommunitySection() {
         const dateText = msg.created_at ? formatSyncDate(msg.created_at) : '日時不明';
         const userName  = msgUser.name || msgUser.email || '匿名';
         const avatarSrc = msgUser.picture || '';
-
-        const avatarHtml = avatarSrc
-          ? `<img src="${escapeHtml(avatarSrc)}" class="ig-avatar" alt="" loading="lazy">`
-          : `<div class="ig-avatar ig-avatar-placeholder">${escapeHtml(userName[0] || '?')}</div>`;
+        // Google 写真URLにサイズ指定を付与（=s64-c）
+        const avatarUrl = avatarSrc && !avatarSrc.includes('=s')
+          ? avatarSrc + '=s64-c'
+          : avatarSrc;
+        const initial = escapeHtml([...userName][0] || '?');
+        const avatarHtml = avatarUrl
+          ? `<img src="${escapeHtml(avatarUrl)}" class="ig-avatar" alt="${escapeHtml(userName)}" loading="lazy"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+             ><div class="ig-avatar ig-avatar-placeholder" style="display:none;">${initial}</div>`
+          : `<div class="ig-avatar ig-avatar-placeholder">${initial}</div>`;
 
         const validBooks = (msg.books || []).filter(item => {
           const b = item.book || item;
