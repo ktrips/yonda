@@ -1307,19 +1307,18 @@ function updateBookTabLabels() {
   const menuMessages = document.getElementById('menuMessages');
   if (tabRead) {
     let label;
-    if (rating === 'completed') label = `読んだ（${readCount}）`;
-    else if (rating === 'in_progress') label = `途中（${inProgressCount}）`;
-    else if (rating === 'not_completed') label = `未読（${unreadCount}）`;
-    else if (rating === 'yearly_completed') label = `${year}年（${yearlyCount}）`;
-    else if (rating === 'favorite') label = `お気に入り（${favoriteCount}）`;
-    else if (rating === 'all') label = `すべて（全${allCount}冊）`;
-    else if (rating === '5') label = `★★★★★（${allBooks.filter(b => (displayRating(b) || 0) >= 5).length}）`;
-    else if (rating === '4') label = `★★★★☆以上（${allBooks.filter(b => (displayRating(b) || 0) >= 4).length}）`;
-    else if (rating === '3') label = `★★★☆☆以上（${allBooks.filter(b => (displayRating(b) || 0) >= 3).length}）`;
+    if (rating === 'completed') label = '読んだ';
+    else if (rating === 'in_progress') label = '途中';
+    else if (rating === 'not_completed') label = '未読';
+    else if (rating === 'yearly_completed') label = `${year}年`;
+    else if (rating === 'favorite') label = 'お気に入り';
+    else if (rating === 'all') label = 'すべて';
+    else if (rating === '5') label = '★★★★★';
+    else if (rating === '4') label = '★★★★☆以上';
+    else if (rating === '3') label = '★★★☆☆以上';
     else {
       const sel = document.getElementById('ratingFilter');
-      const optText = sel?.selectedOptions?.[0]?.textContent || 'Yonda';
-      label = `${optText}（${allCount}）`;
+      label = sel?.selectedOptions?.[0]?.textContent || 'Yonda';
     }
     tabRead.textContent = label;
   }
