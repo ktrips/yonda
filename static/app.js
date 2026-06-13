@@ -1309,8 +1309,8 @@ function updateBookTabLabels() {
     if (rating === 'completed') label = `読んだ（${readCount}）`;
     else if (rating === 'in_progress') label = `途中（${inProgressCount}）`;
     else if (rating === 'not_completed') label = `未読（${unreadCount}）`;
-    else if (rating === 'yearly_completed') label = `${year}年（${yearlyCount}）`;
-    else if (rating === 'favorite') label = `お気に入り（${favoriteCount}）`;
+    else if (rating === 'yearly_completed') label = `${year}年`;
+    else if (rating === 'favorite') label = 'お気に入り';
     else if (rating === 'all') label = `すべて（${allCount}）`;
     else if (rating === '5') label = `★★★★★（${allBooks.filter(b => (displayRating(b) || 0) >= 5).length}）`;
     else if (rating === '4') label = `★★★★☆以上（${allBooks.filter(b => (displayRating(b) || 0) >= 4).length}）`;
