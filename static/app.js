@@ -59,7 +59,7 @@ function _applyAuthUI() {
     if (avatarEl && _authUser.picture) {
       avatarEl.src = _authUser.picture.includes('=s') ? _authUser.picture : _authUser.picture + '=s64-c';
     }
-    if (nameEl) nameEl.textContent = _authUser.name || _authUser.email || '';
+    if (nameEl) nameEl.textContent = (_authUser.name || _authUser.email || '').split(' ')[0];
     // メニュー内: ユーザー情報表示、ログインボタン非表示
     if (menuUserInfo) menuUserInfo.style.display = '';
     if (menuLoginBtn) menuLoginBtn.style.display = 'none';
