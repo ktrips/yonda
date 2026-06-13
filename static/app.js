@@ -378,6 +378,10 @@ function bookRatingRowHtml(book, { showUnrated = false } = {}) {
   // 未レビューボタン（完了済み & レビューなし & showUnrated=true のみ表示）
   const unratedBtn = (showUnrated && book.completed && !hasReview)
     ? (() => {
+        // 紙の本は編集モーダルの評価・書評欄へ直接遷移
+        if (book.source === 'paper' && book.book_id) {
+          return `<span class="btn-unrated btn-unrated-card" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</span>`;
+        }
         const url = reviewUrlForBook(book);
         return url
           ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"
@@ -3481,7 +3485,7 @@ async function copyBookInsightText(insight, button = null) {
 
 function renderTableInsightCell(book) {
   const insight = findBookInsight(book);
-  const editBtn = book.source === 'paper' && book.book_id
+  const editBtn = book.source === 'paper' && book.book_id && !!_authUser
     ? `<button type="button" class="btn-table-edit-paper" data-book-id="${escapeHtml(book.book_id)}" title="編集" onclick="event.stopPropagation();openPaperBookEditById(this.dataset.bookId)">✏️</button>`
     : '';
   if (!insight || !Array.isArray(insight.points) || insight.points.length === 0) {
@@ -4132,10 +4136,12 @@ function openBookDetail(book) {
 
   loadBookInsight(book);
 
-  // 紙の本の場合は編集・削除ボタンを表示（書評ポイント下の固定枠を使用）
+  // 紙の本の場合は編集・削除ボタンを表示（登録した本人のみ）
   const paperEditBar = document.getElementById('bookDetailPaperActions');
   if (paperEditBar) {
-    if (book.source === 'paper') {
+    const isOwnPaperBook = book.source === 'paper' && !!_authUser
+      && allBooks.some(b => b.book_id && b.book_id === book.book_id);
+    if (isOwnPaperBook) {
       paperEditBar.innerHTML = `
         <button type="button" class="btn btn-secondary" id="paperDetailEditBtn">✏️ 編集</button>
         <button type="button" class="btn btn-danger" id="paperDetailDeleteBtn">🗑 削除</button>
@@ -4159,6 +4165,21 @@ function closeBookDetail() {
 // ── 紙の本 編集モーダル ──────────────────────────────────────────────────────
 
 let _paperEditBook = null;
+
+/** 紙の本編集モーダルを開き、評価・書評フィールドにスクロール */
+function openPaperBookEditToRate(bookId) {
+  const book = allBooks.find(b => b.book_id === bookId);
+  if (!book) return;
+  openPaperBookEdit(book);
+  setTimeout(() => {
+    const starsEl = document.getElementById('paperEditStars');
+    if (starsEl) {
+      starsEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const firstStar = starsEl.querySelector('.paper-star-btn');
+      if (firstStar) firstStar.focus();
+    }
+  }, 120);
+}
 
 /** 紙の本編集モーダルの星UIを設定 */
 function _setPaperEditStars(rating) {
