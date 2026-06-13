@@ -1961,6 +1961,8 @@ header {
   transition: transform 0.15s, box-shadow 0.15s;
   text-decoration: none; color: inherit;
   position: relative;
+  min-width: 0;
+  overflow: hidden;
 }
 .book-card:hover {
   transform: translateY(-2px);
@@ -2021,6 +2023,7 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .title-supplement-summary { font-style: normal; }
 .book-card-author {
   font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.3rem;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
 .book-card-rating-row {
   display: flex;
@@ -2794,6 +2797,7 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
   .filter-input { width: 100%; }
   .view-toggle { justify-content: flex-start; margin-left: 0; }
   .book-grid { grid-template-columns: 1fr; }
+  .book-card { max-width: 100%; }
   .book-card .book-cover {
     width: 56px; height: 80px;
   }
