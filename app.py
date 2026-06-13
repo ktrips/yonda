@@ -231,7 +231,6 @@ def _migrate_root_data_to_user(uid_safe: str) -> None:
     migrate_files = [
         "library_books.json", "audible_books.json", "kindle_books.json",
         "paper_books.json", "amazon_list.json", "book_insights.json",
-        "private_books.json",
     ]
     # 既にユーザーデータがあればスキップ
     has_data = any((user_dir / f).exists() for f in migrate_files)
@@ -2644,22 +2643,6 @@ def api_delete_paper_book(book_id: str):
         logger.warning("api_delete_paper_book エラー: %s", e, exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
 
-
-
-@app.route("/api/book/set-private", methods=["POST"])
-def api_set_book_private():
-    """本の非公開フラグを設定・解除する"""
-    data = request.get_json(force=True) or {}
-    book_id = (data.get("book_id") or "").strip()
-    private = bool(data.get("private", False))
-    if not book_id:
-        return jsonify({"success": False, "error": "book_id が必要です"}), 400
-    try:
-        library_service.set_book_private(book_id, private)
-        return jsonify({"success": True})
-    except Exception as e:
-        logger.warning("api_set_book_private エラー: %s", e, exc_info=True)
-        return jsonify({"success": False, "error": str(e)}), 500
 
 
 def _fetch_book_info_with_genre(q: str, want_title: str = "", want_author: str = "") -> dict | None:

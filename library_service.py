@@ -90,9 +90,6 @@ def _amazon_list_path() -> Path:
 def _book_insights_path() -> Path:
     return get_user_data_dir() / "book_insights.json"
 
-def _private_books_path() -> Path:
-    return get_user_data_dir() / "private_books.json"
-
 # 後方互換エイリアス（既存コードが直接参照している場合向け）
 def _json_map_compat():
     return _get_json_map()
@@ -350,8 +347,8 @@ _saved_cache_mtimes: dict[str, float] = {}
 
 
 def _get_books_max_mtime() -> float:
-    """書籍JSONファイル群（+ 非公開設定）の最新 mtime を返す（キャッシュ有効性チェック用）"""
-    paths = list(_get_json_map().values()) + [_private_books_path()]
+    """書籍JSONファイル群の最新 mtime を返す（キャッシュ有効性チェック用）"""
+    paths = list(_get_json_map().values())
     return max(
         (p.stat().st_mtime for p in paths if p.exists()),
         default=0.0,
@@ -374,12 +371,6 @@ def _load_saved_uncached() -> Optional[dict]:
             import firestore_service  # noqa: PLC0415
             result = firestore_service.load_books(uid)
             if result:
-                # 非公開フラグを付与
-                private_ids = load_private_book_ids()
-                for b in result.get("books", []):
-                    bid = b.get("book_id")
-                    if bid and bid in private_ids:
-                        b["private"] = True
                 return result
         except Exception as e:
             logger.warning("Firestore読み込み失敗、JSONにフォールバック: %s", e)
@@ -423,12 +414,6 @@ def _load_saved_uncached() -> Optional[dict]:
             logger.warning("JSON 読込失敗 (%s): %s", path, e)
     if not all_books:
         return None
-    # 非公開フラグを付与
-    private_ids = load_private_book_ids()
-    for b in all_books:
-        bid = b.get("book_id")
-        if bid and bid in private_ids:
-            b["private"] = True
     all_books.sort(key=lambda b: b.get("loan_date", ""), reverse=True)
     return {"sources": sources, "total": len(all_books), "books": all_books}
 
@@ -687,31 +672,9 @@ def book_insight_key(book: dict) -> str:
     return "book:" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def load_private_book_ids() -> set:
-    """非公開に設定された book_id の集合を返す"""
-    p = _private_books_path()
-    if not p.exists():
-        return set()
-    try:
-        with open(p, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return set(data.get("ids", []))
-    except Exception:
-        return set()
-
 
 def set_book_private(book_id: str, private: bool) -> None:
-    """指定 book_id の非公開フラグを設定・解除する"""
-    ids = load_private_book_ids()
-    if private:
-        ids.add(book_id)
-    else:
-        ids.discard(book_id)
-    p = _private_books_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    with open(p, "w", encoding="utf-8") as f:
-        json.dump({"ids": sorted(ids)}, f, ensure_ascii=False, indent=2)
-    invalidate_saved_cache()
+    pass  # 非公開機能は削除済み。後方互換のため関数名のみ残す。
 
 
 

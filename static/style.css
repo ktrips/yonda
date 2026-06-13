@@ -3899,25 +3899,6 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .public-welcome-banner p { margin: 0 0 0.85rem; }
 .public-welcome-banner .btn { min-width: 180px; }
 
-/* 非公開チェックボックス（詳細画面・右下） */
-.book-detail-private-bottom {
-  display: flex; justify-content: flex-end;
-  margin-top: 0.75rem; padding-top: 0.5rem;
-  border-top: 1px solid var(--border);
-}
-.book-detail-private-label {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  font-size: 0.75rem; color: var(--text-muted); cursor: pointer;
-}
-.book-detail-private-label input[type="checkbox"] { accent-color: var(--accent); width: 0.85rem; height: 0.85rem; }
-/* テーブルビュー 非公開・非表示列 */
-.col-private { width: 3.2rem; text-align: center; }
-.private-check-label {
-  display: inline-flex; align-items: center; gap: 0.2rem;
-  cursor: pointer; font-size: 0.75rem;
-}
-.private-check-label input[type="checkbox"] { accent-color: var(--accent); width: 0.85rem; height: 0.85rem; }
-
 /* タイトル・概要のソースバッジ */
 .badge-detail-src, .badge-summary-src {
   vertical-align: middle;
