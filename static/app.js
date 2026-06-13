@@ -4593,28 +4593,42 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
     const completedBadge = book.completed ? `<span class="badge-completed" data-filter-source="${escapeHtml(book.source || '')}">読了</span> ` : '';
     const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
     const genre = book.genre ? genreBadgeHtml(book, true) : '—';
-    const supplementHtml = titleSupplementHtml(book);
-    const hasRating = (displayRating(book) || 0) > 0;
-    const hasComment = !!ratingCommentText(book);
-    const reviewUrl = reviewUrlForBook(book);
-    const unratedBtn = book.completed && !hasComment && reviewUrl
-      ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener"
-            class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`
-      : '';
     const summary = (book.summary || '').trim();
     const summaryCell = summary ? escapeHtml(summary.length > 80 ? summary.substring(0, 80) + '…' : summary) : '—';
     const tsundoku = getTsundokuDays(book);
     const tsundokuStr = tsundoku != null ? tsundoku + '日' : '—';
+
+    // レビュー列: 星 + 個人レビュー（または未レビューボタン）
+    const dispRating = displayRating(book);
+    const hasRating = dispRating > 0;
+    const personalReview = ((book.source === 'audible_jp' ? book.review_headline : book.comment) || '').trim();
+    const reviewUrl = reviewUrlForBook(book);
+    let reviewCellHtml = '';
+    if (hasRating) {
+      reviewCellHtml += `<div class="table-review-stars">${starsHtml(dispRating)}</div>`;
+    }
+    if (personalReview) {
+      const truncated = personalReview.length > 50 ? personalReview.slice(0, 50) + '…' : personalReview;
+      reviewCellHtml += `<div class="table-review-text">${escapeHtml(truncated)}</div>`;
+    }
+    if (!hasRating && !personalReview) {
+      if (book.source === 'paper' && book.book_id && !!_authUser) {
+        reviewCellHtml = `<button type="button" class="btn-unrated" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</button>`;
+      } else if (reviewUrl) {
+        reviewCellHtml = `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`;
+      }
+    }
+
     return headerRow + `
       <tr class="book-row-clickable ${book.completed ? 'row-completed' : ''}" data-book-index="${i}" role="button" tabindex="0">
         <td class="col-cover"><img src="${escapeHtml(book.cover_url || NO_COVER)}" alt=""
             loading="lazy" onerror="this.src='${NO_COVER}'"></td>
         <td class="col-title">
           <div>${completedBadge}${favoriteBadge}${escapeHtml(book.title)}</div>
-          ${supplementHtml ? `<div class="title-supplement-cell">${supplementHtml}</div>` : ''}
-          ${unratedBtn}
         </td>
         <td class="col-author" title="${escapeHtml(book.author || '')}">${escapeHtml(book.author || '')}</td>
+        <td class="col-review" onclick="event.stopPropagation()">${reviewCellHtml}</td>
+        <td class="col-ai-insight">${renderTableInsightCell(book)}</td>
         <td class="col-summary" title="${summary ? escapeHtml(summary) : ''}">${summaryCell}</td>
         <td class="col-genre">${genre}</td>
         <td class="col-runtime">${(book.runtime_length_min || 0) > 0 ? formatRuntime(book.runtime_length_min) : '—'}</td>
@@ -4622,7 +4636,6 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
         <td>${book.completed ? formatDateOnly(book.completed_date) : (formatProgress(book) || '—')}</td>
         <td class="col-tsundoku">${tsundokuStr}</td>
         <td>${srcBadge}</td>
-        <td class="col-ai-insight">${renderTableInsightCell(book)}</td>
         <td class="col-private" onclick="event.stopPropagation()">
           ${book.book_id ? `<label class="private-check-label" title="${book.private ? '非公開' : '公開'}">
             <input type="checkbox" class="private-checkbox" data-book-id="${escapeAttr(book.book_id)}" ${book.private ? 'checked' : ''}>
@@ -4640,6 +4653,8 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
           <th class="col-cover"></th>
           <th class="col-title">タイトル</th>
           <th class="col-author th-sortable" data-sort-asc="author_group" data-sort-desc="author_group" title="クリックでソート">著者</th>
+          <th class="col-review">レビュー</th>
+          <th class="col-ai-insight">書評ポイント</th>
           <th class="col-summary">概要</th>
           <th class="col-genre">ジャンル</th>
           <th class="col-runtime">再生時間</th>
@@ -4647,7 +4662,6 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
           <th class="th-sortable" data-sort-asc="completed_date_asc" data-sort-desc="completed_date_desc" title="クリックでソート">読了日</th>
           <th class="th-sortable" data-sort-asc="tsundoku_desc" data-sort-desc="tsundoku_desc" title="クリックでソート">積読</th>
           <th>ソース</th>
-          <th class="col-ai-insight">書評ポイント</th>
           <th class="col-private" title="非公開にするとみんなのYondaに表示されません">非公開</th>
         </tr>
       </thead>
