@@ -1657,42 +1657,12 @@ function renderCommunitySection() {
             : allBooks.find(b => b.title === book.title && b.author === book.author);
           const merged = myBook ? { ...book, ...myBook } : book;
 
-          const cover = merged.cover_url || NO_COVER;
-          const srcFullLabel_map = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'Kindle', paper: 'Paper' };
-          const srcFullLabel = srcFullLabel_map[merged.source] || merged.source || '';
-          const srcBadge = srcFullLabel
-            ? `<span class="badge-source badge-${escapeHtml(merged.source)} badge-card-top">${escapeHtml(srcFullLabel)}</span>`
-            : '';
-          const completedBadge = merged.completed
-            ? `<span class="badge-completed badge-short">完</span>` : '';
-          const srcClass = merged.source === 'audible_jp' ? ' source-audible' : '';
-
-          const genreCanonical = normalizeGenre(merged.genre || '');
-          const genreColors = CAT_COLORS[genreCanonical] || CAT_COLORS['その他'];
-          const cardBg = genreColors.unread + '55';
-          const genreHtml = merged.genre
-            ? `<div class="book-card-genre">${genreBadgeHtml(merged)}</div>` : '';
-
-          const summaryHtml = merged.summary
-            ? `<div class="book-card-summary">${escapeHtml(merged.summary)}</div>` : '';
-          const authorExtra = (merged.runtime_length_min || 0) > 0
-            ? ` · ${formatRuntime(merged.runtime_length_min)}` : '';
-          const completedExtra = merged.completed
-            ? ` · ${completedBadge}${merged.completed_date ? ` ${formatDateOnly(merged.completed_date)}` : ''}` : '';
-
-          return `<div class="book-card${merged.completed ? ' completed' : ''}${srcClass} community-book-card-item"
-              data-cache-key="${cacheKey}" role="button" tabindex="0"
-              style="background:${cardBg}; cursor:pointer;">
-            <img class="book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
-                 onerror="this.src='${NO_COVER}'">
-            <div class="book-card-body">
-              <div class="book-card-top-row">${genreHtml}${srcBadge}</div>
-              <div class="book-card-title">${escapeHtml(merged.title || '—')}</div>
-              <div class="book-card-author">${escapeHtml(merged.author || '')}${authorExtra}${completedExtra}</div>
-              ${bookRatingRowHtml(merged, { showUnrated: !!myBook && !!_authUser })}
-              ${summaryHtml}
-            </div>
-          </div>`;
+          return renderBookCardHtml(merged, {
+            extraClass: 'community-book-card-item',
+            extraAttrs: `data-cache-key="${cacheKey}"`,
+            showUnrated: !!myBook && !!_authUser,
+            showProgress: false,
+          });
         }).join('');
 
         return `<div class="ig-post-card">
@@ -4424,6 +4394,76 @@ function _compressImageToBase64(file, maxW, maxH) {
   });
 }
 
+/**
+ * 単一書籍カードのHTML文字列を生成する共通関数。
+ * renderCardView と renderCommunitySection の両方から使用。
+ *
+ * @param {object} book           書籍データ
+ * @param {object} opts
+ *   extraClass   {string}  カード要素に追加するクラス文字列
+ *   extraAttrs   {string}  カード要素に追加するHTML属性文字列
+ *   showUnrated  {boolean} 未レビューボタンを表示するか
+ *   showProgress {boolean} Kindle進捗バーを表示するか（デフォルトtrue）
+ */
+function renderBookCardHtml(book, { extraClass = '', extraAttrs = '', showUnrated = false, showProgress = true } = {}) {
+  const cover = book.cover_url || NO_COVER;
+  const srcClass = book.source === 'audible_jp' ? ' source-audible' : '';
+  const srcLabel_map = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'Kindle', paper: 'Paper' };
+  const srcFullLabel = srcLabel_map[book.source] || book.source || '';
+
+  const cardDetailUrl = (() => {
+    if (book.source === 'paper') {
+      if (book.detail_url) return appendTagToUrl(book.detail_url, getAffiliateTag());
+      const q = `${book.title || ''} ${book.author || ''}`.trim();
+      return q ? appendTagToUrl(`https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`, getAffiliateTag()) : '';
+    }
+    return book.detail_url ? appendTagToUrl(book.detail_url, getAffiliateTag()) : '';
+  })();
+
+  const srcBadge = srcFullLabel
+    ? (cardDetailUrl
+        ? `<a href="${escapeHtml(cardDetailUrl)}" target="_blank" rel="noopener"
+             class="badge-source badge-${escapeHtml(book.source)} badge-card-top"
+             title="${escapeHtml(srcFullLabel)}" onclick="event.stopPropagation()">${escapeHtml(srcFullLabel)}</a>`
+        : `<span class="badge-source badge-${escapeHtml(book.source)} badge-card-top">${escapeHtml(srcFullLabel)}</span>`)
+    : '';
+  const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
+  const completedBadge = book.completed
+    ? `<span class="badge-completed badge-short" title="読了" data-filter-source="${escapeHtml(book.source || '')}">完</span>`
+    : '';
+  const summaryHtml = book.summary ? `<div class="book-card-summary">${escapeHtml(book.summary)}</div>` : '';
+  const progressBarHtml = showProgress && book.source === 'kindle' && (book.percent_complete || 0) > 0 ? renderProgressBar(book) : '';
+
+  const genreCanonical = book._normalizedGenre || normalizeGenre(book.genre || '');
+  const genreColors = CAT_COLORS[genreCanonical] || CAT_COLORS['その他'];
+  const cardBg = genreColors.unread + '55';
+  const genreHtml = book.genre ? genreBadgeHtml(book, true) : '';
+
+  const authorExtra = (book.runtime_length_min || 0) > 0 ? ` · ${formatRuntime(book.runtime_length_min)}` : '';
+  const completedExtra = book.completed
+    ? ` · ${completedBadge}${book.completed_date ? ` ${formatDateOnly(book.completed_date)}` : ''}`
+    : '';
+  const progressMeta = !book.completed
+    ? (formatProgress(book) ? `<div class="book-card-meta"><span>進捗: ${formatProgress(book)}</span></div>` : `<div class="book-card-meta"><span>${formatDate(book.loan_date)}</span></div>`)
+    : '';
+
+  return `
+    <div class="book-card${book.completed ? ' completed' : ''}${srcClass}${extraClass ? ' ' + extraClass : ''}"
+         role="button" tabindex="0" style="background:${cardBg}; cursor:pointer;" ${extraAttrs}>
+      <img class="book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
+           onerror="this.src='${NO_COVER}'">
+      <div class="book-card-body">
+        <div class="book-card-title">${escapeHtml(book.title || '—')}</div>
+        <div class="book-card-author">${escapeHtml(book.author || '')}${authorExtra}${completedExtra}</div>
+        ${bookRatingRowHtml(book, { showUnrated })}
+        ${progressBarHtml}
+        ${progressMeta}
+        <div class="book-card-top-row">${genreHtml}${srcBadge}${favoriteBadge}</div>
+        ${summaryHtml}
+      </div>
+    </div>`;
+}
+
 function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreCounts = {}) {
   let lastYear = null;
   let lastAuthor = null;
@@ -4466,65 +4506,12 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
       }
     }
 
-    const cover = book.cover_url || NO_COVER;
-    const srcClass = book.source === 'audible_jp' ? ' source-audible' : '';
-    const srcLabel_map = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'Kindle', paper: 'Paper' };
-    const srcFullLabel = srcLabel_map[book.source] || book.source || '';
-    // 詳細URLを解決（外部リンク用）
-    const cardDetailUrl = (() => {
-      if (book.source === 'paper') {
-        if (book.detail_url) return appendTagToUrl(book.detail_url, getAffiliateTag());
-        const q = `${book.title || ''} ${book.author || ''}`.trim();
-        return q ? appendTagToUrl(`https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`, getAffiliateTag()) : '';
-      }
-      return book.detail_url ? appendTagToUrl(book.detail_url, getAffiliateTag()) : '';
-    })();
-    // ソースバッジ（フルラベル、外部リンク付き）
-    const srcBadge = srcFullLabel
-      ? (cardDetailUrl
-          ? `<a href="${escapeHtml(cardDetailUrl)}" target="_blank" rel="noopener"
-               class="badge-source badge-${escapeHtml(book.source)} badge-card-top"
-               title="${escapeHtml(srcFullLabel)}" onclick="event.stopPropagation()">${escapeHtml(srcFullLabel)}</a>`
-          : `<span class="badge-source badge-${escapeHtml(book.source)} badge-card-top">${escapeHtml(srcFullLabel)}</span>`)
-      : '';
-    const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
-    const completedBadge = book.completed
-      ? `<span class="badge-completed badge-short" title="読了" data-filter-source="${escapeHtml(book.source || '')}">完</span>`
-      : '';
-    const summaryHtml = book.summary ? `<div class="book-card-summary">${escapeHtml(book.summary)}</div>` : '';
-    const progressBarHtml = book.source === 'kindle' && (book.percent_complete || 0) > 0 ? renderProgressBar(book) : '';
-
-    // ジャンル背景色（unread カラーを薄く）
-    const genreCanonical = book._normalizedGenre || normalizeGenre(book.genre || '');
-    const genreColors = CAT_COLORS[genreCanonical] || CAT_COLORS['その他'];
-    const cardBg = genreColors.unread + '55'; // ~33% opacity
-    const genreHtml = book.genre ? genreBadgeHtml(book, true) : '';
-    const cardStyle = `style="background: ${cardBg};"`;
-
-    // 著者行: 著者 · 時間 · 完了日
-    const authorExtra = (book.runtime_length_min || 0) > 0 ? ` · ${formatRuntime(book.runtime_length_min)}` : '';
-    const completedExtra = book.completed
-      ? ` · ${completedBadge}${book.completed_date ? ` ${formatDateOnly(book.completed_date)}` : ''}`
-      : '';
-    const progressMeta = !book.completed
-      ? (formatProgress(book) ? `<div class="book-card-meta"><span>進捗: ${formatProgress(book)}</span></div>` : `<div class="book-card-meta"><span>${formatDate(book.loan_date)}</span></div>`)
-      : '';
-
-    return header + `
-      <div class="book-card book-card-clickable${book.completed ? ' completed' : ''}${srcClass}" data-book-index="${i}" role="button" tabindex="0" ${cardStyle}>
-        <img class="book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
-             onerror="this.src='${NO_COVER}'">
-        <div class="book-card-body">
-          <div class="book-card-title">${escapeHtml(book.title)}</div>
-          <div class="book-card-author">${escapeHtml(book.author || '')}${authorExtra}${completedExtra}</div>
-          ${bookRatingRowHtml(book, { showUnrated: !!_authUser })}
-          ${progressBarHtml}
-          ${progressMeta}
-          <div class="book-card-top-row">${genreHtml}${srcBadge}${favoriteBadge}</div>
-          ${summaryHtml}
-        </div>
-      </div>
-    `;
+    return header + renderBookCardHtml(book, {
+      extraClass: 'book-card-clickable',
+      extraAttrs: `data-book-index="${i}"`,
+      showUnrated: !!_authUser,
+      showProgress: true,
+    });
   }).join('');
 }
 
