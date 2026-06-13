@@ -3335,6 +3335,19 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
   padding-bottom: 0.25rem;
   margin-bottom: 0.75rem;
 }
+/* プルトゥリフレッシュ */
+.ptr-indicator {
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  opacity: 0;
+  transform: translateY(0);
+  transition: opacity 0.15s, transform 0.15s;
+  padding: 0.25rem 0;
+  pointer-events: none;
+  user-select: none;
+}
+.ptr-arrow { font-size: 1rem; margin-right: 0.3em; }
 .btn-sm {
   font-size: 0.75rem;
   padding: 0.2rem 0.6rem;

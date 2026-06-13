@@ -1771,7 +1771,48 @@ function renderCommunitySection() {
       listEl.innerHTML = `<p class="recommend-error">取得エラー: ${escapeHtml(e.message)}</p>`;
     });
 }
-document.getElementById('communityRefreshBtn')?.addEventListener('click', renderCommunitySection);
+// プルトゥリフレッシュ（communitySection が表示中に引き下げで更新）
+(function() {
+  let startY = 0;
+  let pulling = false;
+  const THRESHOLD = 70;
+  const indicator = document.getElementById('pullToRefreshIndicator');
+  if (!indicator) return;
+
+  const isCommunityVisible = () => {
+    const el = document.getElementById('communitySection');
+    return el && el.style.display !== 'none';
+  };
+
+  document.addEventListener('touchstart', (e) => {
+    if (!isCommunityVisible()) return;
+    if (window.scrollY === 0) {
+      startY = e.touches[0].clientY;
+      pulling = true;
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!pulling || !isCommunityVisible()) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy > 0) {
+      const progress = Math.min(dy / THRESHOLD, 1);
+      indicator.style.opacity = String(progress);
+      indicator.style.transform = `translateY(${Math.min(dy * 0.4, 28)}px)`;
+      indicator.querySelector('.ptr-arrow').textContent = dy >= THRESHOLD ? '↻' : '↓';
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', (e) => {
+    if (!pulling) return;
+    pulling = false;
+    const dy = e.changedTouches[0].clientY - startY;
+    indicator.style.opacity = '0';
+    indicator.style.transform = '';
+    indicator.querySelector('.ptr-arrow').textContent = '↓';
+    if (dy >= THRESHOLD && isCommunityVisible()) renderCommunitySection();
+  });
+})();
 
 async function renderYondaRecommend() {
   const listEl = document.getElementById('recommendList');

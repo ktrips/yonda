@@ -220,8 +220,8 @@
           <button type="button" class="book-tab" id="tabCommunity" data-tab="community">みんな</button>
         </div>
         <div id="communitySection" class="recommend-section" style="display:none;">
-          <div class="community-header">
-            <button type="button" class="btn btn-secondary btn-sm" id="communityRefreshBtn">更新</button>
+          <div id="pullToRefreshIndicator" class="ptr-indicator" aria-hidden="true">
+            <span class="ptr-arrow">↓</span> 引っ張って更新
           </div>
           <div id="communityLoading" class="recommend-loading" style="display:none;">読み込み中…</div>
           <div id="communityMessageList"></div>
