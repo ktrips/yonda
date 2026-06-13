@@ -1639,12 +1639,13 @@ function renderCommunitySection() {
           const merged = myBook ? { ...book, ...myBook } : book;
 
           const cover = merged.cover_url || NO_COVER;
-          const srcShort = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' }[merged.source] || '';
-          const srcBadge = srcShort
-            ? `<span class="badge-source badge-${escapeHtml(merged.source)} badge-short">${srcShort}</span> `
+          const srcFullLabel_map = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'Kindle', paper: 'Paper' };
+          const srcFullLabel = srcFullLabel_map[merged.source] || merged.source || '';
+          const srcBadge = srcFullLabel
+            ? `<span class="badge-source badge-${escapeHtml(merged.source)} badge-card-top">${escapeHtml(srcFullLabel)}</span>`
             : '';
           const completedBadge = merged.completed
-            ? `<span class="badge-completed badge-short">完</span> ` : '';
+            ? `<span class="badge-completed badge-short">完</span>` : '';
           const srcClass = merged.source === 'audible_jp' ? ' source-audible' : '';
 
           const genreCanonical = normalizeGenre(merged.genre || '');
@@ -1653,13 +1654,12 @@ function renderCommunitySection() {
           const genreHtml = merged.genre
             ? `<div class="book-card-genre">${genreBadgeHtml(merged)}</div>` : '';
 
-          const supplementHtml = titleSupplementHtml(merged);
           const summaryHtml = merged.summary
             ? `<div class="book-card-summary">${escapeHtml(merged.summary)}</div>` : '';
           const authorExtra = (merged.runtime_length_min || 0) > 0
             ? ` · ${formatRuntime(merged.runtime_length_min)}` : '';
           const completedExtra = merged.completed
-            ? ` · <span class="badge-completed badge-short">完</span>${merged.completed_date ? ` ${formatDateOnly(merged.completed_date)}` : ''}` : '';
+            ? ` · ${completedBadge}${merged.completed_date ? ` ${formatDateOnly(merged.completed_date)}` : ''}` : '';
 
           return `<div class="book-card${merged.completed ? ' completed' : ''}${srcClass} community-book-card-item"
               data-cache-key="${cacheKey}" role="button" tabindex="0"
@@ -1667,10 +1667,10 @@ function renderCommunitySection() {
             <img class="book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
                  onerror="this.src='${NO_COVER}'">
             <div class="book-card-body">
-              <div class="book-card-title">${srcBadge}${completedBadge}${escapeHtml(merged.title || '—')}</div>
+              <div class="book-card-top-row">${genreHtml}${srcBadge}</div>
+              <div class="book-card-title">${escapeHtml(merged.title || '—')}</div>
               <div class="book-card-author">${escapeHtml(merged.author || '')}${authorExtra}${completedExtra}</div>
               ${bookRatingRowHtml(merged)}
-              <div class="book-card-genre-row">${genreHtml}</div>
               ${summaryHtml}
             </div>
           </div>`;
@@ -4410,7 +4410,8 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
 
     const cover = book.cover_url || NO_COVER;
     const srcClass = book.source === 'audible_jp' ? ' source-audible' : '';
-    const srcShort = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' }[book.source] || '';
+    const srcLabel_map = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'Kindle', paper: 'Paper' };
+    const srcFullLabel = srcLabel_map[book.source] || book.source || '';
     // 詳細URLを解決（外部リンク用）
     const cardDetailUrl = (() => {
       if (book.source === 'paper') {
@@ -4420,23 +4421,17 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
       }
       return book.detail_url ? appendTagToUrl(book.detail_url, getAffiliateTag()) : '';
     })();
-    const srcBadge = srcShort ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short" title="${escapeHtml(sourceLabel(book.source))}" data-filter-source="${escapeHtml(book.source)}">${srcShort}</span> ` : '';
-    const completedBadge = book.completed ? `<span class="badge-completed badge-short" title="読了" data-filter-source="${escapeHtml(book.source || '')}">完</span> ` : '';
+    // ソースバッジ（フルラベル、外部リンク付き）
+    const srcBadge = srcFullLabel
+      ? (cardDetailUrl
+          ? `<a href="${escapeHtml(cardDetailUrl)}" target="_blank" rel="noopener"
+               class="badge-source badge-${escapeHtml(book.source)} badge-card-top"
+               title="${escapeHtml(srcFullLabel)}" onclick="event.stopPropagation()">${escapeHtml(srcFullLabel)}</a>`
+          : `<span class="badge-source badge-${escapeHtml(book.source)} badge-card-top">${escapeHtml(srcFullLabel)}</span>`)
+      : '';
     const favoriteBadge = book.favorite ? '<span class="badge-favorite" title="お気に入り">♥</span> ' : '';
-    // タイトル左のソースバッジ（外部リンク付き）
-    const titleSrcBadge = srcShort && cardDetailUrl
-      ? `<a href="${escapeHtml(cardDetailUrl)}" target="_blank" rel="noopener" class="badge-source badge-${escapeHtml(book.source)} badge-short badge-title-link" title="${escapeHtml(sourceLabel(book.source))}" onclick="event.stopPropagation()">${srcShort}</a> `
-      : srcShort
-        ? `<span class="badge-source badge-${escapeHtml(book.source)} badge-short" data-filter-source="${escapeHtml(book.source)}">${srcShort}</span> `
-        : '';
-
-    const genreHtml = book.genre ? `<div class="book-card-genre">${genreBadgeHtml(book)}</div>` : '';
-    const supplementHtml = titleSupplementHtml(book);
-    const hasComment = !!ratingCommentText(book);
-    const reviewUrl = reviewUrlForBook(book);
-    const unratedBtn = book.completed && !hasComment && reviewUrl
-      ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener"
-            class="btn-unrated btn-unrated-card" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`
+    const completedBadge = book.completed
+      ? `<span class="badge-completed badge-short" title="読了" data-filter-source="${escapeHtml(book.source || '')}">完</span>`
       : '';
     const summaryHtml = book.summary ? `<div class="book-card-summary">${escapeHtml(book.summary)}</div>` : '';
     const progressBarHtml = book.source === 'kindle' && (book.percent_complete || 0) > 0 ? renderProgressBar(book) : '';
@@ -4447,17 +4442,26 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
     const cardBg = genreColors.unread + '55'; // ~33% opacity
     const cardStyle = `style="background: ${cardBg};"`;
 
+    // 著者行: 著者 · 時間 · 完了日
+    const authorExtra = (book.runtime_length_min || 0) > 0 ? ` · ${formatRuntime(book.runtime_length_min)}` : '';
+    const completedExtra = book.completed
+      ? ` · ${completedBadge}${book.completed_date ? ` ${formatDateOnly(book.completed_date)}` : ''}`
+      : '';
+    const progressMeta = !book.completed
+      ? (formatProgress(book) ? `<div class="book-card-meta"><span>進捗: ${formatProgress(book)}</span></div>` : `<div class="book-card-meta"><span>${formatDate(book.loan_date)}</span></div>`)
+      : '';
+
     return header + `
       <div class="book-card book-card-clickable${book.completed ? ' completed' : ''}${srcClass}" data-book-index="${i}" role="button" tabindex="0" ${cardStyle}>
         <img class="book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
              onerror="this.src='${NO_COVER}'">
         <div class="book-card-body">
-          <div class="book-card-title">${titleSrcBadge}${favoriteBadge}${escapeHtml(book.title)}</div>
-          <div class="book-card-author">${escapeHtml(book.author || '')}${(book.runtime_length_min || 0) > 0 ? ` · ${formatRuntime(book.runtime_length_min)}` : ''}${book.completed ? ` · <span class="badge-completed badge-short" title="読了" data-filter-source="${escapeHtml(book.source || '')}">完</span>${book.completed_date ? ` ${formatDateOnly(book.completed_date)}` : ''}` : ''}</div>
+          <div class="book-card-top-row">${genreHtml}${srcBadge}${favoriteBadge}</div>
+          <div class="book-card-title">${escapeHtml(book.title)}</div>
+          <div class="book-card-author">${escapeHtml(book.author || '')}${authorExtra}${completedExtra}</div>
           ${bookRatingRowHtml(book)}
-          <div class="book-card-genre-row">${genreHtml}</div>
           ${progressBarHtml}
-          ${!book.completed ? `<div class="book-card-meta">${formatProgress(book) ? `<span>進捗: ${formatProgress(book)}</span>` : `<span>${formatDate(book.loan_date)}</span>`}</div>` : ''}
+          ${progressMeta}
           ${summaryHtml}
         </div>
       </div>

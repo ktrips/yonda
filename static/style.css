@@ -1974,6 +1974,25 @@ header {
   box-shadow: 2px 2px 6px rgba(60,40,20,0.15);
 }
 .book-card-body { flex: 1; min-width: 0; }
+.book-card-top-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.2rem;
+}
+/* カード最上段のソースバッジ（フルラベル） */
+.badge-card-top {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  line-height: 1.4;
+  text-decoration: none;
+  letter-spacing: 0.02em;
+}
+a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .book-card-title {
   font-family: var(--font-title);
   font-size: 0.85rem; font-weight: 600; line-height: 1.35;
@@ -2773,15 +2792,29 @@ header {
   .view-toggle { justify-content: flex-start; margin-left: 0; }
   .book-grid { grid-template-columns: 1fr; }
   .book-card .book-cover {
-    width: 53px; height: 74px;
+    width: 56px; height: 80px;
   }
-  .book-card .badge-source:not(.badge-short) { display: none; }
+  .book-card .badge-source:not(.badge-short):not(.badge-card-top) { display: none; }
   .book-card .book-card-summary,
   .book-card .book-card-comment,
   .book-card .book-card-rating-content { display: none; }
-  .book-card .book-card-genre-row .book-card-genre { display: block; }
-  .book-card .book-card-meta { flex-wrap: nowrap; gap: 0.5rem; }
-  .book-card .book-card-title { -webkit-line-clamp: 2; padding: 0.25rem 0; }
+  .book-card .book-card-top-row { margin-bottom: 0.15rem; }
+  .book-card .book-card-title {
+    font-size: 0.82rem;
+    -webkit-line-clamp: 2;
+    line-height: 1.3;
+    margin-bottom: 0.15rem;
+  }
+  .book-card .book-card-author {
+    font-size: 0.7rem;
+    margin-bottom: 0.15rem;
+  }
+  .book-card .book-card-rating-row {
+    margin-bottom: 0.15rem;
+  }
+  .book-card .book-card-rating-row .star-rating { font-size: 0.8rem; }
+  .book-card .card-review-text { font-size: 0.68rem; }
+  .book-card .book-card-meta { flex-wrap: nowrap; gap: 0.5rem; font-size: 0.68rem; }
   .book-table th:nth-child(1), .book-table td:nth-child(1),
   .book-table th:nth-child(5), .book-table td:nth-child(5) { display: none; }
   .book-table .rating-comment { display: none; }
