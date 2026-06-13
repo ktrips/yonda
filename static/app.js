@@ -3666,11 +3666,11 @@ function renderMessageBookItem(item) {
     const truncated = personalReview.length > 50 ? personalReview.slice(0, 50) + '…' : personalReview;
     reviewCellHtml += `<div class="table-review-text">${escapeHtml(truncated)}</div>`;
   }
-  if (!hasRating && !personalReview) {
+  if (!personalReview) {
     if (book.source === 'paper' && book.book_id && !!_authUser) {
-      reviewCellHtml = `<button type="button" class="btn-unrated" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</button>`;
+      reviewCellHtml += `<button type="button" class="btn-unrated" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</button>`;
     } else if (reviewUrl) {
-      reviewCellHtml = `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`;
+      reviewCellHtml += `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`;
     }
   }
 
@@ -4567,11 +4567,11 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
       const truncated = personalReview.length > 50 ? personalReview.slice(0, 50) + '…' : personalReview;
       reviewCellHtml += `<div class="table-review-text">${escapeHtml(truncated)}</div>`;
     }
-    if (!hasRating && !personalReview) {
+    if (!personalReview) {
       if (book.source === 'paper' && book.book_id && !!_authUser) {
-        reviewCellHtml = `<button type="button" class="btn-unrated" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</button>`;
+        reviewCellHtml += `<button type="button" class="btn-unrated" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</button>`;
       } else if (reviewUrl) {
-        reviewCellHtml = `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`;
+        reviewCellHtml += `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`;
       }
     }
 
