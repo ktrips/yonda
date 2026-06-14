@@ -2625,8 +2625,13 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .book-detail-author { font-size: 0.9rem; color: var(--text-secondary); }
 /* 著者 + ナレーター 横並び */
 .book-detail-author-row {
-  display: flex; flex-wrap: wrap; align-items: baseline;
-  gap: 0.5rem 0.8rem; margin-bottom: 0.35rem;
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 0.3rem 0.5rem; margin-bottom: 0.35rem;
+}
+.book-detail-author-row .badge-source,
+.book-detail-author-row #bookDetailSrcBadge {
+  font-size: 0.7rem;
+  flex-shrink: 0;
 }
 .book-detail-narrator {
   font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap;
@@ -2712,6 +2717,19 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .book-detail-summary-wrap h3 {
   font-size: 0.85rem; font-weight: 600; color: var(--accent);
   margin-bottom: 0.5rem; padding-top: 0.75rem; border-top: 1px solid var(--border);
+}
+.book-detail-summary-header {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding-top: 0.75rem; border-top: 1px solid var(--border);
+  margin-bottom: 0.5rem;
+}
+.book-detail-summary-header h3 {
+  font-size: 0.85rem; font-weight: 600; color: var(--accent);
+  margin-bottom: 0; padding-top: 0; border-top: none;
+  white-space: nowrap;
+}
+.book-detail-summary-header .book-detail-genre {
+  margin-bottom: 0;
 }
 .book-detail-summary {
   font-size: 0.85rem; line-height: 1.7; color: var(--text);
