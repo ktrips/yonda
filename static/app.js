@@ -181,9 +181,24 @@ let allBooks = [];
 let filteredBooks = [];
 /** allBooks の O(1) インデックス検索用 Map（indexOf の O(n) を回避） */
 const _bookIndexMap = new Map();
+/** source:catalog → book のルックアップ Map */
+const _bookByCatalogMap = new Map();
+/** source:title:author → book のルックアップ Map */
+const _bookByTitleAuthorMap = new Map();
+
 function _rebuildBookIndexMap() {
   _bookIndexMap.clear();
-  allBooks.forEach((b, i) => _bookIndexMap.set(b, i));
+  _bookByCatalogMap.clear();
+  _bookByTitleAuthorMap.clear();
+  allBooks.forEach((b, i) => {
+    _bookIndexMap.set(b, i);
+    const src = (b.source || '').trim();
+    const catalog = (b.catalog_number || b.asin || '').trim();
+    if (catalog) _bookByCatalogMap.set(`${src}:${catalog}`, b);
+    const title = (b.title || '').trim();
+    const author = (b.author || '').trim();
+    _bookByTitleAuthorMap.set(`${src}:${title}:${author}`, b);
+  });
 }
 function _bookIndex(book) {
   return _bookIndexMap.has(book) ? _bookIndexMap.get(book) : allBooks.indexOf(book);
@@ -195,6 +210,23 @@ let monthlyChart = null;
 let genreChart = null;
 let currentDetailBook = null;
 let bookInsightsCache = {};
+/** title+author のセカンダリインデックス（Object.values().find の線形探索を回避） */
+const _insightByTitleAuthorMap = new Map();
+
+function _addToInsightCache(insight) {
+  if (!insight?.id) return;
+  bookInsightsCache[insight.id] = insight;
+  const key = `${(insight.title || '').trim()}:${(insight.author || '').trim()}`;
+  if (key !== ':') _insightByTitleAuthorMap.set(key, insight);
+}
+
+function _rebuildInsightIndex() {
+  _insightByTitleAuthorMap.clear();
+  for (const insight of Object.values(bookInsightsCache)) {
+    const key = `${(insight.title || '').trim()}:${(insight.author || '').trim()}`;
+    if (key !== ':') _insightByTitleAuthorMap.set(key, insight);
+  }
+}
 let yondaMessages = [];
 let archivedMessages = [];
 let messageBookRefs = [];
@@ -211,14 +243,13 @@ const NO_COVER = 'data:image/svg+xml,' + encodeURIComponent(
 
 /* --- Utility --- */
 
+const _HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text || '';
-  return div.innerHTML;
+  return (text || '').replace(/[&<>"']/g, c => _HTML_ESCAPE_MAP[c]);
 }
 
 function escapeAttr(text) {
-  return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return escapeHtml(text);
 }
 
 function starsHtml(rating, options = {}) {
@@ -1075,6 +1106,7 @@ async function loadBookInsightsCache() {
     console.error('loadBookInsightsCache error:', e);
     bookInsightsCache = {};
   }
+  _rebuildInsightIndex();
 }
 
 async function loadMessages() {
@@ -1240,16 +1272,29 @@ async function submitFetchOtp() {
 /* --- Stats --- */
 
 function _computeBookStats() {
-  const year = new Date().getFullYear();
-  const yearStr = String(year);
+  const yearStr = String(new Date().getFullYear());
+  let completed = 0, inProgress = 0, unread = 0, yearlyCompleted = 0, favorite = 0;
+  let star5 = 0, star4 = 0, star3 = 0;
+  for (const b of allBooks) {
+    if (b.completed) {
+      completed++;
+      if (b.completed_date?.startsWith(yearStr)) yearlyCompleted++;
+    } else if (isInProgress(b)) {
+      inProgress++;
+    } else {
+      unread++;
+    }
+    if (b.favorite) favorite++;
+    const r = displayRating(b) || 0;
+    if (r >= 5) star5++;
+    if (r >= 4) star4++;
+    if (r >= 3) star3++;
+  }
   return {
-    year,
-    completed:       allBooks.filter(b => b.completed).length,
-    inProgress:      allBooks.filter(b => isInProgress(b)).length,
-    unread:          allBooks.filter(b => isUnread(b)).length,
-    yearlyCompleted: allBooks.filter(b => b.completed && b.completed_date && b.completed_date.startsWith(yearStr)).length,
-    favorite:        allBooks.filter(b => b.favorite).length,
-    all:             allBooks.length,
+    year: +yearStr,
+    completed, inProgress, unread, yearlyCompleted, favorite,
+    all: allBooks.length,
+    star5, star4, star3,
   };
 }
 
@@ -1304,7 +1349,8 @@ function markMessageRead(id) {
 function updateBookTabLabels(s) {
   if (!s) s = _computeBookStats();
   const { completed: readCount, inProgress: inProgressCount, unread: unreadCount,
-          year, yearlyCompleted: yearlyCount, favorite: favoriteCount, all: allCount } = s;
+          year, yearlyCompleted: yearlyCount, favorite: favoriteCount, all: allCount,
+          star5, star4, star3 } = s;
   const rating = document.getElementById('ratingFilter')?.value || 'completed';
   const tabRead = document.getElementById('tabRead');
   const tabRanking = document.getElementById('tabRanking');
@@ -1318,9 +1364,9 @@ function updateBookTabLabels(s) {
     else if (rating === 'yearly_completed') label = `${year}年`;
     else if (rating === 'favorite') label = 'お気に入り';
     else if (rating === 'all') label = `すべて（${allCount}）`;
-    else if (rating === '5') label = `★★★★★（${allBooks.filter(b => (displayRating(b) || 0) >= 5).length}）`;
-    else if (rating === '4') label = `★★★★☆以上（${allBooks.filter(b => (displayRating(b) || 0) >= 4).length}）`;
-    else if (rating === '3') label = `★★★☆☆以上（${allBooks.filter(b => (displayRating(b) || 0) >= 3).length}）`;
+    else if (rating === '5') label = `★★★★★（${star5}）`;
+    else if (rating === '4') label = `★★★★☆以上（${star4}）`;
+    else if (rating === '3') label = `★★★☆☆以上（${star3}）`;
     else {
       const sel = document.getElementById('ratingFilter');
       label = sel?.selectedOptions?.[0]?.textContent || 'Yonda';
@@ -1477,11 +1523,15 @@ function populateRankingFilters() {
   const completed = allBooks.filter(b => b.completed && (displayRating(b) || 0) > 0);
   const years = [...new Set(completed.map(b => (b.completed_date || '').slice(0, 4)).filter(Boolean))].sort().reverse();
   const yearCurrent = yearSel.value;
-  yearSel.innerHTML = '<option value="all">全期間</option>';
-  for (const y of years) {
-    const cnt = completed.filter(b => (b.completed_date || '').startsWith(y)).length;
-    yearSel.innerHTML += `<option value="${escapeHtml(y)}">${escapeHtml(y)}年（${cnt}冊）</option>`;
+  // Map で事前集計し、最後に一括 innerHTML セット
+  const yearCounts = new Map(years.map(y => [y, 0]));
+  for (const b of completed) {
+    const y = (b.completed_date || '').slice(0, 4);
+    if (yearCounts.has(y)) yearCounts.set(y, yearCounts.get(y) + 1);
   }
+  const opts = ['<option value="all">全期間</option>',
+    ...years.map(y => `<option value="${y}">${y}年（${yearCounts.get(y)}冊）</option>`)];
+  yearSel.innerHTML = opts.join('');
   if ([...yearSel.options].some(o => o.value === yearCurrent)) yearSel.value = yearCurrent;
 }
 
@@ -3536,9 +3586,7 @@ function findBookInsight(book) {
   }
   const title = (book.title || '').trim();
   const author = (book.author || '').trim();
-  return Object.values(bookInsightsCache).find((item) =>
-    (item.title || '').trim() === title && (item.author || '').trim() === author
-  ) || null;
+  return _insightByTitleAuthorMap.get(`${title}:${author}`) || null;
 }
 
 function bookInsightCopyText(insight) {
@@ -3669,19 +3717,12 @@ function findBookFromMessage(book) {
   const source = (book.source || '').trim();
   const catalog = (book.catalog_number || book.asin || '').trim();
   if (catalog) {
-    const matched = allBooks.find(b =>
-      (b.source || '').trim() === source &&
-      ((b.catalog_number || b.asin || '').trim() === catalog)
-    );
+    const matched = _bookByCatalogMap.get(`${source}:${catalog}`);
     if (matched) return matched;
   }
   const title = (book.title || '').trim();
   const author = (book.author || '').trim();
-  return allBooks.find(b =>
-    (b.source || '').trim() === source &&
-    (b.title || '').trim() === title &&
-    (b.author || '').trim() === author
-  ) || book;
+  return _bookByTitleAuthorMap.get(`${source}:${title}:${author}`) || book;
 }
 
 function messageUpdatedCount(message) {
@@ -3895,7 +3936,7 @@ async function generateMessageBookInsight(button) {
       throw new Error(data.error || '生成に失敗しました');
     }
     ref.item.insight = data.insight;
-    if (data.insight?.id) bookInsightsCache[data.insight.id] = data.insight;
+    if (data.insight?.id) _addToInsightCache(data.insight);
     renderMessages();
   } catch (e) {
     ref.item.insight = { points: [], error: e.message || '生成に失敗しました' };
@@ -3956,7 +3997,7 @@ async function saveManualBookInsight() {
     if (!res.ok || !data.success) {
       throw new Error(data.error || '保存に失敗しました');
     }
-    if (data.insight?.id) bookInsightsCache[data.insight.id] = data.insight;
+    if (data.insight?.id) _addToInsightCache(data.insight);
     renderBookInsight(data.insight);
     if (document.getElementById('viewTable')?.classList.contains('active')) {
       renderBooks();
@@ -3978,7 +4019,7 @@ async function loadBookInsight(book) {
     const data = await res.json();
     if (currentDetailBook !== book) return;
     if (data.success && data.insight) {
-      if (data.insight.id) bookInsightsCache[data.insight.id] = data.insight;
+      if (data.insight.id) _addToInsightCache(data.insight);
       renderBookInsight(data.insight);
     }
   } catch (e) {
@@ -4013,7 +4054,7 @@ async function generateBookInsight(bookOverride = null, options = {}) {
     if (!res.ok || !data.success) {
       throw new Error(data.error || '生成に失敗しました');
     }
-    if (data.insight?.id) bookInsightsCache[data.insight.id] = data.insight;
+    if (data.insight?.id) _addToInsightCache(data.insight);
     if (!bookOverride && currentDetailBook === requestedBook) {
       renderBookInsight(data.insight);
     }
@@ -4513,14 +4554,15 @@ function renderBookCardHtml(book, { extraClass = '', extraAttrs = '', showUnrate
   const srcClass = book.source === 'audible_jp' ? ' source-audible' : '';
   const srcLabel_map = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'Kindle', paper: 'Paper' };
   const srcFullLabel = srcLabel_map[book.source] || book.source || '';
+  const affiliateTag = getAffiliateTag();
 
   const cardDetailUrl = (() => {
     if (book.source === 'paper') {
-      if (book.detail_url) return appendTagToUrl(book.detail_url, getAffiliateTag());
+      if (book.detail_url) return appendTagToUrl(book.detail_url, affiliateTag);
       const q = `${book.title || ''} ${book.author || ''}`.trim();
-      return q ? appendTagToUrl(`https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`, getAffiliateTag()) : '';
+      return q ? appendTagToUrl(`https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`, affiliateTag) : '';
     }
-    return book.detail_url ? appendTagToUrl(book.detail_url, getAffiliateTag()) : '';
+    return book.detail_url ? appendTagToUrl(book.detail_url, affiliateTag) : '';
   })();
 
   const srcBadge = srcFullLabel
@@ -4546,8 +4588,9 @@ function renderBookCardHtml(book, { extraClass = '', extraAttrs = '', showUnrate
   const completedExtra = book.completed
     ? ` · ${completedBadge}${book.completed_date ? ` ${formatDateOnly(book.completed_date)}` : ''}`
     : '';
+  const progress = formatProgress(book);
   const progressMeta = !book.completed
-    ? (formatProgress(book) ? `<div class="book-card-meta"><span>進捗: ${formatProgress(book)}</span></div>` : `<div class="book-card-meta"><span>${formatDate(book.loan_date)}</span></div>`)
+    ? (progress ? `<div class="book-card-meta"><span>進捗: ${progress}</span></div>` : `<div class="book-card-meta"><span>${formatDate(book.loan_date)}</span></div>`)
     : '';
 
   return `

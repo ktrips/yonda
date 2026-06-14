@@ -8,6 +8,7 @@ import re
 import threading
 import time
 import uuid
+import hashlib
 
 _DEFAULT_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -335,6 +336,10 @@ def fetch_and_save(library_id: str) -> dict:
 _saved_caches: dict[str, Optional[dict]] = {}
 _saved_cache_mtimes: dict[str, float] = {}
 
+# load_saved_for のキャッシュ (library_id → (data, mtime))
+_saved_for_caches: dict[str, Optional[dict]] = {}
+_saved_for_cache_mtimes: dict[str, float] = {}
+
 
 def _load_json_file(path) -> dict:
     """JSON ファイルを読み込む。'Extra data' エラー時は先頭の有効オブジェクトを返す。"""
@@ -392,10 +397,11 @@ def _load_saved_uncached() -> Optional[dict]:
         try:
             data = _load_json_file(path)
             books = data.get("books", [])
+            is_page_library = lid in ("setagaya", "paper")
             for b in books:
                 if not b.get("source"):
                     b["source"] = lid
-                if lid in ("setagaya", "paper") and (b.get("runtime_length_min") or 0) == 0:
+                if is_page_library and (b.get("runtime_length_min") or 0) == 0:
                     b["runtime_length_min"] = 240
             all_books.extend(books)
             sources.append({
@@ -425,12 +431,19 @@ def load_saved() -> Optional[dict]:
 
 
 def load_saved_for(library_id: str) -> Optional[dict]:
-    """特定ソースの保存済み JSON を読み込む"""
+    """特定ソースの保存済み JSON を読み込む（mtimeキャッシュ付き）"""
     path = _json_path_for(library_id)
     if not path.exists():
         return None
     try:
-        return _load_json_file(path)
+        mtime = path.stat().st_mtime
+        if (_saved_for_caches.get(library_id) is not None
+                and mtime <= _saved_for_cache_mtimes.get(library_id, 0.0)):
+            return _saved_for_caches[library_id]
+        data = _load_json_file(path)
+        _saved_for_caches[library_id] = data
+        _saved_for_cache_mtimes[library_id] = mtime
+        return data
     except (json.JSONDecodeError, OSError):
         return None
 
@@ -655,7 +668,6 @@ def book_insight_key(book: dict) -> str:
     title = (book.get("title") or "").strip()
     author = (book.get("author") or "").strip()
     raw = f"{source}::{title}::{author}".lower()
-    import hashlib
     return "book:" + hashlib.md5(raw.encode("utf-8")).hexdigest()[:16]
 
 
