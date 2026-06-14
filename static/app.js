@@ -1268,9 +1268,6 @@ function updateStats() {
   }
 
   document.getElementById('statTsundokuVal').textContent = s.inProgress;
-  document.getElementById('statYearlyVal').textContent = s.yearlyCompleted;
-  document.getElementById('statYearlyLabel').textContent = s.year + '年';
-  document.getElementById('statFavoriteVal').textContent = s.favorite;
   updateBookTabLabels(s);
 }
 
@@ -4137,11 +4134,20 @@ function openBookDetail(book) {
 
   if (dispRating > 0) {
     const starsContent = starsHtml(dispRating);
-    ratingEl.innerHTML = reviewUrl
+    let html = reviewUrl
       ? `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="rating-link stars-link" title="レビュー画面へ">${starsContent}</a>`
       : starsContent;
+    // 星はあるが個人レビューテキストがない場合も未レビューボタンを表示
+    if (isOwnBook && !personalReview) {
+      if (book.source === 'paper') {
+        html += ` <button type="button" class="btn-no-review" onclick="closeBookDetail();openPaperBookEditToRate('${escapeHtml(book.book_id || '')}')">未レビュー</button>`;
+      } else if (reviewUrl) {
+        html += ` <a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-no-review">未レビュー</a>`;
+      }
+    }
+    ratingEl.innerHTML = html;
   } else if (isOwnBook && !personalReview) {
-    // 自分の本で未レビューの場合のみ「未レビュー」ボタンを表示
+    // 星なし・自分の本で個人レビューがない場合
     if (book.source === 'paper') {
       ratingEl.innerHTML = `<button type="button" class="btn-no-review" onclick="closeBookDetail();openPaperBookEditToRate('${escapeHtml(book.book_id || '')}')">未レビュー</button>`;
     } else if (reviewUrl) {
@@ -6220,17 +6226,6 @@ document.getElementById('statTsundoku')?.addEventListener('click', (e) => {
   activeMainTab = 'yonda';
   activeBookTab = 'read';
   document.getElementById('ratingFilter').value = 'in_progress';
-  document.querySelectorAll('.book-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('tabRead')?.classList.add('active');
-  updateBookTabLabels();
-  updateMainTabVisibility();
-  applyFilters();
-});
-document.getElementById('statYearly')?.addEventListener('click', (e) => {
-  e.preventDefault();
-  activeMainTab = 'yonda';
-  activeBookTab = 'read';
-  document.getElementById('ratingFilter').value = 'yearly_completed';
   document.querySelectorAll('.book-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('tabRead')?.classList.add('active');
   updateBookTabLabels();

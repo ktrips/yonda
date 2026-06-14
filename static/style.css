@@ -2081,7 +2081,7 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
   flex-shrink: 0;
 }
 .card-review-text {
-  font-size: 0.72rem;
+  font-size: 0.86rem;
   color: var(--text-secondary);
   font-style: italic;
   overflow: hidden;
@@ -2195,6 +2195,9 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
     font-weight: 700;
     letter-spacing: 0;
   }
+  /* 詳細モーダルのバッジは常にフルラベルを表示 */
+  .badge-detail-src.badge-source[data-short] { font-size: 0.65rem; }
+  .badge-detail-src.badge-source[data-short]::before { content: none; }
 }
 .badge-favorite { color: #c45c6a; font-size: 0.75rem; }
 .badge-short {
@@ -2676,7 +2679,7 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .book-detail-rating { font-size: 0.95rem; flex-shrink: 0; }
 .book-detail-rating .stars { color: var(--star); font-size: 1rem; letter-spacing: 0.05em; }
 .book-detail-review-inline {
-  font-size: 0.82rem; color: var(--text-secondary); font-style: italic;
+  font-size: 0.98rem; color: var(--text-secondary); font-style: italic;
   line-height: 1.4; min-width: 0; word-break: break-all;
 }
 .btn-no-review {
@@ -2931,7 +2934,7 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
     margin-bottom: 0.15rem;
   }
   .book-card .book-card-rating-row .star-rating { font-size: 0.8rem; }
-  .book-card .card-review-text { font-size: 0.68rem; }
+  .book-card .card-review-text { font-size: 0.82rem; }
   .book-card .book-card-meta { flex-wrap: nowrap; gap: 0.5rem; font-size: 0.68rem; }
   .book-table th:nth-child(1), .book-table td:nth-child(1),
   .book-table th:nth-child(5), .book-table td:nth-child(5) { display: none; }
