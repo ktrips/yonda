@@ -3827,7 +3827,14 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 
 .paper-edit-save-wrap {
   display: flex;
+  align-items: center;
   gap: 0.5rem;
+}
+
+.paper-edit-save-wrap .btn-secondary.btn-sm {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.65rem;
+  opacity: 0.75;
 }
 
 .btn-danger {
