@@ -167,6 +167,20 @@
             </div>
           </div>
         </div>
+        <div id="loading" style="display:none;">
+          <div class="spinner"></div>
+          <p id="loadingMessage">読み込み中…</p>
+        </div>
+        <div id="error" class="error" style="display:none;"></div>
+        <div id="emptyState" class="empty-state">
+          <p>読書記録がありません。</p>
+          <p>メニューから「読書記録を取込み」を実行してください。</p>
+        </div>
+        <div id="bookTabs" class="book-tabs" style="display:none;">
+          <button type="button" class="book-tab active" id="tabRead" data-tab="read">Yonda</button>
+          <button type="button" class="book-tab" id="tabRanking" data-tab="ranking">ランキング</button>
+          <button type="button" class="book-tab" id="tabCommunity" data-tab="community">みんな</button>
+        </div>
         <div class="chart-section" id="chartSection" style="display:none;">
           <div class="chart-toggle" id="chartToggle">
             <span class="chart-toggle-title">読書グラフ</span>
@@ -204,20 +218,6 @@
               <p class="relation-heatmap-legend" id="relationHeatmapLegend">ジャンル × 評価の分布（色が濃いほど冊数が多い）</p>
             </div>
           </div>
-        </div>
-        <div id="loading" style="display:none;">
-          <div class="spinner"></div>
-          <p id="loadingMessage">読み込み中…</p>
-        </div>
-        <div id="error" class="error" style="display:none;"></div>
-        <div id="emptyState" class="empty-state">
-          <p>読書記録がありません。</p>
-          <p>メニューから「読書記録を取込み」を実行してください。</p>
-        </div>
-        <div id="bookTabs" class="book-tabs" style="display:none;">
-          <button type="button" class="book-tab active" id="tabRead" data-tab="read">Yonda</button>
-          <button type="button" class="book-tab" id="tabRanking" data-tab="ranking">ランキング</button>
-          <button type="button" class="book-tab" id="tabCommunity" data-tab="community">みんな</button>
         </div>
         <div id="communitySection" class="recommend-section" style="display:none;">
           <div id="pullToRefreshIndicator" class="ptr-indicator" aria-hidden="true">

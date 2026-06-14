@@ -2045,6 +2045,10 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .book-card-author {
   font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.3rem;
   overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  display: flex; align-items: center; gap: 0.3rem;
+}
+.book-card-src-inline {
+  flex-shrink: 0;
 }
 .book-card-rating-row {
   display: flex;

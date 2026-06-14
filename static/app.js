@@ -4515,11 +4515,11 @@ function renderBookCardHtml(book, { extraClass = '', extraAttrs = '', showUnrate
            onerror="this.src='${NO_COVER}'">
       <div class="book-card-body">
         <div class="book-card-title">${escapeHtml(book.title || '—')}</div>
-        <div class="book-card-author">${escapeHtml(book.author || '')}${authorExtra}${completedExtra}</div>
+        <div class="book-card-author">${escapeHtml(book.author || '')}${authorExtra}${completedExtra}${srcBadge ? `<span class="book-card-src-inline">${srcBadge}</span>` : ''}</div>
         ${bookRatingRowHtml(book, { showUnrated })}
         ${progressBarHtml}
         ${progressMeta}
-        <div class="book-card-top-row">${srcBadge}${favoriteBadge}</div>
+        <div class="book-card-top-row">${favoriteBadge}</div>
         ${summaryHtml}
       </div>
     </div>`;
