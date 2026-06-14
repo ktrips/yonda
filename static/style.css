@@ -647,6 +647,25 @@ header {
 .yonda-toast.yonda-toast-error   { background: #a33; }
 .yonda-toast.yonda-toast-info    { background: #555; }
 
+/* アクションボタン付きトースト */
+.yonda-action-toast {
+  position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%) translateY(2rem);
+  background: #2d7a2d; color: #fff;
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.65rem 1rem 0.65rem 1.25rem; border-radius: 8px;
+  font-size: 0.85rem; white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  z-index: 9999;
+}
+.yonda-action-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+.action-toast-btn {
+  background: rgba(255,255,255,0.25); color: #fff; border: 1px solid rgba(255,255,255,0.5);
+  border-radius: 4px; padding: 0.2rem 0.65rem; font-size: 0.8rem; cursor: pointer;
+  transition: background 0.15s;
+}
+.action-toast-btn:hover { background: rgba(255,255,255,0.4); }
+
 /* === Amazon ほしいものリスト === */
 .amazon-list-section {
   margin-top: 1rem;

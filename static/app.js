@@ -958,6 +958,7 @@ async function _submitPaperBookAdd() {
     const savedBook = data.book;
     if (savedBook) {
       showToast(`「${title}」を登録しました。追加情報を入力できます`, 'success');
+      _justAddedPaperBook = true;
       setTimeout(() => openPaperBookEdit(savedBook), 250);
       addToAmazonList({
         title: savedBook.title || title,
@@ -993,6 +994,26 @@ function showToast(message, type = 'success') {
   toast.className = `yonda-toast yonda-toast-${type} show`;
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+/** アクションボタン付きトースト */
+function showActionToast(message, actionLabel, onAction, duration = 6000) {
+  const id = 'yondaActionToast';
+  let toast = document.getElementById(id);
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = id;
+    document.body.appendChild(toast);
+  }
+  toast.innerHTML = `<span class="action-toast-msg">${escapeHtml(message)}</span>
+    <button type="button" class="action-toast-btn">${escapeHtml(actionLabel)}</button>`;
+  toast.className = 'yonda-action-toast show';
+  toast.querySelector('.action-toast-btn').onclick = () => {
+    toast.classList.remove('show');
+    onAction();
+  };
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.remove('show'), duration);
 }
 
 /**
@@ -4235,6 +4256,7 @@ function closeBookDetail() {
 // ── 紙の本 編集モーダル ──────────────────────────────────────────────────────
 
 let _paperEditBook = null;
+let _justAddedPaperBook = false;
 
 /** 紙の本編集モーダルを開き、評価・書評フィールドにスクロール */
 function openPaperBookEditToRate(bookId) {
@@ -4390,13 +4412,27 @@ async function savePaperBookEdit() {
     });
     const data = await res.json();
     if (data.success) {
-      showToast('保存しました', 'success');
+      const wasNew = _justAddedPaperBook;
+      _justAddedPaperBook = false;
+      const savedBookSnap = _paperEditBook;
       if (data.books) {
         allBooks = data.books;
         _rebuildBookIndexMap();
         applyFilters();
       }
       closePaperBookEdit();
+      if (wasNew && savedBookSnap) {
+        const savedId = savedBookSnap.book_id;
+        const savedTitle = savedBookSnap.title || body.title || '本';
+        const target = savedId
+          ? allBooks.find(b => b.book_id === savedId)
+          : allBooks.find(b => b.title === body.title && b.author === body.author);
+        showActionToast(`「${savedTitle}」を追加しました！`, '確認する', () => {
+          if (target) openBookDetail(target);
+        });
+      } else {
+        showToast('保存しました', 'success');
+      }
     } else {
       showToast(data.error || '保存に失敗しました', 'error');
     }
