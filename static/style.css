@@ -3844,9 +3844,27 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
   background: #c0392b;
 }
 
+/* 目立たない削除ボタン（ゴーストスタイル） */
+.btn-danger-ghost {
+  background: transparent;
+  color: #c0392b;
+  border: 1px solid #e0b0b0;
+  padding: 0.25rem 0.6rem;
+  border-radius: 5px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.btn-danger-ghost:hover {
+  background: #fdf0f0;
+  opacity: 1;
+}
+
 /* 詳細モーダル内の紙の本アクションバー */
 .book-detail-paper-actions {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.6rem;
   margin-top: 0.9rem;
   padding-top: 0.75rem;

@@ -4201,8 +4201,8 @@ function openBookDetail(book) {
       && allBooks.some(b => b.book_id && b.book_id === book.book_id);
     if (isOwnPaperBook) {
       paperEditBar.innerHTML = `
+        <button type="button" class="btn btn-danger-ghost btn-sm" id="paperDetailDeleteBtn">🗑 削除</button>
         <button type="button" class="btn btn-secondary" id="paperDetailEditBtn">✏️ 編集</button>
-        <button type="button" class="btn btn-danger" id="paperDetailDeleteBtn">🗑 削除</button>
       `;
       document.getElementById('paperDetailEditBtn').onclick = () => { closeBookDetail(); openPaperBookEdit(book); };
       document.getElementById('paperDetailDeleteBtn').onclick = () => confirmDeletePaperBook(book);
