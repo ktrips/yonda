@@ -1307,7 +1307,19 @@ function updateBookTabLabels(s) {
       const sel = document.getElementById('ratingFilter');
       label = sel?.selectedOptions?.[0]?.textContent || 'Yonda';
     }
-    tabRead.textContent = label;
+    // ログインユーザーのアイコンをタブに表示
+    if (_authUser) {
+      const pic = _authUser.picture
+        ? (_authUser.picture.includes('=s') ? _authUser.picture : _authUser.picture + '=s32-c')
+        : '';
+      const init = escapeHtml(([...((_authUser.name || _authUser.email || '?').split(' ')[0])][0] || '?').toUpperCase());
+      const avatarHtml = pic
+        ? `<img src="${escapeHtml(pic)}" class="tab-user-avatar" alt="" onerror="this.style.display='none'">`
+        : `<span class="tab-user-avatar tab-user-avatar-init">${init}</span>`;
+      tabRead.innerHTML = `${avatarHtml}<span>${escapeHtml(label)}</span>`;
+    } else {
+      tabRead.textContent = label;
+    }
   }
   if (tabRanking) tabRanking.textContent = 'ランキング';
   const tabCommunity = document.getElementById('tabCommunity');
@@ -1697,7 +1709,7 @@ function renderCommunitySection() {
       dateMap.forEach((userMap, dateKey) => {
         const userBlocks = [];
         userMap.forEach(({ user: msgUser, msgs }) => {
-          const userName = msgUser.name || msgUser.email || '匿名';
+          const userName = (msgUser.name || msgUser.email || '匿名').split(' ')[0];
           const avatarSrc = msgUser.picture || '';
           const avatarUrl = avatarSrc && !avatarSrc.includes('=s')
             ? avatarSrc + '=s64-c' : avatarSrc;
