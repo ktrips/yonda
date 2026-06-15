@@ -1833,11 +1833,9 @@ function renderCommunitySection() {
           userBlocks.push(`<div class="ig-post-card">
             <div class="ig-post-header">
               ${avatarHtml}
-              <div class="ig-post-meta">
-                <div class="ig-user-name">${escapeHtml(userName)}</div>
-                ${srcBadges ? `<div class="ig-src-counts">${srcBadges}</div>` : ''}
-              </div>
-              <div class="ig-post-count">${allMsgBooks.length}冊</div>
+              <span class="ig-user-name">${escapeHtml(userName)}</span>
+              ${srcBadges}
+              <span class="ig-post-count">${allMsgBooks.length}冊</span>
             </div>
             <div class="community-cards-wrap">${bookCards}</div>
           </div>`);

@@ -35,6 +35,26 @@ os.chdir(APP_DIR)
 
 AI_CONFIG_PATH = get_ai_config_path()
 
+# 静的ファイルのキャッシュバスティング用バージョン文字列
+# 環境変数 APP_VERSION があれば使用（CI が git SHA を注入）、なければ起動時刻を使用
+def _get_app_version() -> str:
+    v = os.environ.get("APP_VERSION", "")
+    if v:
+        return v
+    # git SHA を取得（開発環境用）
+    try:
+        import subprocess
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=APP_DIR, stderr=subprocess.DEVNULL, timeout=3
+        ).decode().strip()
+    except Exception:
+        pass
+    import time
+    return str(int(time.time()))
+
+APP_VERSION = _get_app_version()
+
 # Kindle OTP ログイン用セッション（session_id -> {cookies, otp_page_html}）
 _kindle_otp_sessions: dict[str, dict] = {}
 
@@ -44,6 +64,8 @@ app = Flask(
     static_folder=str(APP_DIR / "static"),
 )
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
+# 静的ファイルの max-age を短く設定（キャッシュバスティング用 ?v= クエリと併用）
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 60
 def _get_stable_secret_key() -> str:
     """FLASK_SECRET_KEY 未設定時は複数インスタンスで共有できるキーを生成する。
     Google Client Secret から派生させることで Cloud Run 全インスタンスで一致させる。"""
@@ -441,7 +463,7 @@ def api_internal_auto_fetch():
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", app_version=APP_VERSION)
 
 
 @app.route("/api/docs")

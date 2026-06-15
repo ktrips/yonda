@@ -7,8 +7,6 @@ name: Deploy yonda to Cloud Run
 on:
   push:
     branches: [main]
-    paths:
-      - '**'
   workflow_dispatch:
     inputs:
       image_only:
@@ -107,32 +105,14 @@ jobs:
       - name: Build and push Docker image
         run: |
           IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:latest"
-          # ビルドIDをsubmit出力から直接取得（競合回避）
-          SUBMIT_OUT=$(gcloud builds submit --async --tag "${IMAGE_TAG}" --timeout=600 . 2>&1)
-          echo "${SUBMIT_OUT}"
-          BUILD_ID=$(echo "${SUBMIT_OUT}" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-          if [[ -z "${BUILD_ID}" ]]; then
-            echo "WARNING: UUIDが取得できません。最新ビルドIDを使用します"
-            BUILD_ID=$(gcloud builds list --limit=1 --format='value(id)')
-          fi
-          echo "Waiting for build ${BUILD_ID}..."
-          for i in $(seq 1 60); do
-            STATUS=$(gcloud builds describe "${BUILD_ID}" --format='value(status)' 2>/dev/null || echo "UNKNOWN")
-            echo "  [${i}/60] Build status: ${STATUS}"
-            case "$STATUS" in
-              SUCCESS) echo "✔ Build completed successfully"; break ;;
-              FAILURE|CANCELLED|EXPIRED)
-                echo "Build failed with status: ${STATUS}"
-                echo "--- Cloud Build ログ ---"
-                gcloud builds log "${BUILD_ID}" 2>/dev/null | tail -50 || true
-                exit 1 ;;
-              *) sleep 15 ;;
-            esac
-          done
-          if [[ "${STATUS}" != "SUCCESS" ]]; then
-            echo "Build timed out (status: ${STATUS})"
-            exit 1
-          fi
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+          # 同期ビルド（--async 廃止）: 完了まで待機してからデプロイに進む
+          gcloud builds submit \
+            --tag "${IMAGE_TAG}" \
+            --timeout=900 \
+            . 2>&1
+          echo "✔ Build completed: ${IMAGE_TAG} (version: ${SHORT_SHA})"
 
       - name: Deploy (image only)
         if: ${{ github.event.inputs.image_only == 'true' }}
@@ -141,6 +121,7 @@ jobs:
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image "${IMAGE_TAG}" \
             --region ${{ env.REGION }} \
+            --update-env-vars "APP_VERSION=${{ github.sha }}" \
             --quiet
           echo "✔ イメージ更新デプロイ完了"
 
@@ -239,7 +220,7 @@ jobs:
             --add-volume "name=data-vol,type=cloud-storage,bucket=${BUCKET_NAME}" \
             --add-volume-mount "volume=data-vol,mount-path=/mnt/data" \
             --set-secrets "/secrets/auth_jp.json=${AUTH_SECRET}:latest" \
-            --update-env-vars "YONDA_DATA_DIR=/mnt/data,YONDA_AUTH_FILE=/secrets/auth_jp.json,YONDA_CREDS_PATH=/mnt/data/.credentials.json,YONDA_KINDLE_SESSION_PATH=/mnt/data/kindle_session.json,YONDA_AI_CONFIG_PATH=/mnt/data/ai_config.json" \
+            --update-env-vars "YONDA_DATA_DIR=/mnt/data,YONDA_AUTH_FILE=/secrets/auth_jp.json,YONDA_CREDS_PATH=/mnt/data/.credentials.json,YONDA_KINDLE_SESSION_PATH=/mnt/data/kindle_session.json,YONDA_AI_CONFIG_PATH=/mnt/data/ai_config.json,APP_VERSION=${{ github.sha }}" \
             --quiet
           echo "✔ Cloud Run デプロイ完了"
 
