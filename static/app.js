@@ -438,7 +438,7 @@ function getAudibleRatingUrl(book) {
 }
 
 const SOURCE_LABELS = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'Kindle', paper: 'Paper' };
-const SOURCE_SHORT_LABELS = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' };
+const SOURCE_SHORT_LABELS = { setagaya: 'L', audible_jp: 'A', kindle: 'K', paper: 'P' };
 function sourceLabel(source) { return SOURCE_LABELS[source] || source || ''; }
 function sourceShortLabel(source) { return SOURCE_SHORT_LABELS[source] || SOURCE_LABELS[source] || source || ''; }
 function sourceBadgeHtml(source, extraClass = '') {
@@ -1441,11 +1441,14 @@ function updateTabContentVisibility() {
   // ランキングバー（年フィルター）はランキングタブのみ表示
   if (myRankingBar) myRankingBar.style.display = (activeBookTab === 'ranking' && allBooks.length > 0) ? 'flex' : 'none';
 
+  const chartSection = document.getElementById('chartSection');
+
   if (activeBookTab === 'ranking') {
     if (bookList) bookList.style.display = 'none';
     if (pagination) pagination.style.display = 'none';
     if (communitySection) communitySection.style.display = 'none';
     if (messagesSection) messagesSection.style.display = 'none';
+    if (chartSection) chartSection.style.display = 'none';
     if (rankingSection) {
       rankingSection.style.display = 'block';
       selectedRankingGenre = null;
@@ -1457,6 +1460,7 @@ function updateTabContentVisibility() {
     if (pagination) pagination.style.display = 'none';
     if (rankingSection) rankingSection.style.display = 'none';
     if (messagesSection) messagesSection.style.display = 'none';
+    if (chartSection) chartSection.style.display = 'none';
     if (communitySection) {
       communitySection.style.display = 'block';
       renderCommunitySection();
@@ -1466,15 +1470,17 @@ function updateTabContentVisibility() {
     if (pagination) pagination.style.display = 'none';
     if (rankingSection) rankingSection.style.display = 'none';
     if (communitySection) communitySection.style.display = 'none';
+    if (chartSection) chartSection.style.display = 'none';
     if (messagesSection) {
       messagesSection.style.display = 'block';
       renderMessages();
     }
   } else {
-    // read タブ
+    // read タブ — グラフを（データがあれば）表示
     if (rankingSection) rankingSection.style.display = 'none';
     if (communitySection) communitySection.style.display = 'none';
     if (messagesSection) messagesSection.style.display = 'none';
+    if (chartSection && allBooks.length > 0) scheduleRenderCharts();
     // bookList / pagination は renderBooks で表示制御
   }
 }
@@ -1796,6 +1802,17 @@ function renderCommunitySection() {
             seenTitles.add(b.title);
             return true;
           }));
+          // ソース別冊数カウント (A/K/L/P)
+          const srcCount = { audible_jp: 0, kindle: 0, setagaya: 0, paper: 0 };
+          for (const item of allMsgBooks) {
+            const src = (item.book || item).source;
+            if (src in srcCount) srcCount[src]++;
+          }
+          const srcBadges = [
+            ['audible_jp', 'A'], ['kindle', 'K'], ['setagaya', 'L'], ['paper', 'P'],
+          ].filter(([key]) => srcCount[key] > 0)
+           .map(([key, label]) => `<span class="ig-src-count ig-src-${key}">${label}:${srcCount[key]}</span>`)
+           .join('');
 
           const bookCards = allMsgBooks.map(item => {
             const book = item.book || item;
@@ -1818,6 +1835,7 @@ function renderCommunitySection() {
               ${avatarHtml}
               <div class="ig-post-meta">
                 <div class="ig-user-name">${escapeHtml(userName)}</div>
+                ${srcBadges ? `<div class="ig-src-counts">${srcBadges}</div>` : ''}
               </div>
               <div class="ig-post-count">${allMsgBooks.length}冊</div>
             </div>
@@ -3005,24 +3023,18 @@ function renderMonthlyChart() {
     const runtime = (b.runtime_length_min || 0) | 0;
     if (d.length >= 7) {
       const ym = d.substring(0, 7);
-      if (!monthMap[ym]) monthMap[ym] = { library: 0, audible: 0 };
+      if (!monthMap[ym]) monthMap[ym] = { audible: 0, kindle: 0, library: 0, paper: 0 };
       if (!runtimeMonthMap[ym]) runtimeMonthMap[ym] = 0;
       if (b.source === 'audible_jp') {
         monthMap[ym].audible++;
         if (useRuntime && b.completed && runtime > 0) {
           const compYm = (b.completed_date || '').substring(0, 7);
-          if (compYm.length >= 7) {
-            runtimeMonthMap[compYm] = (runtimeMonthMap[compYm] || 0) + runtime;
-          }
+          if (compYm.length >= 7) runtimeMonthMap[compYm] = (runtimeMonthMap[compYm] || 0) + runtime;
         }
-      } else if (b.source === 'setagaya') {
-        monthMap[ym].library++;
-        if (useRuntime && b.completed && runtime > 0) {
-          const compYm = (b.completed_date || '').substring(0, 7);
-          if (compYm.length >= 7) {
-            runtimeMonthMap[compYm] = (runtimeMonthMap[compYm] || 0) + runtime;
-          }
-        }
+      } else if (b.source === 'kindle') {
+        monthMap[ym].kindle++;
+      } else if (b.source === 'paper') {
+        monthMap[ym].paper++;
       } else {
         monthMap[ym].library++;
       }
@@ -3036,11 +3048,13 @@ function renderMonthlyChart() {
   const allMonths = new Set([...Object.keys(monthMap), ...Object.keys(compMonthMap), ...Object.keys(runtimeMonthMap)]);
   const labels = [...allMonths].sort();
   const last24 = labels.slice(-24);
-  const libData = useRuntime ? last24.map(() => 0) : last24.map(k => (monthMap[k]?.library || 0));
   const audData = useRuntime
     ? last24.map(k => Math.round(((runtimeMonthMap[k] || 0) / 60) * 10) / 10)
     : last24.map(k => (monthMap[k]?.audible || 0));
-  const compData = last24.map(k => (compMonthMap[k] || 0));
+  const kindleData = last24.map(k => (monthMap[k]?.kindle || 0));
+  const libData   = last24.map(k => (monthMap[k]?.library || 0));
+  const paperData = last24.map(k => (monthMap[k]?.paper || 0));
+  const compData  = last24.map(k => (compMonthMap[k] || 0));
   const shortLabels = last24.map(k => {
     const [y, m] = k.split('-');
     return m === '01' ? `${y}/${m}` : m;
@@ -3050,20 +3064,43 @@ function renderMonthlyChart() {
   if (monthlyChart) monthlyChart.destroy();
 
   const datasets = [
-    ...(useRuntime ? [] : [{
-      label: '図書館',
-      data: libData,
-      backgroundColor: 'rgba(107,66,38,0.65)',
-      borderRadius: 2,
-      barPercentage: 0.7,
-    }]),
-    {
-      label: useRuntime ? '読了（視聴時間）' : 'Audible',
+    ...(useRuntime ? [] : [
+      {
+        label: 'A',
+        data: audData,
+        backgroundColor: 'rgba(192,94,32,0.65)',
+        borderRadius: 2,
+        barPercentage: 0.7,
+      },
+      {
+        label: 'K',
+        data: kindleData,
+        backgroundColor: 'rgba(51,102,170,0.65)',
+        borderRadius: 2,
+        barPercentage: 0.7,
+      },
+      {
+        label: 'L',
+        data: libData,
+        backgroundColor: 'rgba(107,66,38,0.65)',
+        borderRadius: 2,
+        barPercentage: 0.7,
+      },
+      {
+        label: 'P',
+        data: paperData,
+        backgroundColor: 'rgba(60,140,80,0.65)',
+        borderRadius: 2,
+        barPercentage: 0.7,
+      },
+    ]),
+    ...(useRuntime ? [{
+      label: '読了（視聴時間）',
       data: audData,
       backgroundColor: 'rgba(192,94,32,0.55)',
       borderRadius: 2,
       barPercentage: 0.7,
-    },
+    }] : []),
     {
       label: '読了',
       data: compData,
@@ -3738,9 +3775,13 @@ function renderMessageSummaryRow(message, idx) {
   const updatedCount = messageUpdatedCount(message);
   const dateText = message.created_at ? formatSyncDate(message.created_at) : '日時不明';
   const summary = message.sync_summary || {};
-  const sources = Array.isArray(summary.sources) ? summary.sources : [];
-  const sourceText = sources.length
-    ? sources.map(src => `${src.label || sourceLabel(src.source)} ${Number(src.total || 0)}冊`).join(' / ')
+  // サーバー側 sources が未設定/Kindle・Paper未収録の場合は books から集計
+  const serverSources = Array.isArray(summary.sources) ? summary.sources : [];
+  const sourcesForDisplay = serverSources.length
+    ? serverSources
+    : getMessageSourceGroups(message).map(g => ({ source: g.source, label: sourceShortLabel(g.source), total: g.count }));
+  const sourceText = sourcesForDisplay.length
+    ? sourcesForDisplay.map(src => `${src.label || sourceShortLabel(src.source)} ${Number(src.total || 0)}`).join(' / ')
     : '';
   return `
     <button type="button" class="message-summary-row${isOpen ? ' open' : ''}${isUnread ? ' unread' : ''}" data-message-id="${escapeAttr(id)}">
