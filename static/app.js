@@ -1802,17 +1802,6 @@ function renderCommunitySection() {
             seenTitles.add(b.title);
             return true;
           }));
-          // ソース別冊数カウント (A/K/L/P)
-          const srcCount = { audible_jp: 0, kindle: 0, setagaya: 0, paper: 0 };
-          for (const item of allMsgBooks) {
-            const src = (item.book || item).source;
-            if (src in srcCount) srcCount[src]++;
-          }
-          const srcBadges = [
-            ['audible_jp', 'A'], ['kindle', 'K'], ['setagaya', 'L'], ['paper', 'P'],
-          ].filter(([key]) => srcCount[key] > 0)
-           .map(([key, label]) => `<span class="ig-src-count ig-src-${key}">${label}:${srcCount[key]}</span>`)
-           .join('');
 
           const bookCards = allMsgBooks.map(item => {
             const book = item.book || item;
@@ -1834,7 +1823,6 @@ function renderCommunitySection() {
             <div class="ig-post-header">
               ${avatarHtml}
               <span class="ig-user-name">${escapeHtml(userName)}</span>
-              ${srcBadges}
               <span class="ig-post-count">${allMsgBooks.length}冊</span>
             </div>
             <div class="community-cards-wrap">${bookCards}</div>
