@@ -387,78 +387,98 @@ def api_admin_backfill_messages():
 @app.route("/api/internal/auto-fetch", methods=["POST"])
 def api_internal_auto_fetch():
     """Cloud Scheduler から呼ばれる内部自動取得エンドポイント。
-    X-Internal-Token ヘッダーで認証。uid を指定してそのユーザーの書籍を取得し、
-    新規読了があれば同期メッセージも生成する。"""
+    認証: X-Internal-Token ヘッダー（YONDA_INTERNAL_TOKEN が設定済みの場合）
+         または Cloud Scheduler が自動付与する X-CloudScheduler: true ヘッダー。
+    uid=all または uid 未指定の場合は DATA_DIR/users/ 配下の全ユーザーを処理する。"""
     import hmac
+
+    # 認証: X-Internal-Token（設定済みの場合）または X-CloudScheduler ヘッダー
+    is_scheduler = request.headers.get("X-CloudScheduler", "").lower() == "true"
     token = request.headers.get("X-Internal-Token", "")
-    if not _INTERNAL_TOKEN or not hmac.compare_digest(token, _INTERNAL_TOKEN):
+    token_ok = _INTERNAL_TOKEN and hmac.compare_digest(token, _INTERNAL_TOKEN)
+    if not is_scheduler and not token_ok:
         logger.warning("内部取得: 認証失敗 (IP=%s)", request.remote_addr)
         return jsonify({"error": "unauthorized"}), 401
 
     body = request.get_json(silent=True) or {}
-    uid = body.get("uid", "").strip()
-    sources = body.get("sources") or ["kindle"]
+    uid = (body.get("uid") or "").strip()
+    sources = body.get("sources") or ["setagaya", "audible_jp"]
 
-    if not uid:
-        return jsonify({"error": "uid は必須です"}), 400
+    # uid=all または未指定の場合は全ユーザーを対象
+    if not uid or uid == "all":
+        users_dir = library_service.DATA_DIR / "users"
+        if not users_dir.exists():
+            return jsonify({"error": "users ディレクトリが見つかりません"}), 404
+        uid_list = [d.name for d in users_dir.iterdir() if d.is_dir()]
+        if not uid_list:
+            return jsonify({"error": "登録ユーザーが見つかりません"}), 404
+    else:
+        uid_list = [uid]
 
-    # ユーザーデータディレクトリを強制セット
-    user_data_dir = library_service.DATA_DIR / "users" / uid
-    if not user_data_dir.exists():
-        return jsonify({"error": f"uid={uid} のデータディレクトリが見つかりません"}), 404
-    library_service.set_user_data_dir(user_data_dir)
+    all_results = {}
+    for target_uid in uid_list:
+        user_data_dir = library_service.DATA_DIR / "users" / target_uid
+        if not user_data_dir.exists():
+            all_results[target_uid] = {"error": "データディレクトリが見つかりません"}
+            continue
 
-    # Firestore からユーザープロフィールを取得（メッセージに付与）
-    user_info = None
-    try:
-        import firestore_service  # noqa: PLC0415
-        db = firestore_service.get_db()
-        if db:
-            doc = db.collection("users").document(uid).get()
-            if doc.exists:
-                d = doc.to_dict() or {}
-                user_info = {
-                    "name":    d.get("name", ""),
-                    "email":   d.get("email", ""),
-                    "picture": d.get("picture", ""),
-                }
-    except Exception as e:
-        logger.warning("ユーザー情報取得失敗: %s", e)
+        library_service.set_user_data_dir(user_data_dir)
 
-    source_map = {"kindle": "kindle", "audible": "audible_jp", "setagaya": "setagaya"}
-    results = {}
-    errors = {}
-    previous_payloads = {}
-    current_payloads = {}
-
-    for source in sources:
-        lib_id = source_map.get(source, source)
+        # Firestore からユーザープロフィールを取得
+        user_info = None
         try:
-            previous_payloads[lib_id] = library_service.load_saved_for(lib_id)
-            logger.info("自動取得開始: source=%s uid=%s", source, uid)
-            payload = library_service.fetch_and_save(lib_id)
-            current_payloads[lib_id] = payload
-            results[source] = {"total": payload.get("total", 0)}
+            import firestore_service  # noqa: PLC0415
+            db = firestore_service.get_db()
+            if db:
+                doc = db.collection("users").document(target_uid).get()
+                if doc.exists:
+                    d = doc.to_dict() or {}
+                    user_info = {
+                        "name":    d.get("name", ""),
+                        "email":   d.get("email", ""),
+                        "picture": d.get("picture", ""),
+                    }
         except Exception as e:
-            logger.error("自動取得エラー: source=%s uid=%s error=%s", source, uid, e, exc_info=True)
-            errors[source] = str(e)
+            logger.warning("ユーザー情報取得失敗 uid=%s: %s", target_uid, e)
 
-    # 新規読了があればメッセージ生成
-    message = None
-    if current_payloads:
-        try:
-            message = _create_completed_books_message(previous_payloads, current_payloads, errors)
-            if message and user_info:
-                message["user"] = user_info
-                library_service.update_yonda_message(message)
-                logger.info("同期メッセージ更新: %d冊", len(message.get("books", [])))
-        except Exception as e:
-            logger.error("同期メッセージ生成エラー: %s", e)
+        source_map = {"kindle": "kindle", "audible": "audible_jp", "audible_jp": "audible_jp", "setagaya": "setagaya"}
+        results = {}
+        errors = {}
+        previous_payloads = {}
+        current_payloads = {}
 
-    status = "ok" if not errors else ("partial" if results else "error")
-    new_books = len(message.get("books", [])) if message else 0
-    logger.info("自動取得完了: uid=%s results=%s errors=%s new_books=%d", uid, results, errors, new_books)
-    return jsonify({"status": status, "results": results, "errors": errors, "new_books": new_books})
+        for source in sources:
+            lib_id = source_map.get(source, source)
+            try:
+                previous_payloads[lib_id] = library_service.load_saved_for(lib_id)
+                logger.info("自動取得開始: source=%s uid=%s", lib_id, target_uid)
+                payload = library_service.fetch_and_save(lib_id)
+                current_payloads[lib_id] = payload
+                results[lib_id] = {"total": payload.get("total", 0)}
+                logger.info("自動取得完了: source=%s uid=%s total=%d", lib_id, target_uid, payload.get("total", 0))
+            except Exception as e:
+                logger.error("自動取得エラー: source=%s uid=%s error=%s", lib_id, target_uid, e, exc_info=True)
+                errors[lib_id] = str(e)
+
+        # 新規読了があればメッセージ生成
+        if current_payloads:
+            try:
+                message = _create_completed_books_message(previous_payloads, current_payloads, errors)
+                if message and user_info:
+                    message["user"] = user_info
+                    library_service.update_yonda_message(message)
+                    logger.info("同期メッセージ更新: uid=%s %d冊", target_uid, len(message.get("books", [])))
+            except Exception as e:
+                logger.error("同期メッセージ生成エラー uid=%s: %s", target_uid, e)
+
+        all_results[target_uid] = {
+            "results": results,
+            "errors": errors,
+            "status": "ok" if not errors else ("partial" if results else "error"),
+        }
+
+    logger.info("全ユーザー自動取得完了: %s", {u: v["status"] for u, v in all_results.items()})
+    return jsonify({"success": True, "users": all_results})
 
 
 @app.route("/")

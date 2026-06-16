@@ -239,8 +239,9 @@ jobs:
       - name: Setup Cloud Scheduler (fetch 6/12/18 JST)
         if: ${{ github.event.inputs.image_only != 'true' }}
         run: |
-          FETCH_URL="$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.url)')/api/fetch"
-          FETCH_BODY='{"library_id":"all","notify_completed":true}'
+          SERVICE_URL="$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.url)')"
+          FETCH_URL="${SERVICE_URL}/api/internal/auto-fetch"
+          FETCH_BODY='{"uid":"all","sources":["setagaya","audible_jp"]}'
           setup_job() {
             local name="$1" schedule="$2"
             if gcloud scheduler jobs describe "${name}" \
