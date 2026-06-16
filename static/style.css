@@ -2172,6 +2172,20 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
   vertical-align: middle; letter-spacing: 0.04em;
   cursor: pointer;
 }
+.badge-new-book {
+  display: inline-block;
+  background: #e04040;
+  color: #fff;
+  font-size: 0.55rem;
+  font-weight: 800;
+  padding: 0 3px;
+  border-radius: 3px;
+  vertical-align: middle;
+  margin-right: 3px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
 .badge-source {
   display: inline-block; padding: 0.08rem 0.3rem;
   border-radius: 3px; font-size: 0.55rem; font-weight: 600;

@@ -442,6 +442,18 @@ const SOURCE_LABELS = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'K
 const SOURCE_SHORT_LABELS = { setagaya: 'L', audible_jp: 'A', kindle: 'K', paper: 'P' };
 function sourceLabel(source) { return SOURCE_LABELS[source] || source || ''; }
 function sourceShortLabel(source) { return SOURCE_SHORT_LABELS[source] || SOURCE_LABELS[source] || source || ''; }
+
+/** 7日以内に追加/同期された本かどうか */
+function isRecentBook(book, days = 7) {
+  const dateStr = book.loan_date || book.added_date || '';
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return d >= cutoff;
+}
+
 function sourceBadgeHtml(source, extraClass = '') {
   if (!source) return '';
   const label = escapeHtml(sourceLabel(source));
@@ -4637,13 +4649,15 @@ function renderBookCardHtml(book, { extraClass = '', extraAttrs = '', showUnrate
     ? (progress ? `<div class="book-card-meta"><span>進捗: ${progress}</span></div>` : `<div class="book-card-meta"><span>${formatDate(book.loan_date)}</span></div>`)
     : '';
 
+  const newBadge = isRecentBook(book) ? '<span class="badge-new-book">N</span>' : '';
+
   return `
     <div class="book-card${book.completed ? ' completed' : ''}${srcClass}${extraClass ? ' ' + extraClass : ''}"
          role="button" tabindex="0" style="background:${cardBg}; cursor:pointer;" ${extraAttrs}>
       <img class="book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
            onerror="this.src='${NO_COVER}'">
       <div class="book-card-body">
-        <div class="book-card-title">${escapeHtml(book.title || '—')}</div>
+        <div class="book-card-title">${newBadge}${escapeHtml(book.title || '—')}</div>
         <div class="book-card-author">${escapeHtml(book.author || '')}${authorExtra}${completedExtra}${srcBadge ? `<span class="book-card-src-inline">${srcBadge}</span>` : ''}</div>
         ${bookRatingRowHtml(book, { showUnrated })}
         ${progressBarHtml}
