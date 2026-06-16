@@ -1492,11 +1492,11 @@ def _message_book_identity(book: dict) -> str:
 
 
 def _completed_messaged_book_ids() -> set[str]:
-    """既にメッセージ化した読了本の識別子。重複通知を防ぐ。"""
+    """既にメッセージ化した本の識別子。重複通知を防ぐ。"""
     messages = library_service.load_yonda_messages().get("messages") or []
     ids: set[str] = set()
     for message in messages:
-        if message.get("type") not in ("audible_completed", "completed_books", "sync_result"):
+        if message.get("type") not in ("audible_completed", "completed_books", "sync_result", "paper_add"):
             continue
         for item in message.get("books") or []:
             book = item.get("book") if isinstance(item, dict) else None
@@ -1524,7 +1524,86 @@ def _source_label(source: str) -> str:
         "setagaya": "図書館",
         "audible_jp": "Audible",
         "kindle": "Kindle",
+        "paper": "Paper",
     }.get(source or "", source or "その他")
+
+
+def _upsert_book_to_daily_message(book_record: dict) -> None:
+    """Paper等手動追加の本を今日のアクティビティメッセージに追加する。
+    同一ユーザー・同日のメッセージがあればそこに追加、なければ新規作成。"""
+    from datetime import datetime, timezone
+    try:
+        user = get_current_user()
+        user_email = (user or {}).get("email", "")
+        user_info = {
+            "name": (user or {}).get("name", ""),
+            "picture": (user or {}).get("picture", ""),
+            "email": user_email,
+        } if user else {}
+
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        # 今日の同ユーザーの paper_add メッセージを探す
+        data = library_service.load_yonda_messages()
+        messages = data.get("messages") or []
+        existing_msg = None
+        for msg in messages:
+            if msg.get("type") != "paper_add":
+                continue
+            if (msg.get("created_at") or "")[:10] != today:
+                continue
+            msg_user = msg.get("user") or {}
+            if user_email and msg_user.get("email") != user_email:
+                continue
+            existing_msg = msg
+            break
+
+        insight = library_service.get_book_insight(book_record) or {"points": [], "pending": False}
+        msg_book_entry = {"book": dict(book_record), "insight": insight}
+
+        if existing_msg:
+            existing_books = existing_msg.get("books") or []
+            existing_titles = {(b.get("book") or b).get("title") for b in existing_books}
+            if book_record.get("title") not in existing_titles:
+                existing_books.append(msg_book_entry)
+                existing_msg["books"] = existing_books
+                n = len(existing_books)
+                comp = sum(1 for b in existing_books if (b.get("book") or b).get("completed"))
+                existing_msg["title"] = f"Paper追加 {n}冊"
+                existing_msg["source_groups"] = _message_source_groups(existing_books)
+                existing_msg["sync_summary"] = {
+                    "created_at_jst": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "new_completed_count": comp,
+                    "sources": [{"source": "paper", "label": "P", "total": n, "completed": comp}],
+                    "errors": {},
+                    "status": "complete",
+                }
+                library_service.update_yonda_message(existing_msg)
+        else:
+            created_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            completed = 1 if book_record.get("completed") else 0
+            new_msg = {
+                "id": str(uuid.uuid4()),
+                "type": "paper_add",
+                "title": "Paper追加 1冊",
+                "created_at": created_at,
+                "books": [msg_book_entry],
+                "source_groups": _message_source_groups([msg_book_entry]),
+                "sync_summary": {
+                    "created_at_jst": created_at,
+                    "new_completed_count": completed,
+                    "sources": [{"source": "paper", "label": "P", "total": 1, "completed": completed}],
+                    "errors": {},
+                    "status": "complete",
+                },
+                "ai_status": "complete",
+                "ios_sent": False,
+            }
+            if user_info:
+                new_msg["user"] = user_info
+            library_service.save_yonda_message(new_msg)
+    except Exception as e:
+        logger.warning("_upsert_book_to_daily_message エラー: %s", e, exc_info=True)
 
 
 def _group_message_books_by_source(books: list[dict]) -> dict[str, list[dict]]:
@@ -1674,22 +1753,28 @@ def _create_completed_books_message(
             for b in prev_books
             if b.get("completed")
         }
+        prev_all_ids = {_message_book_identity(b) for b in prev_books}
         prev_fetch_at = _parse_book_datetime(prev_payload.get("fetch_date") or "")
         for book in curr_books:
-            if not book.get("completed"):
-                continue
             msg_book = dict(book)
             msg_book.setdefault("source", library_id)
             identity = _message_book_identity(msg_book)
             if identity in notified_ids or identity in seen_ids:
                 continue
-            completed_at = _parse_book_datetime(msg_book.get("completed_date") or "")
-            changed_to_completed = bool(prev_books) and identity not in prev_completed
-            completed_after_last_fetch = bool(completed_at and prev_fetch_at and completed_at > prev_fetch_at)
-            completed_recently = bool(completed_at and completed_at >= recent_threshold)
-            if changed_to_completed or completed_after_last_fetch or completed_recently:
-                newly_completed.append(msg_book)
-                seen_ids.add(identity)
+            if book.get("completed"):
+                # 新規読了
+                completed_at = _parse_book_datetime(msg_book.get("completed_date") or "")
+                changed_to_completed = bool(prev_books) and identity not in prev_completed
+                completed_after_last_fetch = bool(completed_at and prev_fetch_at and completed_at > prev_fetch_at)
+                completed_recently = bool(completed_at and completed_at >= recent_threshold)
+                if changed_to_completed or completed_after_last_fetch or completed_recently:
+                    newly_completed.append(msg_book)
+                    seen_ids.add(identity)
+            else:
+                # 新規追加（未読・読中）: 前回フェッチになかった本
+                if bool(prev_books) and identity not in prev_all_ids:
+                    newly_completed.append(msg_book)
+                    seen_ids.add(identity)
     if not newly_completed and not errors:
         return None
 
@@ -1713,7 +1798,7 @@ def _create_completed_books_message(
     message = {
         "id": str(uuid.uuid4()),
         "type": "sync_result",
-        "title": f"データ同期 新規読了{len(message_books)}冊",
+        "title": f"データ同期 更新{len(message_books)}冊",
         "created_at": created_at,
         "books": message_books,
         "source_groups": _message_source_groups(message_books),
@@ -2618,6 +2703,7 @@ def api_add_paper_book():
         if result.get("duplicate"):
             return jsonify({"success": False, "duplicate": True, "error": "同じ本がすでに登録されています", "book": result["book"]})
 
+        _upsert_book_to_daily_message(result["book"])
         combined = library_service.load_saved()
         return jsonify({"success": True, "book": result["book"], **(combined or {})})
     except Exception as e:
@@ -2663,6 +2749,9 @@ def api_update_paper_book(book_id: str):
         result = library_service.update_paper_book(book_id, updates)
         if not result.get("success"):
             return jsonify(result), 404
+        # ステータス・レビュー変更時はメッセージフィードに反映
+        if "status" in updates or "rating" in updates or "comment" in updates:
+            _upsert_book_to_daily_message(result["book"])
         combined = library_service.load_saved()
         return jsonify({"success": True, "book": result["book"], **(combined or {})})
     except Exception as e:

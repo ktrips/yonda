@@ -101,18 +101,48 @@ jobs:
               --location=${{ env.REGION }} \
               --description="yonda container images"
           fi
+          # デプロイ用SAにCloudBuild閲覧権限を付与（ビルドステータスポーリング用）
+          DEPLOY_SA=$(gcloud config get-value account 2>/dev/null)
+          if [[ -n "${DEPLOY_SA}" ]]; then
+            gcloud projects add-iam-policy-binding ${{ secrets.GCP_PROJECT_ID }} \
+              --member="serviceAccount:${DEPLOY_SA}" \
+              --role="roles/cloudbuild.builds.viewer" \
+              --quiet 2>/dev/null || true
+            echo "  ✔ cloudbuild.builds.viewer 付与: ${DEPLOY_SA}"
+          fi
 
       - name: Build and push Docker image
         run: |
           IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:latest"
           SHORT_SHA="${{ github.sha }}"
           SHORT_SHA="${SHORT_SHA:0:7}"
-          # 同期ビルド（--async 廃止）: 完了まで待機してからデプロイに進む
-          gcloud builds submit \
-            --tag "${IMAGE_TAG}" \
-            --timeout=900 \
-            . 2>&1
-          echo "✔ Build completed: ${IMAGE_TAG} (version: ${SHORT_SHA})"
+          # --async で送信 → URL からビルドIDを確実に取得 → ポーリング
+          SUBMIT_OUT=$(gcloud builds submit --async --tag "${IMAGE_TAG}" --timeout=900 . 2>&1)
+          echo "${SUBMIT_OUT}"
+          # Created [.../builds/UUID] の形式から UUID を取得
+          BUILD_ID=$(echo "${SUBMIT_OUT}" | grep -oP '/builds/\K[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+          if [[ -z "${BUILD_ID}" ]]; then
+            echo "ERROR: ビルドIDを取得できませんでした。出力:"
+            echo "${SUBMIT_OUT}"
+            exit 1
+          fi
+          echo "Build ID: ${BUILD_ID}"
+          # ビルド完了までポーリング（最大30分）
+          for i in $(seq 1 120); do
+            STATUS=$(gcloud builds describe "${BUILD_ID}" --format='value(status)' 2>/dev/null || echo "UNKNOWN")
+            echo "  [${i}/120] ${STATUS}"
+            case "$STATUS" in
+              SUCCESS) echo "✔ Build ${BUILD_ID} succeeded (version: ${SHORT_SHA})"; break ;;
+              FAILURE|CANCELLED|EXPIRED|TIMEOUT)
+                echo "✘ Build failed: ${STATUS}"
+                exit 1 ;;
+              *) sleep 15 ;;
+            esac
+          done
+          if [[ "${STATUS}" != "SUCCESS" ]]; then
+            echo "✘ Build timed out (status: ${STATUS})"
+            exit 1
+          fi
 
       - name: Deploy (image only)
         if: ${{ github.event.inputs.image_only == 'true' }}

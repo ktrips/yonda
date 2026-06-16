@@ -207,6 +207,7 @@ let currentPage = 0;
 let activeMainTab = 'yonda'; // 'yonda' | 'yomu' | 'oshi'
 let activeBookTab = 'read'; // 'read' = 読んだ/途中, 'community' = みんなのYonda, 'messages' = メッセージ
 let monthlyChart = null;
+let activeChartSource = null; // null=全ソース, 'audible'|'kindle'|'library'|'paper'
 let genreChart = null;
 let currentDetailBook = null;
 let bookInsightsCache = {};
@@ -2047,6 +2048,7 @@ function applyFilters() {
   currentPage = 0;
   updateTabContentVisibility();
   renderBooks();
+  activeChartSource = null;
   scheduleRenderCharts();
 }
 
@@ -3001,6 +3003,7 @@ function scheduleRenderCharts() {
 function renderMonthlyChart() {
   const monthMap = {};
   const compMonthMap = {};
+  const compBySourceMap = {};
   const runtimeMonthMap = {};
   const useRuntime = chartMode === 'runtime';
   const books = getBooksForChart();
@@ -3028,84 +3031,84 @@ function renderMonthlyChart() {
     if (b.completed && b.completed_date && b.completed_date.length >= 7) {
       const compYm = b.completed_date.substring(0, 7);
       compMonthMap[compYm] = (compMonthMap[compYm] || 0) + 1;
+      const bSrcKey = b.source === 'audible_jp' ? 'audible'
+        : b.source === 'kindle' ? 'kindle'
+        : b.source === 'paper'  ? 'paper'
+        : 'library';
+      if (!compBySourceMap[compYm]) compBySourceMap[compYm] = {};
+      compBySourceMap[compYm][bSrcKey] = (compBySourceMap[compYm][bSrcKey] || 0) + 1;
     }
   }
 
   const allMonths = new Set([...Object.keys(monthMap), ...Object.keys(compMonthMap), ...Object.keys(runtimeMonthMap)]);
   const labels = [...allMonths].sort();
   const last24 = labels.slice(-24);
-  const audData = useRuntime
-    ? last24.map(k => Math.round(((runtimeMonthMap[k] || 0) / 60) * 10) / 10)
-    : last24.map(k => (monthMap[k]?.audible || 0));
-  const kindleData = last24.map(k => (monthMap[k]?.kindle || 0));
-  const libData   = last24.map(k => (monthMap[k]?.library || 0));
-  const paperData = last24.map(k => (monthMap[k]?.paper || 0));
-  const compData  = last24.map(k => (compMonthMap[k] || 0));
   const shortLabels = last24.map(k => {
     const [y, m] = k.split('-');
     return m === '01' ? `${y}/${m}` : m;
   });
 
+  const SOURCE_CONFIGS = [
+    { key: 'audible', label: 'Audible', color: 'rgba(192,94,32,0.65)',  dataFn: k => monthMap[k]?.audible  || 0 },
+    { key: 'kindle',  label: 'Kindle',  color: 'rgba(51,102,170,0.65)', dataFn: k => monthMap[k]?.kindle   || 0 },
+    { key: 'library', label: '図書館',  color: 'rgba(107,66,38,0.65)',  dataFn: k => monthMap[k]?.library  || 0 },
+    { key: 'paper',   label: '紙',      color: 'rgba(60,140,80,0.65)',  dataFn: k => monthMap[k]?.paper    || 0 },
+  ];
+
   const ctx = document.getElementById('monthlyChart');
   if (monthlyChart) monthlyChart.destroy();
 
-  const datasets = [
-    ...(useRuntime ? [] : [
-      {
-        label: 'A',
-        data: audData,
-        backgroundColor: 'rgba(192,94,32,0.65)',
-        borderRadius: 2,
-        barPercentage: 0.7,
-      },
-      {
-        label: 'K',
-        data: kindleData,
-        backgroundColor: 'rgba(51,102,170,0.65)',
-        borderRadius: 2,
-        barPercentage: 0.7,
-      },
-      {
-        label: 'L',
-        data: libData,
-        backgroundColor: 'rgba(107,66,38,0.65)',
-        borderRadius: 2,
-        barPercentage: 0.7,
-      },
-      {
-        label: 'P',
-        data: paperData,
-        backgroundColor: 'rgba(60,140,80,0.65)',
-        borderRadius: 2,
-        barPercentage: 0.7,
-      },
-    ]),
-    ...(useRuntime ? [{
-      label: '読了（視聴時間）',
+  const activeSrc = activeChartSource;
+  const datasets = [];
+
+  if (useRuntime) {
+    const audData = last24.map(k => Math.round(((runtimeMonthMap[k] || 0) / 60) * 10) / 10);
+    datasets.push({
+      label: 'Audible（視聴時間）',
       data: audData,
       backgroundColor: 'rgba(192,94,32,0.55)',
       borderRadius: 2,
       barPercentage: 0.7,
-    }] : []),
-    {
-      label: '読了',
-      data: compData,
-      type: 'line',
-      borderColor: '#5a7a3a',
-      backgroundColor: 'rgba(90,122,58,0.15)',
-      borderWidth: 2,
-      pointRadius: 2,
-      pointBackgroundColor: '#5a7a3a',
-      fill: true,
-      tension: 0.3,
-    },
-  ];
+      pointStyle: 'rect',
+    });
+  } else {
+    const srcsToShow = activeSrc
+      ? SOURCE_CONFIGS.filter(c => c.key === activeSrc)
+      : SOURCE_CONFIGS;
+    for (const cfg of srcsToShow) {
+      datasets.push({
+        label: cfg.label,
+        data: last24.map(cfg.dataFn),
+        backgroundColor: cfg.color,
+        borderRadius: 2,
+        barPercentage: activeSrc ? 0.5 : 0.7,
+        pointStyle: 'rect',
+      });
+    }
+  }
+
+  // 読了ライン（ソースフィルタ中はそのソースの読了数）
+  const compData = last24.map(k =>
+    activeSrc ? (compBySourceMap[k]?.[activeSrc] || 0) : (compMonthMap[k] || 0)
+  );
+  datasets.push({
+    label: '読了',
+    data: compData,
+    type: 'line',
+    borderColor: '#22aa44',
+    backgroundColor: 'rgba(34,170,68,0.12)',
+    borderWidth: 2,
+    pointRadius: 3,
+    pointBackgroundColor: '#22aa44',
+    pointStyle: 'circle',
+    fill: true,
+    tension: 0.3,
+    yAxisID: 'y',
+  });
+
   monthlyChart = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels: shortLabels,
-      datasets,
-    },
+    data: { labels: shortLabels, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -3113,22 +3116,36 @@ function renderMonthlyChart() {
       plugins: {
         legend: {
           position: 'top',
-          labels: { font: { size: 11 }, boxWidth: 12, padding: 12 },
+          labels: {
+            font: { size: 11 },
+            padding: 12,
+            usePointStyle: true,
+            pointStyleWidth: 14,
+          },
+          onClick: (_e, legendItem) => {
+            const lbl = legendItem.text;
+            if (lbl === '読了') {
+              const meta = monthlyChart.getDatasetMeta(legendItem.datasetIndex);
+              meta.hidden = !meta.hidden;
+              monthlyChart.update();
+              return;
+            }
+            const labelToKey = { 'Audible': 'audible', 'Kindle': 'kindle', '図書館': 'library', '紙': 'paper' };
+            const key = labelToKey[lbl];
+            if (key) {
+              activeChartSource = (activeChartSource === key) ? null : key;
+              renderMonthlyChart();
+            }
+          },
         },
         tooltip: {
           callbacks: {
-            title: (items) => {
-              const idx = items[0].dataIndex;
-              return last24[idx];
-            },
+            title: (items) => last24[items[0].dataIndex],
             label: (item) => {
               const v = item.raw;
               const lbl = item.dataset.label || '';
-              if (useRuntime && lbl.includes('視聴時間')) {
-                const h = Math.round(v * 10) / 10;
-                return `${lbl}: ${h}時間`;
-              }
-              if (lbl === '読了') return `${lbl}: ${v}冊`;
+              if (useRuntime && lbl.includes('視聴時間')) return `${lbl}: ${Math.round(v * 10) / 10}時間`;
+              if (lbl === '読了') return `読了: ${v}冊`;
               return `${lbl}: ${v}${useRuntime ? '時間' : '冊'}`;
             },
           },
@@ -3136,17 +3153,17 @@ function renderMonthlyChart() {
       },
       scales: {
         x: {
-          stacked: !useRuntime,
+          stacked: !useRuntime && !activeSrc,
           grid: { display: false },
           ticks: { font: { size: 10 }, maxRotation: 0 },
         },
         y: {
-          stacked: !useRuntime,
+          stacked: !useRuntime && !activeSrc,
           beginAtZero: true,
           grid: { color: 'rgba(0,0,0,0.05)' },
           ticks: {
             font: { size: 10 },
-            stepSize: useRuntime ? undefined : 10,
+            stepSize: useRuntime ? undefined : (activeSrc ? undefined : 10),
             callback: (v) => (useRuntime ? (v ? v + 'h' : '0') : v),
           },
         },
@@ -4794,6 +4811,7 @@ document.querySelectorAll('.chart-mode-btn').forEach(btn => {
     document.querySelectorAll('.chart-mode-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     chartMode = btn.dataset.mode || 'count';
+    activeChartSource = null;
     scheduleRenderCharts();
   });
 });
