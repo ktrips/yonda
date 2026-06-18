@@ -14,6 +14,11 @@ on:
         required: false
         default: false
         type: boolean
+      scheduler_only:
+        description: 'Cloud Schedulerのみ更新（ヘッダー修正などに）'
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGION: asia-northeast1
@@ -63,7 +68,7 @@ jobs:
           rm -f gcp-key.json
 
       - name: Prepare auth files for full deploy
-        if: ${{ github.event.inputs.image_only != 'true' }}
+        if: ${{ github.event.inputs.image_only != 'true' && github.event.inputs.scheduler_only != 'true' }}
         env:
           AUTH_JP_JSON: ${{ secrets.AUTH_JP_JSON }}
           CREDENTIALS_JSON: ${{ secrets.CREDENTIALS_JSON }}
@@ -80,7 +85,7 @@ jobs:
           "
 
       - name: Enable APIs
-        if: ${{ github.event.inputs.image_only != 'true' }}
+        if: ${{ github.event.inputs.image_only != 'true' && github.event.inputs.scheduler_only != 'true' }}
         run: |
           gcloud services enable \
             run.googleapis.com \
@@ -92,7 +97,7 @@ jobs:
             --quiet
 
       - name: Create Artifact Registry repository
-        if: ${{ github.event.inputs.image_only != 'true' }}
+        if: ${{ github.event.inputs.image_only != 'true' && github.event.inputs.scheduler_only != 'true' }}
         run: |
           if ! gcloud artifacts repositories describe ${{ env.REPO_NAME }} \
                --location=${{ env.REGION }} --format='value(name)' 2>/dev/null; then
@@ -112,6 +117,7 @@ jobs:
           fi
 
       - name: Build and push Docker image
+        if: ${{ github.event.inputs.scheduler_only != 'true' }}
         run: |
           IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:latest"
           SHORT_SHA="${{ github.sha }}"
@@ -145,7 +151,7 @@ jobs:
           fi
 
       - name: Deploy (image only)
-        if: ${{ github.event.inputs.image_only == 'true' }}
+        if: ${{ github.event.inputs.image_only == 'true' && github.event.inputs.scheduler_only != 'true' }}
         run: |
           IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:latest"
           gcloud run deploy ${{ env.SERVICE_NAME }} \
@@ -156,7 +162,7 @@ jobs:
           echo "✔ イメージ更新デプロイ完了"
 
       - name: Create GCS bucket (データアップロードはスキップ)
-        if: ${{ github.event.inputs.image_only != 'true' }}
+        if: ${{ github.event.inputs.image_only != 'true' && github.event.inputs.scheduler_only != 'true' }}
         run: |
           BUCKET_NAME="${{ secrets.GCP_PROJECT_ID }}-${{ env.BUCKET_NAME_PREFIX }}"
           if ! gsutil ls -b "gs://${BUCKET_NAME}" 2>/dev/null; then
@@ -174,7 +180,7 @@ jobs:
           fi
 
       - name: Create or update secrets
-        if: ${{ github.event.inputs.image_only != 'true' }}
+        if: ${{ github.event.inputs.image_only != 'true' && github.event.inputs.scheduler_only != 'true' }}
         run: |
           # 最新バージョン以外を削除してアクティブバージョン数を1に保つヘルパー
           prune_old_versions() {
@@ -207,7 +213,7 @@ jobs:
           fi
 
       - name: Grant IAM to Cloud Run service account
-        if: ${{ github.event.inputs.image_only != 'true' }}
+        if: ${{ github.event.inputs.image_only != 'true' && github.event.inputs.scheduler_only != 'true' }}
         run: |
           PROJECT_NUMBER=$(gcloud projects describe ${{ secrets.GCP_PROJECT_ID }} --format='value(projectNumber)')
           RUN_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
@@ -227,7 +233,7 @@ jobs:
           done
 
       - name: Deploy to Cloud Run (full)
-        if: ${{ github.event.inputs.image_only != 'true' }}
+        if: ${{ github.event.inputs.image_only != 'true' && github.event.inputs.scheduler_only != 'true' }}
         run: |
           IMAGE_TAG="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPO_NAME }}/${{ env.SERVICE_NAME }}:latest"
           BUCKET_NAME="${{ secrets.GCP_PROJECT_ID }}-${{ env.BUCKET_NAME_PREFIX }}"
@@ -255,7 +261,7 @@ jobs:
           echo "✔ Cloud Run デプロイ完了"
 
       - name: Map custom domain
-        if: ${{ github.event.inputs.image_only != 'true' }}
+        if: ${{ github.event.inputs.image_only != 'true' && github.event.inputs.scheduler_only != 'true' }}
         run: |
           if ! gcloud run domain-mappings describe \
                --domain=${{ env.DOMAIN }} --region=${{ env.REGION }} 2>/dev/null; then
@@ -267,7 +273,8 @@ jobs:
           fi
 
       - name: Setup Cloud Scheduler (fetch 6/12/18 JST)
-        if: ${{ github.event.inputs.image_only != 'true' }}
+        if: ${{ github.event.inputs.image_only != 'true' || github.event.inputs.scheduler_only == 'true' }}
+        # scheduler_only=true の場合は SERVICE_URL を再取得する必要あり
         run: |
           SERVICE_URL="$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.url)')"
           FETCH_URL="${SERVICE_URL}/api/internal/auto-fetch"
@@ -281,7 +288,7 @@ jobs:
                 --schedule="${schedule}" \
                 --uri="${FETCH_URL}" \
                 --message-body="${FETCH_BODY}" \
-                --headers="Content-Type=application/json" \
+                --headers="Content-Type=application/json,X-CloudScheduler=true" \
                 --time-zone="Asia/Tokyo" \
                 --attempt-deadline=1800s \
                 --quiet \
@@ -292,7 +299,7 @@ jobs:
                 --schedule="${schedule}" \
                 --uri="${FETCH_URL}" \
                 --message-body="${FETCH_BODY}" \
-                --headers="Content-Type=application/json" \
+                --headers="Content-Type=application/json,X-CloudScheduler=true" \
                 --time-zone="Asia/Tokyo" \
                 --attempt-deadline=1800s \
                 --quiet \
