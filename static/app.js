@@ -230,6 +230,7 @@ function _rebuildInsightIndex() {
 }
 let yondaMessages = [];
 let archivedMessages = [];
+let _readIdsCached = null; // loadReadMessageIds のキャッシュ
 let messageBookRefs = [];
 let activeMessageId = null;
 let chartMode = 'count';  // 'count' | 'runtime'
@@ -349,10 +350,12 @@ function formatRuntime(min) {
 }
 
 /** 積読期間の日数を返す（読了日 or 本日 − 取得日） */
-function getTsundokuDays(book) {
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-  const endStr = (book.completed_date || '').trim().substring(0, 10) || todayStr;
+function getTsundokuDays(book, _todayStr) {
+  if (!_todayStr) {
+    const today = new Date();
+    _todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  }
+  const endStr = (book.completed_date || '').trim().substring(0, 10) || _todayStr;
   const startStr = (book.loan_date || '').trim().substring(0, 10);
   if (!startStr) return null;
   const m1 = startStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -1330,16 +1333,19 @@ function updateStats() {
 }
 
 function loadReadMessageIds() {
+  if (_readIdsCached !== null) return _readIdsCached;
   try {
     const raw = localStorage.getItem(READ_MESSAGES_STORAGE_KEY);
     const ids = JSON.parse(raw || '[]');
-    return new Set(Array.isArray(ids) ? ids : []);
+    _readIdsCached = new Set(Array.isArray(ids) ? ids : []);
   } catch (_) {
-    return new Set();
+    _readIdsCached = new Set();
   }
+  return _readIdsCached;
 }
 
 function saveReadMessageIds(ids) {
+  _readIdsCached = ids;
   try {
     localStorage.setItem(READ_MESSAGES_STORAGE_KEY, JSON.stringify([...ids].slice(-500)));
   } catch (_) {}
@@ -1502,18 +1508,17 @@ function populateSourceFilter(sources) {
   const sel = document.getElementById('sourceFilter');
   if (!sel) return;
   const current = sel.value;
-  sel.innerHTML = '<option value="all">すべて</option>';
+  const opts = ['<option value="all">すべて</option>'];
   if (sources && sources.length > 0) {
     for (const s of sources) {
-      const label = sourceLabel(s.library_id);
-      sel.innerHTML += `<option value="${escapeHtml(s.library_id)}">${escapeHtml(label)}（${s.total}冊）</option>`;
+      opts.push(`<option value="${escapeHtml(s.library_id)}">${escapeHtml(sourceLabel(s.library_id))}（${s.total}冊）</option>`);
     }
   } else {
-    const ids = [...new Set(allBooks.map(b => b.source).filter(Boolean))];
-    for (const id of ids) {
-      sel.innerHTML += `<option value="${escapeHtml(id)}">${escapeHtml(sourceLabel(id))}</option>`;
+    for (const id of [...new Set(allBooks.map(b => b.source).filter(Boolean))]) {
+      opts.push(`<option value="${escapeHtml(id)}">${escapeHtml(sourceLabel(id))}</option>`);
     }
   }
+  sel.innerHTML = opts.join('');
   if ([...sel.options].some(o => o.value === current)) sel.value = current;
 }
 
@@ -1752,121 +1757,124 @@ async function renderHistoryRecommend() {
 document.getElementById('historyRecommendRefreshBtn')?.addEventListener('click', renderHistoryRecommend);
 
 /** みんなのYonda タブ: 日付→ユーザー名の順でグルーピングして表示 */
+// コミュニティ用書籍キャッシュ（イベントデリゲーション用）
+const _communityBookCache = new Map();
+
 function renderCommunitySection() {
   const listEl = document.getElementById('communityMessageList');
   const loadingEl = document.getElementById('communityLoading');
   if (!listEl) return;
-  if (loadingEl) loadingEl.style.display = 'block';
-  listEl.innerHTML = '';
 
-  fetch(API.messages)
-    .then(r => r.json())
-    .then(data => {
+  // yondaMessages が未ロードなら fetch してからレンダリング
+  if (!yondaMessages.length && !archivedMessages.length) {
+    if (loadingEl) loadingEl.style.display = 'block';
+    listEl.innerHTML = '';
+    loadMessages().then(() => {
       if (loadingEl) loadingEl.style.display = 'none';
-      const messages = (data.messages || []).slice(0, 50);
-      if (messages.length === 0) {
-        listEl.innerHTML = '<p class="recommend-empty">まだ投稿がありません。</p>';
-        return;
-      }
-
-      // 日付文字列を取得（YYYY-MM-DD）
-      const toDateKey = ts => {
-        if (!ts) return '日時不明';
-        const d = new Date(ts);
-        if (isNaN(d)) return '日時不明';
-        return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
-      };
-
-      // 日付 → ユーザーID → メッセージ[] でグルーピング
-      const dateMap = new Map();
-      messages.forEach(msg => {
-        const dateKey = toDateKey(msg.created_at);
-        const msgUser = msg.user || {};
-        const userId = msgUser.id || msgUser.email || '匿名';
-        if (!dateMap.has(dateKey)) dateMap.set(dateKey, new Map());
-        const userMap = dateMap.get(dateKey);
-        if (!userMap.has(userId)) userMap.set(userId, { user: msgUser, msgs: [] });
-        userMap.get(userId).msgs.push(msg);
-      });
-
-      const communityBookCache = {};
-      let cacheIdx = 0;
-      const fragments = [];
-
-      dateMap.forEach((userMap, dateKey) => {
-        const userBlocks = [];
-        userMap.forEach(({ user: msgUser, msgs }) => {
-          const userName = (msgUser.name || msgUser.email || '匿名').split(' ')[0];
-          const avatarSrc = msgUser.picture || '';
-          const avatarUrl = avatarSrc && !avatarSrc.includes('=s')
-            ? avatarSrc + '=s64-c' : avatarSrc;
-          const initial = escapeHtml([...userName][0] || '?');
-          const avatarHtml = avatarUrl
-            ? `<img src="${escapeHtml(avatarUrl)}" class="ig-avatar" alt="${escapeHtml(userName)}" loading="lazy"
-                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
-               ><div class="ig-avatar ig-avatar-placeholder" style="display:none;">${initial}</div>`
-            : `<div class="ig-avatar ig-avatar-placeholder">${initial}</div>`;
-
-          // 全メッセージの本を結合（重複排除）
-          const seenTitles = new Set();
-          const allMsgBooks = msgs.flatMap(msg => (msg.books || []).filter(item => {
-            const b = item.book || item;
-            if (!b.title || seenTitles.has(b.title)) return false;
-            seenTitles.add(b.title);
-            return true;
-          }));
-
-          const bookCards = allMsgBooks.map(item => {
-            const book = item.book || item;
-            const cacheKey = `c${cacheIdx++}`;
-            communityBookCache[cacheKey] = book;
-            const myBook = book.book_id
-              ? allBooks.find(b => b.book_id === book.book_id)
-              : allBooks.find(b => b.title === book.title && b.author === book.author);
-            const merged = myBook ? { ...book, ...myBook } : book;
-            return renderBookCardHtml(merged, {
-              extraClass: 'community-book-card-item',
-              extraAttrs: `data-cache-key="${cacheKey}"`,
-              showUnrated: !!myBook && !!_authUser,
-              showProgress: false,
-            });
-          }).join('');
-
-          userBlocks.push(`<div class="ig-post-card">
-            <div class="ig-post-header">
-              ${avatarHtml}
-              <span class="ig-user-name">${escapeHtml(userName)}</span>
-              <span class="ig-post-count">${allMsgBooks.length}冊</span>
-            </div>
-            <div class="community-cards-wrap">${bookCards}</div>
-          </div>`);
-        });
-
-        fragments.push(`<div class="community-date-group">
-          <div class="community-date-header">${escapeHtml(dateKey)}</div>
-          ${userBlocks.join('')}
-        </div>`);
-      });
-
-      listEl.innerHTML = fragments.join('');
-
-      // クリックで詳細モーダル
-      listEl.querySelectorAll('.community-book-card-item').forEach(el => {
-        el.addEventListener('click', () => {
-          const key = el.dataset.cacheKey;
-          const msgBook = communityBookCache[key];
-          if (!msgBook) return;
-          const found = msgBook.book_id
-            ? allBooks.find(b => b.book_id === msgBook.book_id)
-            : allBooks.find(b => b.title === msgBook.title && b.author === msgBook.author);
-          openBookDetail(found || msgBook);
-        });
-      });
-    })
-    .catch(e => {
+      _renderCommunityFromCache(listEl);
+    }).catch(e => {
       if (loadingEl) loadingEl.style.display = 'none';
       listEl.innerHTML = `<p class="recommend-error">取得エラー: ${escapeHtml(e.message)}</p>`;
     });
+    return;
+  }
+  if (loadingEl) loadingEl.style.display = 'none';
+  _renderCommunityFromCache(listEl);
+}
+
+function _renderCommunityFromCache(listEl) {
+  const messages = yondaMessages.slice(0, 50);
+  if (messages.length === 0) {
+    listEl.innerHTML = '<p class="recommend-empty">まだ投稿がありません。</p>';
+    return;
+  }
+
+  const toDateKey = ts => {
+    if (!ts) return '日時不明';
+    const d = new Date(ts);
+    if (isNaN(d)) return '日時不明';
+    return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+  };
+
+  // 日付 → ユーザーID → メッセージ[] でグルーピング
+  const dateMap = new Map();
+  for (const msg of messages) {
+    const dateKey = toDateKey(msg.created_at);
+    const msgUser = msg.user || {};
+    const userId = msgUser.id || msgUser.email || '匿名';
+    if (!dateMap.has(dateKey)) dateMap.set(dateKey, new Map());
+    const userMap = dateMap.get(dateKey);
+    if (!userMap.has(userId)) userMap.set(userId, { user: msgUser, msgs: [] });
+    userMap.get(userId).msgs.push(msg);
+  }
+
+  _communityBookCache.clear();
+  let cacheIdx = 0;
+  const fragments = [];
+
+  dateMap.forEach((userMap, dateKey) => {
+    const userBlocks = [];
+    userMap.forEach(({ user: msgUser, msgs }) => {
+      const userName = (msgUser.name || msgUser.email || '匿名').split(' ')[0];
+      const avatarSrc = msgUser.picture || '';
+      const avatarUrl = avatarSrc && !avatarSrc.includes('=s') ? avatarSrc + '=s64-c' : avatarSrc;
+      const initial = escapeHtml([...userName][0] || '?');
+      const avatarHtml = avatarUrl
+        ? `<img src="${escapeHtml(avatarUrl)}" class="ig-avatar" alt="${escapeHtml(userName)}" loading="lazy"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"
+           ><div class="ig-avatar ig-avatar-placeholder" style="display:none;">${initial}</div>`
+        : `<div class="ig-avatar ig-avatar-placeholder">${initial}</div>`;
+
+      const seenTitles = new Set();
+      const allMsgBooks = msgs.flatMap(msg => (msg.books || []).filter(item => {
+        const b = item.book || item;
+        if (!b.title || seenTitles.has(b.title)) return false;
+        seenTitles.add(b.title);
+        return true;
+      }));
+
+      const bookCards = allMsgBooks.map(item => {
+        const book = item.book || item;
+        const cacheKey = `c${cacheIdx++}`;
+        _communityBookCache.set(cacheKey, book);
+        // O(1) lookupで allBooks.find() を排除
+        const myBook = findBookFromMessage(book);
+        const merged = (myBook && myBook !== book) ? { ...book, ...myBook } : book;
+        return renderBookCardHtml(merged, {
+          extraClass: 'community-book-card-item',
+          extraAttrs: `data-cache-key="${cacheKey}"`,
+          showUnrated: !!(myBook && myBook !== book) && !!_authUser,
+          showProgress: false,
+        });
+      }).join('');
+
+      userBlocks.push(`<div class="ig-post-card">
+        <div class="ig-post-header">
+          ${avatarHtml}
+          <span class="ig-user-name">${escapeHtml(userName)}</span>
+          <span class="ig-post-count">${allMsgBooks.length}冊</span>
+        </div>
+        <div class="community-cards-wrap">${bookCards}</div>
+      </div>`);
+    });
+
+    fragments.push(`<div class="community-date-group">
+      <div class="community-date-header">${escapeHtml(dateKey)}</div>
+      ${userBlocks.join('')}
+    </div>`);
+  });
+
+  listEl.innerHTML = fragments.join('');
+
+  // イベントデリゲーション（querySelectorAll+個別登録を廃止）
+  listEl.onclick = e => {
+    const card = e.target.closest('.community-book-card-item');
+    if (!card) return;
+    const msgBook = _communityBookCache.get(card.dataset.cacheKey);
+    if (!msgBook) return;
+    const found = findBookFromMessage(msgBook);
+    openBookDetail((found && found !== msgBook) ? found : msgBook);
+  };
 }
 // プルトゥリフレッシュ（communitySection が表示中に引き下げで更新）
 (function() {
@@ -3339,13 +3347,12 @@ function renderRelationChart() {
       .sort((x, y) => y[1] - x[1])
       .slice(0, 10);
     const authors = authorTotals.map(([a]) => a);
-    const genres = [...new Set(books.flatMap(b => [b._normalizedGenre || 'その他']))]
+    // ジャンル件数を事前集計（O(n)）してからソート（O(n²)→O(n log n)）
+    const genreCountForSort = new Map();
+    for (const bk of books) genreCountForSort.set(bk._normalizedGenre || 'その他', (genreCountForSort.get(bk._normalizedGenre || 'その他') || 0) + 1);
+    const genres = [...new Set(books.map(b => b._normalizedGenre || 'その他'))]
       .filter(Boolean)
-      .sort((a, b) => {
-        const ca = books.filter(bk => (normalizeGenre(bk.genre) || 'その他') === a).length;
-        const cb = books.filter(bk => (normalizeGenre(bk.genre) || 'その他') === b).length;
-        return cb - ca;
-      })
+      .sort((a, b) => (genreCountForSort.get(b) || 0) - (genreCountForSort.get(a) || 0))
       .slice(0, 10);
 
     if (authors.length === 0 || genres.length === 0) {
@@ -4722,6 +4729,9 @@ function renderCardView(books, selectedGenre = 'all', prevBook = null, subGenreC
 function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenreCounts = {}) {
   let lastSubGenre = prevBook && selectedGenre !== 'all' ? getSubGenreForGrouping(prevBook, selectedGenre) : null;
   const showSubGenreHeaders = selectedGenre !== 'all';
+  // 今日の日付を1回だけ計算してループ内で使い回す
+  const _today = new Date();
+  const _todayStr = `${_today.getFullYear()}-${String(_today.getMonth() + 1).padStart(2, '0')}-${String(_today.getDate()).padStart(2, '0')}`;
 
   const rows = books.map((book, i) => {
     let headerRow = '';
@@ -4739,7 +4749,7 @@ function renderTableView(books, selectedGenre = 'all', prevBook = null, subGenre
     const genre = book.genre ? genreBadgeHtml(book, true) : '—';
     const summary = (book.summary || '').trim();
     const summaryCell = summary ? escapeHtml(summary.length > 80 ? summary.substring(0, 80) + '…' : summary) : '—';
-    const tsundoku = getTsundokuDays(book);
+    const tsundoku = getTsundokuDays(book, _todayStr);
     const tsundokuStr = tsundoku != null ? tsundoku + '日' : '—';
 
     // レビュー列: 星 + 個人レビュー（または未レビューボタン）

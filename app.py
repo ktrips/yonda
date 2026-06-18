@@ -416,12 +416,12 @@ def api_internal_auto_fetch():
         uid_list = [uid]
 
     all_results = {}
-    for target_uid in uid_list:
+    def _fetch_for_user(target_uid: str) -> tuple[str, dict]:
         user_data_dir = library_service.DATA_DIR / "users" / target_uid
         if not user_data_dir.exists():
-            all_results[target_uid] = {"error": "データディレクトリが見つかりません"}
-            continue
+            return target_uid, {"error": "データディレクトリが見つかりません"}
 
+        # スレッドローカルなので並列実行でも安全
         library_service.set_user_data_dir(user_data_dir)
 
         # Firestore からユーザープロフィールを取得
@@ -433,19 +433,15 @@ def api_internal_auto_fetch():
                 doc = db.collection("users").document(target_uid).get()
                 if doc.exists:
                     d = doc.to_dict() or {}
-                    user_info = {
-                        "name":    d.get("name", ""),
-                        "email":   d.get("email", ""),
-                        "picture": d.get("picture", ""),
-                    }
+                    user_info = {"name": d.get("name", ""), "email": d.get("email", ""), "picture": d.get("picture", "")}
         except Exception as e:
             logger.warning("ユーザー情報取得失敗 uid=%s: %s", target_uid, e)
 
         source_map = {"kindle": "kindle", "audible": "audible_jp", "audible_jp": "audible_jp", "setagaya": "setagaya"}
-        results = {}
-        errors = {}
-        previous_payloads = {}
-        current_payloads = {}
+        results: dict = {}
+        errors: dict = {}
+        previous_payloads: dict = {}
+        current_payloads: dict = {}
 
         for source in sources:
             lib_id = source_map.get(source, source)
@@ -460,7 +456,7 @@ def api_internal_auto_fetch():
                 logger.error("自動取得エラー: source=%s uid=%s error=%s", lib_id, target_uid, e, exc_info=True)
                 errors[lib_id] = str(e)
 
-        # 新規読了があればメッセージ生成
+        # 新規追加・読了があればメッセージ生成
         if current_payloads:
             try:
                 message = _create_completed_books_message(previous_payloads, current_payloads, errors)
@@ -471,11 +467,17 @@ def api_internal_auto_fetch():
             except Exception as e:
                 logger.error("同期メッセージ生成エラー uid=%s: %s", target_uid, e)
 
-        all_results[target_uid] = {
+        return target_uid, {
             "results": results,
             "errors": errors,
             "status": "ok" if not errors else ("partial" if results else "error"),
         }
+
+    # 複数ユーザーを並列処理（_tls はスレッドローカルなので安全）
+    import concurrent.futures as _cf
+    with _cf.ThreadPoolExecutor(max_workers=min(4, len(uid_list))) as executor:
+        for uid, result in executor.map(_fetch_for_user, uid_list):
+            all_results[uid] = result
 
     logger.info("全ユーザー自動取得完了: %s", {u: v["status"] for u, v in all_results.items()})
     return jsonify({"success": True, "users": all_results})
@@ -645,6 +647,15 @@ def _fetch_book_info_google_books(
     return None
 
 
+# book-cover / book-info の結果をメモリキャッシュ（最大500件、アプリ再起動でリセット）
+_book_cover_cache: dict[str, str | None] = {}
+_book_info_cache: dict[str, dict] = {}
+_BOOK_CACHE_MAX = 500
+
+def _book_cache_key(title: str, author: str, q: str) -> str:
+    return f"{title.lower()}|{author.lower()}|{q.lower()}"
+
+
 @app.route("/api/book-cover")
 def api_book_cover():
     """タイトル・著者から表紙画像URLを取得。一致するものを優先"""
@@ -655,6 +666,11 @@ def api_book_cover():
         return jsonify({"success": False, "error": "q または title パラメータが必要です"}), 400
     search_q = q or f"{title} {author}".strip() or title
 
+    cache_key = _book_cache_key(title, author, search_q)
+    if cache_key in _book_cover_cache:
+        cover_url = _book_cover_cache[cache_key]
+        return jsonify({"success": bool(cover_url), "cover_url": cover_url})
+
     # ラウンド1: title+author指定検索（Google Books）と Open Library を並列実行
     cover_url = None
     sq = search_q or title
@@ -664,13 +680,10 @@ def api_book_cover():
             f"intitle:{title} inauthor:{author}" if (title and author) else sq,
             8, title or sq, author,
         )
-        f_ol1 = ex.submit(
-            _fetch_cover_open_library,
-            sq, 8, title or sq, author,
-        )
+        f_ol1 = ex.submit(_fetch_cover_open_library, sq, 8, title or sq, author)
     cover_url = f_gb1.result() or f_ol1.result()
 
-    # ラウンド2: 汎用検索（Google Books）と Open Library 緩め検索を並列実行
+    # ラウンド2: 汎用検索
     if not cover_url:
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
             f_gb2 = ex.submit(_fetch_cover_google_books, sq, 8, sq, author)
@@ -681,6 +694,8 @@ def api_book_cover():
     if not cover_url:
         cover_url = _fetch_cover_google_books(sq, max_results=3)
 
+    if len(_book_cover_cache) < _BOOK_CACHE_MAX:
+        _book_cover_cache[cache_key] = cover_url
     if cover_url:
         return jsonify({"success": True, "cover_url": cover_url})
     return jsonify({"success": False, "cover_url": None})
@@ -696,33 +711,23 @@ def api_book_info():
         return jsonify({"success": False, "error": "q または title パラメータが必要です"}), 400
     search_q = q or f"{title} {author}".strip() or title
 
+    cache_key = _book_cache_key(title, author, search_q)
+    if cache_key in _book_info_cache:
+        cached = _book_info_cache[cache_key]
+        return jsonify({"success": bool(cached.get("cover_url")), **cached})
+
     cover_url = None
     summary = ""
     if title and author:
-        result = _fetch_book_info_google_books(
-            f"intitle:{title} inauthor:{author}",
-            max_results=8,
-            want_title=title,
-            want_author=author,
-        )
+        result = _fetch_book_info_google_books(f"intitle:{title} inauthor:{author}", max_results=8, want_title=title, want_author=author)
         if result:
             cover_url, summary = result
     if not cover_url:
-        result = _fetch_book_info_google_books(
-            search_q or title,
-            max_results=8,
-            want_title=title or search_q,
-            want_author=author,
-        )
+        result = _fetch_book_info_google_books(search_q or title, max_results=8, want_title=title or search_q, want_author=author)
         if result:
             cover_url, summary = result
     if not cover_url:
-        cover_url = _fetch_cover_open_library(
-            search_q or title,
-            limit=5,
-            want_title=title or search_q,
-            want_author=author,
-        )
+        cover_url = _fetch_cover_open_library(search_q or title, limit=5, want_title=title or search_q, want_author=author)
     if not cover_url:
         result = _fetch_book_info_google_books(search_q or title, max_results=3)
         if result:
@@ -730,11 +735,10 @@ def api_book_info():
     if not cover_url:
         cover_url = _fetch_cover_google_books(search_q or title, max_results=3)
 
-    return jsonify({
-        "success": bool(cover_url),
-        "cover_url": cover_url,
-        "summary": summary,
-    })
+    info = {"cover_url": cover_url, "summary": summary}
+    if len(_book_info_cache) < _BOOK_CACHE_MAX:
+        _book_info_cache[cache_key] = info
+    return jsonify({"success": bool(cover_url), **info})
 
 
 def _sanitize_api_key(key: str) -> str:

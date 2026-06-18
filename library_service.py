@@ -33,21 +33,36 @@ OPENLIBRARY_SEARCH = "https://openlibrary.org/search.json"
 OPENLIBRARY_BOOKS = "https://openlibrary.org/api/books"
 
 
+_google_api_key_cache: Optional[str] = None
+_google_api_key_cache_mtime: float = 0.0
+_GOOGLE_API_KEY_SENTINEL = object()  # キャッシュ済み(None含む)を示すセンチネル
+_google_api_key_cached = False
+
 def _get_google_api_key() -> Optional[str]:
-    """Google Books API キーを環境変数→AI設定ファイルの順で取得する。"""
-    key = os.environ.get("GOOGLE_BOOKS_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if key:
-        return key
-    # AI設定ファイル（gemini プロバイダーのキーは Google Books でも有効）
+    """Google Books API キーを環境変数→AI設定ファイルの順で取得する（mtime キャッシュ付き）。"""
+    global _google_api_key_cache, _google_api_key_cache_mtime, _google_api_key_cached
+    # 環境変数は変わらないので一度取れたらキャッシュ
+    env_key = os.environ.get("GOOGLE_BOOKS_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if env_key:
+        return env_key
+    # AI設定ファイルから取得（mtime が変わっていなければキャッシュを使う）
     try:
         config_path = get_ai_config_path()
         if config_path.exists():
+            mtime = config_path.stat().st_mtime
+            if _google_api_key_cached and mtime <= _google_api_key_cache_mtime:
+                return _google_api_key_cache
             with open(config_path, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
-            if cfg.get("provider") == "gemini" and cfg.get("api_key"):
-                return cfg["api_key"]
+            key = cfg.get("api_key") if cfg.get("provider") == "gemini" else None
+            _google_api_key_cache = key
+            _google_api_key_cache_mtime = mtime
+            _google_api_key_cached = True
+            return key
     except Exception:
         pass
+    _google_api_key_cached = True
+    _google_api_key_cache = None
     return None
 
 APP_DIR = Path(__file__).resolve().parent
@@ -118,6 +133,7 @@ def save_credentials(library_id: str, user_id: str, password: str) -> None:
     with open(CREDS_PATH, "w", encoding="utf-8") as f:
         json.dump(all_creds, f, ensure_ascii=False, indent=2)
     CREDS_PATH.chmod(0o600)
+    _invalidate_creds_cache()
     logger.info("認証情報を保存: %s", library_id)
 
 
@@ -129,6 +145,7 @@ def delete_credentials(library_id: str) -> None:
     with open(CREDS_PATH, "w", encoding="utf-8") as f:
         json.dump(all_creds, f, ensure_ascii=False, indent=2)
     CREDS_PATH.chmod(0o600)
+    _invalidate_creds_cache()
 
 
 def has_credentials(library_id: str) -> bool:
@@ -202,14 +219,28 @@ def test_login(library_id: str) -> bool:
     return adapter.login(session, creds)
 
 
+_creds_cache: dict = {}
+_creds_cache_mtime: float = 0.0
+
 def _load_all_credentials() -> dict:
+    global _creds_cache, _creds_cache_mtime
     if not CREDS_PATH.exists():
         return {}
     try:
+        mtime = CREDS_PATH.stat().st_mtime
+        if _creds_cache and mtime <= _creds_cache_mtime:
+            return _creds_cache
         with open(CREDS_PATH, encoding="utf-8") as f:
-            return json.load(f)
+            _creds_cache = json.load(f)
+        _creds_cache_mtime = mtime
+        return _creds_cache
     except (json.JSONDecodeError, OSError):
         return {}
+
+def _invalidate_creds_cache() -> None:
+    global _creds_cache, _creds_cache_mtime
+    _creds_cache = {}
+    _creds_cache_mtime = 0.0
 
 
 def _get_credentials(library_id: str) -> LibraryCredentials:
@@ -737,18 +768,44 @@ def get_completed_books_without_insights(max_count: int | None = None) -> list[d
     return result
 
 
+_yonda_messages_cache: Optional[dict] = None
+_yonda_messages_cache_mtime: float = 0.0
+
+def _invalidate_messages_cache() -> None:
+    global _yonda_messages_cache, _yonda_messages_cache_mtime
+    _yonda_messages_cache = None
+    _yonda_messages_cache_mtime = 0.0
+
 def load_yonda_messages() -> dict:
-    """Yonda内メッセージ一覧を読み込む。"""
+    """Yonda内メッセージ一覧を読み込む（mtime キャッシュ付き）。"""
+    global _yonda_messages_cache, _yonda_messages_cache_mtime
     if not YONDA_MESSAGES_PATH.exists():
         return {"messages": []}
     try:
+        mtime = YONDA_MESSAGES_PATH.stat().st_mtime
+        if _yonda_messages_cache is not None and mtime <= _yonda_messages_cache_mtime:
+            return _yonda_messages_cache
         with open(YONDA_MESSAGES_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
         if isinstance(data, dict) and isinstance(data.get("messages"), list):
+            _yonda_messages_cache = data
+            _yonda_messages_cache_mtime = mtime
             return data
     except Exception:
         logger.warning("Yondaメッセージの読込に失敗", exc_info=True)
     return {"messages": []}
+
+
+def _write_yonda_messages(data: dict) -> None:
+    """メッセージをファイルに書き込んでキャッシュを更新する。"""
+    global _yonda_messages_cache, _yonda_messages_cache_mtime
+    with open(YONDA_MESSAGES_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    _yonda_messages_cache = data
+    try:
+        _yonda_messages_cache_mtime = YONDA_MESSAGES_PATH.stat().st_mtime
+    except OSError:
+        _invalidate_messages_cache()
 
 
 def save_yonda_message(message: dict) -> dict:
@@ -758,8 +815,7 @@ def save_yonda_message(message: dict) -> dict:
     messages = data.setdefault("messages", [])
     messages.insert(0, message)
     del messages[100:]
-    with open(YONDA_MESSAGES_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    _write_yonda_messages(data)
     return message
 
 
@@ -779,8 +835,7 @@ def update_yonda_message(message: dict) -> dict:
     if not replaced:
         messages.insert(0, message)
     del messages[100:]
-    with open(YONDA_MESSAGES_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    _write_yonda_messages(data)
     return message
 
 
@@ -793,8 +848,7 @@ def delete_yonda_message(message_id: str) -> bool:
     if len(new_messages) == len(messages):
         return False
     data["messages"] = new_messages
-    with open(YONDA_MESSAGES_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    _write_yonda_messages(data)
     return True
 
 
@@ -824,8 +878,7 @@ def archive_old_messages(months: int = 3) -> int:
     del archived[500:]
     data["messages"] = keep
     data["archived"] = archived
-    with open(YONDA_MESSAGES_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    _write_yonda_messages(data)
     return len(move)
 
 
