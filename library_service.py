@@ -130,9 +130,11 @@ def save_credentials(library_id: str, user_id: str, password: str) -> None:
     ensure_config_dir()
     all_creds = _load_all_credentials()
     all_creds[library_id] = {"user_id": user_id, "password": password}
-    with open(CREDS_PATH, "w", encoding="utf-8") as f:
+    dest = _get_creds_path()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with open(dest, "w", encoding="utf-8") as f:
         json.dump(all_creds, f, ensure_ascii=False, indent=2)
-    CREDS_PATH.chmod(0o600)
+    dest.chmod(0o600)
     _invalidate_creds_cache()
     logger.info("認証情報を保存: %s", library_id)
 
@@ -142,9 +144,11 @@ def delete_credentials(library_id: str) -> None:
     ensure_config_dir()
     all_creds = _load_all_credentials()
     all_creds.pop(library_id, None)
-    with open(CREDS_PATH, "w", encoding="utf-8") as f:
+    dest = _get_creds_path()
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with open(dest, "w", encoding="utf-8") as f:
         json.dump(all_creds, f, ensure_ascii=False, indent=2)
-    CREDS_PATH.chmod(0o600)
+    dest.chmod(0o600)
     _invalidate_creds_cache()
 
 
@@ -219,28 +223,39 @@ def test_login(library_id: str) -> bool:
     return adapter.login(session, creds)
 
 
-_creds_cache: dict = {}
-_creds_cache_mtime: float = 0.0
+_creds_cache: dict[str, dict] = {}        # path_str → parsed credentials
+_creds_cache_mtime: dict[str, float] = {} # path_str → mtime
+
+def _get_creds_path() -> Path:
+    """スレッドローカルのユーザーディレクトリ内 credentials.json を返す。
+    未ログインまたはシングルユーザーモードの場合はグローバルパスにフォールバック。"""
+    user_dir = get_user_data_dir()
+    if user_dir != DATA_DIR:
+        p = user_dir / "credentials.json"
+        if p.exists():
+            return p
+    return CREDS_PATH
 
 def _load_all_credentials() -> dict:
-    global _creds_cache, _creds_cache_mtime
-    if not CREDS_PATH.exists():
+    path = _get_creds_path()
+    path_key = str(path)
+    if not path.exists():
         return {}
     try:
-        mtime = CREDS_PATH.stat().st_mtime
-        if _creds_cache and mtime <= _creds_cache_mtime:
-            return _creds_cache
-        with open(CREDS_PATH, encoding="utf-8") as f:
-            _creds_cache = json.load(f)
-        _creds_cache_mtime = mtime
-        return _creds_cache
+        mtime = path.stat().st_mtime
+        if _creds_cache.get(path_key) and mtime <= _creds_cache_mtime.get(path_key, 0.0):
+            return _creds_cache[path_key]
+        with open(path, encoding="utf-8") as f:
+            _creds_cache[path_key] = json.load(f)
+        _creds_cache_mtime[path_key] = mtime
+        return _creds_cache[path_key]
     except (json.JSONDecodeError, OSError):
         return {}
 
 def _invalidate_creds_cache() -> None:
-    global _creds_cache, _creds_cache_mtime
-    _creds_cache = {}
-    _creds_cache_mtime = 0.0
+    path_key = str(_get_creds_path())
+    _creds_cache.pop(path_key, None)
+    _creds_cache_mtime.pop(path_key, None)
 
 
 def _get_credentials(library_id: str) -> LibraryCredentials:

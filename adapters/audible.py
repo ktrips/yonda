@@ -27,12 +27,27 @@ _DATA_DIR = Path(os.environ.get("YONDA_DATA_DIR", str(APP_DIR / "data")))
 
 
 def _resolve_auth_file() -> Path:
-    """認証ファイルのパスを解決。data/auth_jp.json を優先（アップロード先と一致）"""
+    """認証ファイルのパスを解決する。優先順位:
+    1. YONDA_AUTH_FILE 環境変数（Secret Manager マウント: /secrets/auth_jp.json）
+    2. スレッドローカルのユーザーディレクトリ（ユーザーが手動アップロードしたファイル）
+    3. DATA_DIR ルートのフォールバック候補群（シングルユーザー互換）
+    注意: Secret Manager のファイルは GCS にコピーしない。"""
+    # 1. Secret Manager 経由の環境変数を最優先（GCS への書き込みは行わない）
     if os.environ.get("YONDA_AUTH_FILE"):
         p = Path(os.environ["YONDA_AUTH_FILE"])
         if p.exists():
             return p
-    # 複数パスを試行。cwd/data を最優先（app が os.chdir(APP_DIR) 済みの場合に確実にヒット）
+    # 2. per-user ディレクトリ（ユーザーが明示的にアップロードしたファイル）
+    try:
+        from library_service import get_user_data_dir, DATA_DIR as _LS_DATA_DIR
+        user_dir = get_user_data_dir()
+        if user_dir != _LS_DATA_DIR:
+            p = user_dir / "auth_jp.json"
+            if p.exists():
+                return p
+    except Exception:
+        pass
+    # 3. シングルユーザー互換フォールバック
     candidates = [
         Path.cwd() / "data" / "auth_jp.json",
         Path.cwd() / "auth_jp.json",

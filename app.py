@@ -242,6 +242,27 @@ def auth_debug_redirect():
     return jsonify({"redirect_uri": _GOOGLE_REDIRECT_URI})
 
 
+def _ensure_user_credentials(user_dir: Path) -> None:
+    """ログインのたびに呼ばれ、認証ファイルがユーザーディレクトリに存在することを保証する。
+    ブック移行のセンチネルや既存データ有無に関わらず毎回実行する。
+    注意: auth_jp.json (Audible) は Secret Manager 経由で参照するため GCS にはコピーしない。"""
+    import shutil
+    cred_map = {
+        ".credentials.json": "credentials.json",
+        "kindle_session.json": "kindle_session.json",
+    }
+    for src_name, dst_name in cred_map.items():
+        src = library_service.DATA_DIR / src_name
+        dst = user_dir / dst_name
+        if src.exists() and not dst.exists():
+            try:
+                shutil.copy2(src, dst)
+                dst.chmod(0o600)
+                logger.info("認証ファイルをユーザーディレクトリにコピー: %s → %s", src_name, dst_name)
+            except OSError as e:
+                logger.warning("認証ファイルコピー失敗: %s → %s: %s", src_name, dst_name, e)
+
+
 def _migrate_root_data_to_user(uid_safe: str) -> None:
     """初回ログイン時: DATA_DIR ルートのデータをユーザーディレクトリにコピーする。
     センチネルファイル (.data_migrated) により、最初のユーザーのみに適用され
@@ -302,6 +323,8 @@ def auth_callback():
         "picture": user_info.get("picture"),
     }
     _migrate_root_data_to_user(uid_safe)
+    # ログインのたびに認証ファイルの存在を保証（センチネルに依存しない）
+    _ensure_user_credentials(library_service.DATA_DIR / "users" / uid_safe)
     # Firestore にユーザープロフィールを作成/更新
     try:
         import firestore_service  # noqa: PLC0415
@@ -3061,7 +3084,9 @@ def api_upload_audible_auth():
         # audible 認証ファイルの必須キーを簡易チェック
         if not isinstance(data, dict) or not any(k in data for k in ("website_cookies", "adp_token", "access_token")):
             return jsonify({"success": False, "error": "auth_jp.json の形式が正しくありません。audible-cli で認証し直してください。"}), 400
-        dest = library_service.DATA_DIR / "auth_jp.json"
+        # ユーザーがログイン中ならユーザーディレクトリへ、未ログインならルートへ保存
+        # Secret Manager のファイルはここでは扱わない（GCS への自動コピー禁止）
+        dest = library_service.get_user_data_dir() / "auth_jp.json"
         dest.parent.mkdir(parents=True, exist_ok=True)
         with open(dest, "wb") as out:
             out.write(raw)
