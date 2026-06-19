@@ -256,6 +256,14 @@ GitHub リポジトリ → **Settings** → **Secrets and variables** → **Acti
 | `kindle_session_manager.py` | Kindle セッションの状態確認・削除（`status` / `verify` / `clear`） |
 | `show_audible_fields.py` | Audible API レスポンスのフィールド確認（デバッグ用） |
 | `migrate_config_to_secure.py` | 旧パスの設定ファイルを `~/.config/yonda/` に移行 |
+| `migrate_to_firestore.py` | JSON データを Cloud Firestore へ移行 |
+| `firestore_test.py` | Firestore 接続確認ユーティリティ |
+
+**ルートスクリプト:**
+
+| スクリプト | 説明 |
+|-----------|------|
+| `fetch_all.py` | 全ソース（図書館・Audible・Kindle）の読書記録を一括取得して保存 |
 
 ## データの保存先
 
@@ -285,6 +293,8 @@ GitHub リポジトリ → **Settings** → **Secrets and variables** → **Acti
 
 ## 環境変数
 
+### アプリ基本設定
+
 | 変数 | 説明 |
 |------|------|
 | `YONDA_DATA_DIR` | データ保存先ディレクトリ（Cloud Runでは`/mnt/data`にGCSマウント） |
@@ -295,6 +305,31 @@ GitHub リポジトリ → **Settings** → **Secrets and variables** → **Acti
 | `YONDA_KINDLE_SQLITE_PATH` | Kindle BookData.sqlite のパス（任意） |
 | `YONDA_KINDLE_XML_PATH` | KindleSyncMetadataCache.xml のパス（任意） |
 | `YONDA_KINDLE_SESSION_PATH` | Kindle セッションファイルのパス（デフォルト: `~/.config/yonda/kindle_session.json`） |
+| `FLASK_SECRET_KEY` | Flask セッション署名キー（未設定時は `GOOGLE_CLIENT_SECRET` から自動生成） |
+
+### Google OAuth（マルチユーザー）
+
+| 変数 | 説明 |
+|------|------|
+| `GOOGLE_CLIENT_ID` | Google OAuth 2.0 クライアント ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth 2.0 クライアントシークレット |
+| `GOOGLE_REDIRECT_URI` | OAuth コールバック URI（例: `https://yonda.ktrips.net/auth/callback`） |
+
+### 自動取得・通知
+
+| 変数 | 説明 |
+|------|------|
+| `YONDA_INTERNAL_TOKEN` | `/api/internal/auto-fetch` 認証トークン（Cloud Scheduler マルチユーザー取得用） |
+| `TWILIO_ACCOUNT_SID` | Twilio Account SID（SMS 通知利用時） |
+| `TWILIO_AUTH_TOKEN` | Twilio Auth Token |
+| `TWILIO_FROM` | Twilio 送信元電話番号 |
+| `IOS_MESSAGE_TO` | SMS 送信先電話番号 |
+| `YONDA_IOS_MESSAGE_WEBHOOK_URL` | 読書完了メッセージ送信先 Webhook URL（Twilio の代替） |
+
+### Slack
+
+| 変数 | 説明 |
+|------|------|
 | `SLACK_SIGNING_SECRET` | Slack Slash Command の署名シークレット（Slack 連携利用時） |
 
 **ローカル起動時にクラウドのデータを参照する場合:**
@@ -336,6 +371,31 @@ Google Cloud Run へのデプロイ方法は 2 通りあります。
 > - 初回のみ手動ログイン（OTP 入力）が必要。以降はセッションが自動再利用されます（有効期限: 7日間）  
 > - セッションが無効でローカルファイルもない場合はスキップされます  
 > - GCS に `BookData.sqlite` を配置する場合は `YONDA_KINDLE_SQLITE_PATH=/mnt/data/BookData.sqlite` を設定
+
+### Google OAuth セットアップ（マルチユーザー）
+
+Google Cloud Console でOAuth 2.0 クライアントを作成し、以下を設定します。
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services** → **認証情報** → **OAuth 2.0 クライアント ID** を作成
+2. 承認済みのリダイレクト URI に `https://yonda.ktrips.net/auth/callback` を追加
+3. クライアント ID・シークレットを取得し、GitHub Secrets へ登録
+
+```bash
+# Cloud Run への環境変数設定例
+gcloud run services update yonda \
+  --region=asia-northeast1 \
+  --update-env-vars="GOOGLE_CLIENT_ID=xxx,GOOGLE_CLIENT_SECRET=yyy,GOOGLE_REDIRECT_URI=https://yonda.ktrips.net/auth/callback"
+```
+
+> OAuth を設定しない場合はシングルユーザーモードで動作します（ログイン不要）。
+
+---
+
+### ホーム画面ショートカット（PWA）
+
+`static/manifest.json` を参照。Android / iOS のホーム画面への追加時にブックアイコン（192×512px）とアプリ名「Yonda」が表示されます。
+
+---
 
 ### Slack 連携セットアップ
 
@@ -386,6 +446,9 @@ cat ~/sa-key-yonda.json
 | `GCP_SA_KEY` | サービスアカウントキー JSON 全文 | ✅ |
 | `AUTH_JP_JSON` | `auth_jp.json` の内容 | ✅（Audible 利用時） |
 | `CREDENTIALS_JSON` | `credentials.json` の内容 | 任意（図書館利用時） |
+| `GOOGLE_CLIENT_ID` | Google OAuth クライアント ID | 任意（マルチユーザー時） |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth クライアントシークレット | 任意（マルチユーザー時） |
+| `YONDA_INTERNAL_TOKEN` | 内部 API 認証トークン | 任意（Cloud Scheduler 自動取得時） |
 
 #### 3. セットアップチェックリスト
 
