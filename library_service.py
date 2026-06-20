@@ -97,6 +97,16 @@ def get_current_uid() -> Optional[str]:
     except ValueError:
         return None
 
+
+def get_kindle_session_path_for_user() -> Path:
+    """スレッドローカルのユーザーディレクトリ内 kindle_session.json を返す。
+    未ログインまたはシングルユーザーモードの場合はグローバルパスにフォールバック。"""
+    from config_paths import get_kindle_session_path
+    user_dir = get_user_data_dir()
+    if user_dir != DATA_DIR:
+        return user_dir / "kindle_session.json"
+    return get_kindle_session_path()
+
 def _get_json_map() -> dict[str, Path]:
     d = get_user_data_dir()
     return {

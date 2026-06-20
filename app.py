@@ -155,7 +155,7 @@ def get_user_data_dir_for_session() -> Path:
 # OAuth 有効時に認証不要なパス（前方一致）
 _PUBLIC_PREFIXES = ("/auth/", "/static/", "/help")
 # OAuth 有効時に認証不要な完全一致パス
-_PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info", "/api/internal/auto-fetch"}
+_PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info", "/api/internal/auto-fetch", "/api/internal/auto-fetch-all"}
 
 
 @app.before_request
@@ -242,6 +242,31 @@ def auth_debug_redirect():
     return jsonify({"redirect_uri": _GOOGLE_REDIRECT_URI})
 
 
+def _init_firestore_sources(uid_safe: str, user_dir: Path) -> None:
+    """初回移行時に認証ファイルの有無から Firestore sources フラグを初期設定する。"""
+    sources: dict = {}
+    creds_file = user_dir / "credentials.json"
+    if creds_file.exists():
+        try:
+            creds = json.loads(creds_file.read_text(encoding="utf-8"))
+            if creds.get("setagaya", {}).get("user_id"):
+                sources["setagaya"] = True
+        except Exception:
+            pass
+    if (user_dir / "auth_jp.json").exists():
+        sources["audible"] = True
+    if (user_dir / "kindle_session.json").exists():
+        sources["kindle"] = True
+    if sources:
+        try:
+            import firestore_service  # noqa: PLC0415
+            for src, enabled in sources.items():
+                firestore_service.update_user_sources(uid_safe, src, enabled)
+            logger.info("sources フラグ初期設定: uid=%s sources=%s", uid_safe, sources)
+        except Exception as e:
+            logger.warning("sources フラグ初期設定エラー: %s", e)
+
+
 def _ensure_user_credentials(user_dir: Path) -> None:
     """ログインのたびに呼ばれ、認証ファイルがユーザーディレクトリに存在することを保証する。
     ブック移行のセンチネルや既存データ有無に関わらず毎回実行する。
@@ -297,6 +322,8 @@ def _migrate_root_data_to_user(uid_safe: str) -> None:
     # 移行完了マーク（2人目以降は ROOT データを引き継がない）
     sentinel.touch()
     logger.info("データ移行センチネル作成: %s → ユーザー %s に帰属確定", sentinel, uid_safe)
+    # Firestore sources フラグを初期設定（移行時に認証ファイルの有無から推定）
+    _init_firestore_sources(uid_safe, user_dir)
 
 
 @app.route("/auth/callback")
@@ -504,6 +531,93 @@ def api_internal_auto_fetch():
 
     logger.info("全ユーザー自動取得完了: %s", {u: v["status"] for u, v in all_results.items()})
     return jsonify({"success": True, "users": all_results})
+
+
+@app.route("/api/internal/auto-fetch-all", methods=["POST"])
+def api_internal_auto_fetch_all():
+    """Cloud Scheduler から呼ばれる。Firestore の sources フラグを持つ全ユーザーを並列 fetch する。
+    Firestore にユーザーが存在しない場合は /api/internal/auto-fetch（ファイルシステムスキャン）に
+    フォールバックして同期停止を防ぐ（R2 対応）。
+    認証: X-Internal-Token ヘッダー（YONDA_INTERNAL_TOKEN が設定済みの場合）
+         または Cloud Scheduler が自動付与する X-CloudScheduler: true ヘッダー。"""
+    import hmac as _hmac
+    import concurrent.futures as _cf
+
+    is_scheduler = request.headers.get("X-CloudScheduler", "").lower() == "true"
+    token = request.headers.get("X-Internal-Token", "")
+    token_ok = _INTERNAL_TOKEN and _hmac.compare_digest(token, _INTERNAL_TOKEN)
+    if not is_scheduler and not token_ok:
+        logger.warning("auto-fetch-all: 認証失敗 (IP=%s)", request.remote_addr)
+        return jsonify({"error": "unauthorized"}), 401
+
+    import firestore_service as _fs  # noqa: PLC0415
+
+    # Firestore からユーザー一覧を取得
+    fs_users = _fs.list_sync_users()
+
+    # Firestore にユーザーが未登録の場合はファイルシステムスキャンにフォールバック（R2 対応）
+    if not fs_users:
+        logger.info("auto-fetch-all: Firestore にユーザーなし → /api/internal/auto-fetch にフォールバック")
+        return api_internal_auto_fetch()
+
+    source_map = {"setagaya": "setagaya", "audible": "audible_jp", "kindle": "kindle"}
+
+    def _fetch_for_fs_user(u: dict) -> tuple:
+        target_uid = u["uid"]
+        sources = u.get("sources", {})
+        user_data_dir = library_service.DATA_DIR / "users" / target_uid
+        if not user_data_dir.exists():
+            logger.warning("auto-fetch-all: uid=%s のデータディレクトリなし、スキップ", target_uid)
+            return target_uid, {"error": "データディレクトリが見つかりません"}
+
+        library_service.set_user_data_dir(user_data_dir)
+        profile = _fs.get_user_profile(target_uid)
+
+        results: dict = {}
+        errors: dict = {}
+        prev_payloads: dict = {}
+        curr_payloads: dict = {}
+
+        for src_key, enabled in sources.items():
+            if not enabled:
+                continue
+            lib_id = source_map.get(src_key, src_key)
+            try:
+                prev_payloads[lib_id] = library_service.load_saved_for(lib_id)
+                payload = library_service.fetch_and_save(lib_id)
+                curr_payloads[lib_id] = payload
+                results[src_key] = {"total": payload.get("total", 0)}
+                logger.info("auto-fetch-all: uid=%s source=%s 完了 (%d冊)",
+                            target_uid, src_key, payload.get("total", 0))
+            except Exception as e:
+                logger.error("auto-fetch-all: uid=%s source=%s エラー: %s", target_uid, src_key, e)
+                errors[src_key] = str(e)
+
+        if curr_payloads:
+            try:
+                message = _create_completed_books_message(prev_payloads, curr_payloads, errors)
+                if message and profile:
+                    message["user"] = profile
+                    library_service.update_yonda_message(message)
+            except Exception as e:
+                logger.error("auto-fetch-all: uid=%s メッセージ生成エラー: %s", target_uid, e)
+
+        return target_uid, {
+            "results": results,
+            "errors": errors,
+            "status": "ok" if not errors else ("partial" if results else "error"),
+        }
+
+    all_results: dict = {}
+    with _cf.ThreadPoolExecutor(max_workers=min(4, len(fs_users))) as executor:
+        for uid, result in executor.map(_fetch_for_fs_user, fs_users):
+            all_results[uid] = result
+
+    # スレッドローカルをルートに戻す
+    library_service.set_user_data_dir(library_service.DATA_DIR)
+
+    logger.info("auto-fetch-all 完了: %d ユーザー処理", len(all_results))
+    return jsonify({"status": "ok", "users": len(all_results), "results": all_results})
 
 
 @app.route("/")
@@ -3052,6 +3166,15 @@ def api_save_credentials():
         if not library_id or not user_id or not password:
             return jsonify({"success": False, "error": "図書館ID・ユーザーID・パスワードは必須です"}), 400
         library_service.save_credentials(library_id, user_id, password)
+        # Firestore sources フラグを有効化
+        uid = library_service.get_current_uid()
+        if uid:
+            try:
+                import firestore_service  # noqa: PLC0415
+                src_key = {"setagaya": "setagaya"}.get(library_id, library_id)
+                firestore_service.update_user_sources(uid, src_key, True)
+            except Exception:
+                pass
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -3062,6 +3185,15 @@ def api_delete_credentials(library_id):
     """認証情報を削除"""
     try:
         library_service.delete_credentials(library_id)
+        # Firestore sources フラグを無効化
+        uid = library_service.get_current_uid()
+        if uid:
+            try:
+                import firestore_service  # noqa: PLC0415
+                src_key = {"setagaya": "setagaya"}.get(library_id, library_id)
+                firestore_service.update_user_sources(uid, src_key, False)
+            except Exception:
+                pass
         return jsonify({"success": True})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -3090,6 +3222,14 @@ def api_upload_audible_auth():
         dest.parent.mkdir(parents=True, exist_ok=True)
         with open(dest, "wb") as out:
             out.write(raw)
+        # Firestore sources フラグを有効化
+        uid = library_service.get_current_uid()
+        if uid:
+            try:
+                import firestore_service  # noqa: PLC0415
+                firestore_service.update_user_sources(uid, "audible", True)
+            except Exception:
+                pass
         return jsonify({"success": True, "message": "auth_jp.json を保存しました"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

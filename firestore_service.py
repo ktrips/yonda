@@ -227,3 +227,60 @@ def upsert_user_profile(uid: str, user_info: dict) -> None:
             logger.info("ユーザープロフィール新規作成: %s", uid)
     except Exception as e:
         logger.warning("ユーザープロフィール作成/更新失敗: %s", e)
+
+
+def update_user_sources(uid: str, source: str, enabled: bool) -> None:
+    """sources フラグを更新する。認証設定/削除時に呼ぶ。"""
+    db = get_db()
+    if not db:
+        return
+    try:
+        db.collection("users").document(uid).set(
+            {"sources": {source: enabled}},
+            merge=True,
+        )
+        logger.info("sources フラグ更新: uid=%s source=%s enabled=%s", uid, source, enabled)
+    except Exception as e:
+        logger.error("sources フラグ更新エラー: %s", e)
+
+
+def list_sync_users() -> list:
+    """sources が1つ以上 true のユーザーを返す（同期ループ用）。"""
+    db = get_db()
+    if not db:
+        return []
+    try:
+        result = []
+        for doc in db.collection("users").stream():
+            profile = doc.to_dict() or {}
+            sources = profile.get("sources", {})
+            if any(v for v in sources.values() if v):
+                result.append({
+                    "uid":     doc.id,
+                    "sources": sources,
+                    "name":    profile.get("name", ""),
+                    "picture": profile.get("picture", ""),
+                })
+        return result
+    except Exception as e:
+        logger.error("同期ユーザー一覧取得エラー: %s", e)
+        return []
+
+
+def get_user_profile(uid: str) -> dict | None:
+    """1ユーザーのプロフィールを返す（メッセージ生成用）。"""
+    db = get_db()
+    if not db:
+        return None
+    try:
+        doc = db.collection("users").document(uid).get()
+        if doc.exists:
+            d = doc.to_dict() or {}
+            return {
+                "name":    d.get("name", ""),
+                "email":   d.get("email", ""),
+                "picture": d.get("picture", ""),
+            }
+    except Exception:
+        pass
+    return None

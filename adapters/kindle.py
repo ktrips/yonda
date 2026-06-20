@@ -233,9 +233,13 @@ class KindleAdapter(LibraryAdapter):
 
     @staticmethod
     def _get_session_path() -> Path:
-        """セッションファイルのパスを取得"""
-        from config_paths import get_kindle_session_path
-        return get_kindle_session_path()
+        """セッションファイルのパスを取得（per-user 対応）"""
+        try:
+            from library_service import get_kindle_session_path_for_user
+            return get_kindle_session_path_for_user()
+        except Exception:
+            from config_paths import get_kindle_session_path
+            return get_kindle_session_path()
 
     def save_session(self, session: requests.Session) -> None:
         """セッションクッキーを保存"""

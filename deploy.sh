@@ -195,7 +195,8 @@ YONDA_DATA_DIR=${DATA_MOUNT},\
 YONDA_AUTH_FILE=${SECRETS_MOUNT}/auth_jp.json,\
 YONDA_CREDS_PATH=${DATA_MOUNT}/.credentials.json,\
 YONDA_KINDLE_SESSION_PATH=${DATA_MOUNT}/kindle_session.json,\
-YONDA_AI_CONFIG_PATH=${DATA_MOUNT}/ai_config.json" \
+YONDA_AI_CONFIG_PATH=${DATA_MOUNT}/ai_config.json,\
+YONDA_INTERNAL_TOKEN=${YONDA_INTERNAL_TOKEN}" \
   --quiet
 
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
@@ -219,13 +220,17 @@ fi
 echo ""
 echo ">>> Cloud Scheduler ジョブを設定（6時/12時/18時 JST）..."
 
-FETCH_URL="${SERVICE_URL}/api/fetch"
-FETCH_BODY='{"library_id":"all","notify_completed":true}'
+FETCH_URL="${SERVICE_URL}/api/internal/auto-fetch-all"
+FETCH_BODY='{}'
 SCHEDULER_REGION="asia-northeast1"
 
 setup_scheduler_job() {
   local job_name="$1"
   local schedule="$2"
+  local token_header=""
+  if [[ -n "${YONDA_INTERNAL_TOKEN}" ]]; then
+    token_header=",X-Internal-Token=${YONDA_INTERNAL_TOKEN}"
+  fi
   if gcloud scheduler jobs describe "${job_name}" \
        --location="${SCHEDULER_REGION}" --format='value(name)' 2>/dev/null; then
     gcloud scheduler jobs update http "${job_name}" \
@@ -233,7 +238,7 @@ setup_scheduler_job() {
       --schedule="${schedule}" \
       --uri="${FETCH_URL}" \
       --message-body="${FETCH_BODY}" \
-      --update-headers="Content-Type=application/json" \
+      --update-headers="Content-Type=application/json,X-CloudScheduler=true${token_header}" \
       --time-zone="Asia/Tokyo" \
       --attempt-deadline=1800s \
       --quiet
@@ -244,7 +249,7 @@ setup_scheduler_job() {
       --schedule="${schedule}" \
       --uri="${FETCH_URL}" \
       --message-body="${FETCH_BODY}" \
-      --headers="Content-Type=application/json" \
+      --headers="Content-Type=application/json,X-CloudScheduler=true${token_header}" \
       --time-zone="Asia/Tokyo" \
       --attempt-deadline=1800s \
       --quiet
