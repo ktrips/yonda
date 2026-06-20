@@ -595,34 +595,43 @@ def update_paper_book(book_id: str, updates: dict) -> dict:
 
 
 def delete_paper_book(book_id: str) -> dict:
-    """paper_books.json から指定 book_id の本を削除する。"""
+    """paper_books.json から指定 book_id の本を削除する。
+    JSON に存在しない場合は Firestore を book_id フィールドで検索して削除する。
+    """
     path = _get_json_map()["paper"]
-    if not path.exists():
-        return {"success": False, "error": "paper_books.json が存在しません"}
+    deleted_book: Optional[dict] = None
 
-    with open(path, encoding="utf-8") as f:
-        payload = json.load(f)
+    # ── JSON から削除 ───────────────────────────────────────────────
+    if path.exists():
+        with open(path, encoding="utf-8") as f:
+            payload = json.load(f)
 
-    books: list[dict] = payload.get("books", [])
-    new_books = [b for b in books if b.get("book_id") != book_id]
-    if len(new_books) == len(books):
-        return {"success": False, "error": "本が見つかりません"}
+        books: list[dict] = payload.get("books", [])
+        new_books = [b for b in books if b.get("book_id") != book_id]
 
-    payload["books"] = new_books
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-    invalidate_saved_cache()
+        if len(new_books) < len(books):
+            deleted_book = next((b for b in books if b.get("book_id") == book_id), None)
+            payload["books"] = new_books
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            invalidate_saved_cache()
 
-    # Firestore からも削除
+    # ── Firestore から削除 ────────────────────────────────────────
     uid = get_current_uid()
     if uid:
-        deleted = next((b for b in books if b.get("book_id") == book_id), None)
-        if deleted:
-            try:
-                import firestore_service  # noqa: PLC0415
-                firestore_service.delete_single_book(uid, deleted)
-            except Exception as e:
-                logger.warning("Firestore paper削除エラー: %s", e)
+        try:
+            import firestore_service  # noqa: PLC0415
+            if deleted_book:
+                # JSON で見つかった場合は通常の削除
+                firestore_service.delete_single_book(uid, deleted_book)
+            else:
+                # JSON にない場合は book_id UUID で Firestore を検索して削除
+                deleted_book = firestore_service.delete_book_by_uuid(uid, book_id)
+        except Exception as e:
+            logger.warning("Firestore paper削除エラー: %s", e)
+
+    if deleted_book is None:
+        return {"success": False, "error": "本が見つかりません"}
 
     return {"success": True}
 

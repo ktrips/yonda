@@ -160,6 +160,31 @@ def delete_single_book(uid: str, book: dict) -> None:
         logger.error("Firestore 単冊削除エラー: %s", e)
 
 
+def delete_book_by_uuid(uid: str, book_id: str) -> Optional[dict]:
+    """book_id フィールド（UUID）で Firestore を検索して削除する。
+    JSON にない本を Firestore から削除する場合に使用。
+    削除した本の dict を返す。見つからなければ None。
+    """
+    db = get_db()
+    if not db:
+        return None
+    try:
+        docs = (
+            db.collection("users")
+            .document(uid)
+            .collection("books")
+            .where("book_id", "==", book_id)
+            .get()
+        )
+        for doc in docs:
+            book = doc.to_dict()
+            doc.reference.delete()
+            return book
+    except Exception as e:
+        logger.error("Firestore UUID削除エラー: %s", e)
+    return None
+
+
 def list_users() -> list[dict]:
     """
     Firestore に登録されている全ユーザーのプロフィール一覧を返す。
