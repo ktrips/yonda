@@ -179,17 +179,23 @@ const API = {
 
 let allBooks = [];
 let filteredBooks = [];
+/** _computeBookStats のキャッシュ（allBooks 更新時に null クリア） */
+let _bookStatsCache = null;
 /** allBooks の O(1) インデックス検索用 Map（indexOf の O(n) を回避） */
 const _bookIndexMap = new Map();
 /** source:catalog → book のルックアップ Map */
 const _bookByCatalogMap = new Map();
 /** source:title:author → book のルックアップ Map */
 const _bookByTitleAuthorMap = new Map();
+/** book_id (UUID) → book のルックアップ Map */
+const _bookByIdMap = new Map();
 
 function _rebuildBookIndexMap() {
   _bookIndexMap.clear();
   _bookByCatalogMap.clear();
   _bookByTitleAuthorMap.clear();
+  _bookByIdMap.clear();
+  _bookStatsCache = null;
   allBooks.forEach((b, i) => {
     _bookIndexMap.set(b, i);
     const src = (b.source || '').trim();
@@ -198,6 +204,7 @@ function _rebuildBookIndexMap() {
     const title = (b.title || '').trim();
     const author = (b.author || '').trim();
     _bookByTitleAuthorMap.set(`${src}:${title}:${author}`, b);
+    if (b.book_id) _bookByIdMap.set(b.book_id, b);
   });
 }
 function _bookIndex(book) {
@@ -414,7 +421,7 @@ function bookRatingRowHtml(book, { showUnrated = false } = {}) {
           ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"
                class="btn-unrated btn-unrated-card" title="レビューを入力"
                onclick="event.stopPropagation()">未レビュー</a>`
-          : `<span class="btn-unrated btn-unrated-card" onclick="event.stopPropagation();openBookDetail(allBooks.find(b=>b.book_id==='${escapeHtml(book.book_id||'')}'))">未レビュー</span>`;
+          : `<span class="btn-unrated btn-unrated-card" onclick="event.stopPropagation();openBookDetail(_bookByIdMap.get('${escapeHtml(book.book_id||'')}'))">未レビュー</span>`;
       })()
     : '';
 
@@ -1291,6 +1298,7 @@ async function submitFetchOtp() {
 /* --- Stats --- */
 
 function _computeBookStats() {
+  if (_bookStatsCache) return _bookStatsCache;
   const yearStr = String(new Date().getFullYear());
   let completed = 0, inProgress = 0, unread = 0, yearlyCompleted = 0, favorite = 0;
   let star5 = 0, star4 = 0, star3 = 0;
@@ -1309,12 +1317,13 @@ function _computeBookStats() {
     if (r >= 4) star4++;
     if (r >= 3) star3++;
   }
-  return {
+  _bookStatsCache = {
     year: +yearStr,
     completed, inProgress, unread, yearlyCompleted, favorite,
     all: allBooks.length,
     star5, star4, star3,
   };
+  return _bookStatsCache;
 }
 
 function updateStats() {
@@ -1583,7 +1592,7 @@ function getRankingByGenre() {
   }
   const byGenre = {};
   for (const b of books) {
-    const g = normalizeGenre(b.genre) || 'その他';
+    const g = b._normalizedGenre || normalizeGenre(b.genre || '') || 'その他';
     if (!byGenre[g]) byGenre[g] = [];
     byGenre[g].push(b);
   }
@@ -4376,7 +4385,7 @@ let _justAddedPaperBook = false;
 
 /** 紙の本編集モーダルを開き、評価・書評フィールドにスクロール */
 function openPaperBookEditToRate(bookId) {
-  const book = allBooks.find(b => b.book_id === bookId);
+  const book = _bookByIdMap.get(bookId);
   if (!book) return;
   openPaperBookEdit(book);
   setTimeout(() => {
@@ -4470,7 +4479,7 @@ function closePaperBookEdit() {
 }
 
 function openPaperBookEditById(bookId) {
-  const book = allBooks.find(b => b.book_id === bookId);
+  const book = _bookByIdMap.get(bookId);
   if (book) openPaperBookEdit(book);
 }
 
@@ -4541,7 +4550,7 @@ async function savePaperBookEdit() {
         const savedId = savedBookSnap.book_id;
         const savedTitle = savedBookSnap.title || body.title || '本';
         const target = savedId
-          ? allBooks.find(b => b.book_id === savedId)
+          ? _bookByIdMap.get(savedId)
           : allBooks.find(b => b.title === body.title && b.author === body.author);
         showActionToast(`「${savedTitle}」を追加しました！`, '確認する', () => {
           if (target) openBookDetail(target);

@@ -860,24 +860,35 @@ def api_book_info():
         cached = _book_info_cache[cache_key]
         return jsonify({"success": bool(cached.get("cover_url")), **cached})
 
-    cover_url = None
-    summary = ""
-    if title and author:
-        result = _fetch_book_info_google_books(f"intitle:{title} inauthor:{author}", max_results=8, want_title=title, want_author=author)
-        if result:
-            cover_url, summary = result
+    sq = search_q or title
+
+    # ラウンド1: title+author 精密検索（Google Books）と Open Library を並列実行
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+        f_gb1 = ex.submit(
+            _fetch_book_info_google_books,
+            f"intitle:{title} inauthor:{author}" if (title and author) else sq,
+            8, title or sq, author,
+        )
+        f_ol1 = ex.submit(
+            _fetch_cover_open_library, sq, 5, title or sq, author
+        )
+    gb1 = f_gb1.result()
+    cover_url = gb1[0] if gb1 else None
+    summary = gb1[1] if gb1 else ""
+
     if not cover_url:
-        result = _fetch_book_info_google_books(search_q or title, max_results=8, want_title=title or search_q, want_author=author)
-        if result:
-            cover_url, summary = result
+        cover_url = f_ol1.result()
+
+    # ラウンド2: 汎用クエリ（Google Books 2種）を並列実行
     if not cover_url:
-        cover_url = _fetch_cover_open_library(search_q or title, limit=5, want_title=title or search_q, want_author=author)
-    if not cover_url:
-        result = _fetch_book_info_google_books(search_q or title, max_results=3)
-        if result:
-            cover_url, summary = result[0], result[1]
-    if not cover_url:
-        cover_url = _fetch_cover_google_books(search_q or title, max_results=3)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+            f_gb2 = ex.submit(_fetch_book_info_google_books, sq, 8, sq, author)
+            f_gb3 = ex.submit(_fetch_cover_google_books, sq, 3)
+        gb2 = f_gb2.result()
+        if gb2:
+            cover_url, summary = gb2
+        if not cover_url:
+            cover_url = f_gb3.result()
 
     info = {"cover_url": cover_url, "summary": summary}
     if len(_book_info_cache) < _BOOK_CACHE_MAX:
