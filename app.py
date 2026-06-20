@@ -511,12 +511,13 @@ def api_internal_auto_fetch():
                 logger.error("自動取得エラー: source=%s uid=%s error=%s", lib_id, target_uid, e, exc_info=True)
                 errors[lib_id] = str(e)
 
-        # 新規追加・読了があればメッセージ生成
+        # 新規追加・読了があればメッセージ生成（user_info なしでも保存）
         if current_payloads:
             try:
                 message = _create_completed_books_message(previous_payloads, current_payloads, errors)
-                if message and user_info:
-                    message["user"] = user_info
+                if message:
+                    if user_info:
+                        message["user"] = user_info
                     library_service.update_yonda_message(message)
                     logger.info("同期メッセージ更新: uid=%s %d冊", target_uid, len(message.get("books", [])))
             except Exception as e:
@@ -601,8 +602,9 @@ def api_internal_auto_fetch_all():
         if curr_payloads:
             try:
                 message = _create_completed_books_message(prev_payloads, curr_payloads, errors)
-                if message and profile:
-                    message["user"] = profile
+                if message:
+                    if profile:
+                        message["user"] = profile
                     library_service.update_yonda_message(message)
             except Exception as e:
                 logger.error("auto-fetch-all: uid=%s メッセージ生成エラー: %s", target_uid, e)
