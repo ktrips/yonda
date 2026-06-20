@@ -241,7 +241,15 @@ jobs:
           if gcloud secrets describe "yondapp-auth-jp" 2>/dev/null; then
             AUTH_SECRET="yondapp-auth-jp"
           fi
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
+
+          echo "=== 診断情報 ==="
+          echo "gcloud version: $(gcloud version --format='value(Google Cloud SDK)' 2>/dev/null || gcloud version 2>&1 | head -1)"
+          echo "AUTH_SECRET: ${AUTH_SECRET}"
+          echo "IMAGE_TAG: ${IMAGE_TAG}"
+          echo "BUCKET_NAME: ${BUCKET_NAME}"
+          echo "==============="
+
+          DEPLOY_LOG=$(gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image "${IMAGE_TAG}" \
             --region ${{ env.REGION }} \
             --platform managed \
@@ -257,8 +265,24 @@ jobs:
             --add-volume-mount "volume=data-vol,mount-path=/mnt/data" \
             --set-secrets "/secrets/auth_jp.json=${AUTH_SECRET}:latest,YONDA_INTERNAL_TOKEN=yonda-internal-token:latest" \
             --update-env-vars "YONDA_DATA_DIR=/mnt/data,YONDA_AUTH_FILE=/secrets/auth_jp.json,YONDA_CREDS_PATH=/mnt/data/.credentials.json,YONDA_KINDLE_SESSION_PATH=/mnt/data/kindle_session.json,YONDA_AI_CONFIG_PATH=/mnt/data/ai_config.json,APP_VERSION=${{ github.sha }}" \
-            --quiet
-          echo "✔ Cloud Run デプロイ完了"
+            2>&1) && DEPLOY_OK=true || DEPLOY_OK=false
+
+          echo "${DEPLOY_LOG}"
+
+          if [[ "${DEPLOY_OK}" == "false" ]]; then
+            echo "::error::フルデプロイ失敗。エラー詳細:"
+            echo "::error::${DEPLOY_LOG}"
+            echo ""
+            echo "--- フォールバック: image_only デプロイを試みます ---"
+            gcloud run deploy ${{ env.SERVICE_NAME }} \
+              --image "${IMAGE_TAG}" \
+              --region ${{ env.REGION }} \
+              --update-env-vars "APP_VERSION=${{ github.sha }}" \
+              --quiet
+            echo "⚠ image_only フォールバックデプロイ完了（設定変更は未適用）"
+          else
+            echo "✔ Cloud Run フルデプロイ完了"
+          fi
 
       - name: Map custom domain
         if: ${{ github.event.inputs.image_only != 'true' && github.event.inputs.scheduler_only != 'true' }}
