@@ -2032,10 +2032,15 @@ def api_fetch():
                         message_payloads[lid] = previous_payloads.get(lid) or library_service.load_saved_for(lid)
                 message = _create_completed_books_message(previous_payloads, message_payloads, errors)
                 if message:
-                    # セッションからユーザー情報を付与してコミュニティフィードに保存
                     user = get_current_user()
                     if user:
-                        message["user"] = {
+                        uid = re.sub(r"[^a-zA-Z0-9_\-]", "_", user.get("sub", "anonymous"))
+                        try:
+                            import firestore_service as _fs
+                            profile = _fs.get_user_profile(uid)
+                        except Exception:
+                            profile = None
+                        message["user"] = profile or {
                             "name":    user.get("name", ""),
                             "email":   user.get("email", ""),
                             "picture": user.get("picture", ""),
@@ -2079,7 +2084,13 @@ def api_fetch():
             if message:
                 user = get_current_user()
                 if user:
-                    message["user"] = {
+                    uid = re.sub(r"[^a-zA-Z0-9_\-]", "_", user.get("sub", "anonymous"))
+                    try:
+                        import firestore_service as _fs
+                        profile = _fs.get_user_profile(uid)
+                    except Exception:
+                        profile = None
+                    message["user"] = profile or {
                         "name":    user.get("name", ""),
                         "email":   user.get("email", ""),
                         "picture": user.get("picture", ""),

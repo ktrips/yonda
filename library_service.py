@@ -948,15 +948,15 @@ def _book_title_author_match(
 
 def _fetch_summary_and_genre_from_google_books(
     title: str, author: str, isbn: Optional[str] = None, api_key: Optional[str] = None
-) -> tuple[Optional[str], Optional[str]]:
-    """Google Books API で概要とジャンルを取得。戻り値は (summary, genre)。
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Google Books API で概要・ジャンル・表紙URLを取得。戻り値は (summary, genre, cover_url)。
     ISBN がある場合は ISBN 検索を優先する。api_key は呼び出し元から渡す。"""
     if not title and not isbn:
-        return None, None
+        return None, None, None
 
     key = api_key or _get_google_api_key()
 
-    def _search(params: dict) -> tuple[Optional[str], Optional[str]]:
+    def _search(params: dict) -> tuple[Optional[str], Optional[str], Optional[str]]:
         if key:
             params["key"] = key
         params.setdefault("maxResults", 5)
@@ -970,8 +970,8 @@ def _fetch_summary_and_genre_from_google_books(
             r.raise_for_status()
         except requests.RequestException as e:
             logger.warning("Google Books 取得失敗: %s", e)
-            return None, None
-        fallback: tuple[Optional[str], Optional[str]] = (None, None)
+            return None, None, None
+        fallback: tuple[Optional[str], Optional[str], Optional[str]] = (None, None, None)
         for item in r.json().get("items", []) or []:
             info = item.get("volumeInfo", {}) or {}
             result_title = info.get("title") or ""
@@ -979,12 +979,17 @@ def _fetch_summary_and_genre_from_google_books(
             summary = _clean_book_text(info.get("description") or "")
             categories = info.get("categories") or []
             genre = categories[0] if categories else None
-            if (summary or genre) and not fallback[0] and not fallback[1]:
-                fallback = (summary or None, genre)
+            links = info.get("imageLinks") or {}
+            cover = links.get("thumbnail") or links.get("smallThumbnail") or None
+            if cover:
+                cover = re.sub(r"&zoom=\d+", "&zoom=1", cover)
+                cover = cover.replace("http://", "https://")
+            if (summary or genre or cover) and not any(fallback):
+                fallback = (summary or None, genre, cover)
             if not _book_title_author_match(title or "", author, result_title, result_authors):
                 continue
-            if summary or genre:
-                return summary or None, genre
+            if summary or genre or cover:
+                return summary or None, genre, cover
         return fallback
 
     try:
@@ -993,7 +998,7 @@ def _fetch_summary_and_genre_from_google_books(
             isbn_clean = re.sub(r"\D", "", isbn)
             if len(isbn_clean) >= 10:
                 result = _search({"q": f"isbn:{isbn_clean}"})
-                if result[0] or result[1]:
+                if any(result):
                     return result
 
         # 2. タイトル+著者で日本語限定検索
@@ -1006,26 +1011,26 @@ def _fetch_summary_and_genre_from_google_books(
 
             for q in queries:
                 result = _search({"q": q[:120], "langRestrict": "ja"})
-                if result[0] or result[1]:
+                if any(result):
                     return result
 
             # 3. langRestrict なしでフォールバック（外国語版が先にヒットする場合対策）
             for q in queries[:2]:
                 result = _search({"q": q[:120]})
-                if result[0] or result[1]:
+                if any(result):
                     return result
 
     except Exception as e:
         logger.warning("Google Books 取得エラー: %s", e)
-    return None, None
+    return None, None, None
 
 
 def _fetch_summary_and_genre_from_open_library(
     title: str, author: str, isbn: Optional[str] = None
-) -> tuple[Optional[str], Optional[str]]:
-    """Open Library API で概要とジャンルを取得。戻り値は (summary, genre)。"""
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Open Library API で概要・ジャンル・表紙URLを取得。戻り値は (summary, genre, cover_url)。"""
     if not title and not author and not isbn:
-        return None, None
+        return None, None, None
     try:
         if isbn:
             isbn_clean = re.sub(r"\D", "", isbn)
@@ -1058,13 +1063,14 @@ def _fetch_summary_and_genre_from_open_library(
                         genre = subjects[0]
                     elif subjects and isinstance(subjects[0], dict) and "name" in subjects[0]:
                         genre = subjects[0]["name"]
-                    return summary or None, genre
+                    cover_url: Optional[str] = f"https://covers.openlibrary.org/b/isbn/{isbn_clean}-M.jpg"
+                    return summary or None, genre, cover_url
         q = " ".join(filter(None, [title, author]))
         if not q.strip():
-            return None, None
+            return None, None, None
         r = requests.get(
             OPENLIBRARY_SEARCH,
-            params={"q": q.strip(), "limit": 3, "fields": "first_sentence,subject"},
+            params={"q": q.strip(), "limit": 3, "fields": "first_sentence,subject,cover_i"},
             timeout=8,
         )
         r.raise_for_status()
@@ -1081,13 +1087,15 @@ def _fetch_summary_and_genre_from_open_library(
             subjects = doc.get("subject", [])
             if isinstance(subjects, list) and subjects and isinstance(subjects[0], str):
                 genre = subjects[0]
-            if summary or genre:
-                return summary or None, genre or None
+            cover_i = doc.get("cover_i")
+            cover_url = f"https://covers.openlibrary.org/b/id/{cover_i}-M.jpg" if cover_i else None
+            if summary or genre or cover_url:
+                return summary or None, genre or None, cover_url
     except requests.RequestException as e:
         logger.debug("Open Library 取得失敗: %s", e)
     except Exception as e:
         logger.debug("Open Library 取得エラー: %s", e)
-    return None, None
+    return None, None, None
 
 
 def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
@@ -1095,7 +1103,7 @@ def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
     if library_id not in ("setagaya", "kindle"):
         return
     base = "https://libweb.city.setagaya.tokyo.jp"
-    summary_count = genre_count = 0
+    summary_count = genre_count = cover_count = 0
     google_api_key = _get_google_api_key()
     if google_api_key:
         logger.info("%s: Google Books API キーを使用してエンリッチ", library_id)
@@ -1139,28 +1147,29 @@ def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
                 book.genre = existing.get("genre") or ""
         has_cover = book.cover_url and book.cover_url.strip()
         is_library_cover = has_cover and base in (book.cover_url or "")
-        if library_id == "setagaya" and (not has_cover or is_library_cover):
-            book.cover_url = LIBRARY_COVER_URL
+        is_placeholder = not has_cover or is_library_cover or book.cover_url == LIBRARY_COVER_URL
         needs_summary = not (book.full_summary or book.summary or "").strip()
         needs_genre = not (book.genre or "").strip()
-        # ジャンル・概要が未設定であれば、未読・既読を問わず外部APIから補完する。
+        needs_cover = bool(is_placeholder)
+        # ジャンル・概要・表紙が未設定であれば、未読・既読を問わず外部APIから補完する。
         # （新規追加時および未読→既読の遷移時どちらでも補完される）
         enrich_allowed = True
-        if enrich_allowed and (needs_summary or needs_genre):
+        if enrich_allowed and (needs_summary or needs_genre or needs_cover):
             # catalog_number が ISBN 形式であれば ISBN 検索に活用
             isbn = None
             catalog = (book.catalog_number or "").strip()
             if re.match(r"^\d{10,13}$", catalog):
                 isbn = catalog
-            summary, genre = _fetch_summary_and_genre_from_google_books(
+            summary, genre, cover_url = _fetch_summary_and_genre_from_google_books(
                 book.title, book.author or "", isbn=isbn, api_key=google_api_key
             )
-            if (needs_summary and not summary) or (needs_genre and not genre):
-                ol_summary, ol_genre = _fetch_summary_and_genre_from_open_library(
+            if (needs_summary and not summary) or (needs_genre and not genre) or (needs_cover and not cover_url):
+                ol_summary, ol_genre, ol_cover = _fetch_summary_and_genre_from_open_library(
                     book.title, book.author or "", isbn=isbn
                 )
                 summary = summary or ol_summary
                 genre = genre or ol_genre
+                cover_url = cover_url or ol_cover
             if summary and needs_summary:
                 book.full_summary = summary
                 book.summary = summary[:100] + "…" if len(summary) > 100 else summary
@@ -1168,16 +1177,22 @@ def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
             if genre and needs_genre:
                 book.genre = genre
                 genre_count += 1
+            if cover_url and needs_cover:
+                book.cover_url = cover_url
+                cover_count += 1
+            elif is_placeholder:
+                book.cover_url = LIBRARY_COVER_URL
             # API キーあり: 0.5秒/件、なし: 1秒/件 のスロットル（レート制限対策）
             time.sleep(0.5 if google_api_key else 1.0)
         elif (i + 1) % 10 == 0:
             time.sleep(0.1)
-    if summary_count or genre_count:
+    if summary_count or genre_count or cover_count:
         logger.info(
-            "%s: Google Books/Open Library から概要 %d 件、ジャンル %d 件を取得",
+            "%s: Google Books/Open Library から概要 %d 件、ジャンル %d 件、表紙 %d 件を取得",
             library_id,
             summary_count,
             genre_count,
+            cover_count,
         )
     else:
         logger.info("%s: エンリッチ対象なし（全件既取得済み）", library_id)
@@ -1245,8 +1260,9 @@ def enrich_library_books_missing_genre(
     for book in books:
         if updated + len(targets) >= max_books:
             break
-        needs = not (book.get("genre") or "").strip() or not (book.get("summary") or book.get("full_summary") or "").strip()
-        if needs:
+        needs_summary = not (book.get("genre") or "").strip() or not (book.get("summary") or book.get("full_summary") or "").strip()
+        needs_cover = not (book.get("cover_url") or "").strip() or book.get("cover_url") == LIBRARY_COVER_URL
+        if needs_summary or needs_cover:
             targets.append(book)
 
     for book in targets:
@@ -1262,32 +1278,43 @@ def enrich_library_books_missing_genre(
         try:
             needs_summary = not (book.get("full_summary") or book.get("summary") or "").strip()
             needs_genre = not (book.get("genre") or "").strip()
+            needs_cover = not (book.get("cover_url") or "").strip() or book.get("cover_url") == LIBRARY_COVER_URL
             summary: Optional[str] = None
             genre: Optional[str] = None
+            cover_url: Optional[str] = None
 
             # ① Open Library（API キー不要・日本語書籍も対応）を先に試す
-            ol_s, ol_g = _fetch_summary_and_genre_from_open_library(title, author, isbn=isbn)
-            summary, genre = ol_s, ol_g
+            ol_s, ol_g, ol_c = _fetch_summary_and_genre_from_open_library(title, author, isbn=isbn)
+            summary, genre, cover_url = ol_s, ol_g, ol_c
 
             # ② Google Books（API キーがある場合のみ追加で試す）
-            if google_api_key and (needs_summary and not summary or needs_genre and not genre):
-                gb_s, gb_g = _fetch_summary_and_genre_from_google_books(
+            if google_api_key and (
+                (needs_summary and not summary) or
+                (needs_genre and not genre) or
+                (needs_cover and not cover_url)
+            ):
+                gb_s, gb_g, gb_c = _fetch_summary_and_genre_from_google_books(
                     title, author, isbn=isbn, api_key=google_api_key
                 )
                 summary = summary or gb_s
                 genre = genre or gb_g
+                cover_url = cover_url or gb_c
 
             if summary and needs_summary:
                 book["full_summary"] = summary
                 book["summary"] = summary[:100] + "…" if len(summary) > 100 else summary
             if genre and needs_genre:
                 book["genre"] = genre
-            if (summary and needs_summary) or (genre and needs_genre):
+            if cover_url and needs_cover:
+                book["cover_url"] = cover_url
+            elif needs_cover:
+                book["cover_url"] = LIBRARY_COVER_URL
+            if (summary and needs_summary) or (genre and needs_genre) or (cover_url and needs_cover):
                 updated += 1
-                logger.info("ジャンル/概要補完: %s → genre=%s", title[:30], genre)
+                logger.info("ジャンル/概要/表紙補完: %s → genre=%s cover=%s", title[:30], genre, bool(cover_url))
             else:
                 skipped += 1
-                logger.warning("ジャンル/概要取得できず: %s", title[:30])
+                logger.warning("ジャンル/概要/表紙取得できず: %s", title[:30])
         except Exception as e:
             errors += 1
             logger.warning("エンリッチエラー [%s]: %s", title[:30], e)
@@ -1296,7 +1323,7 @@ def enrich_library_books_missing_genre(
     if updated:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
-        logger.info("%s: ジャンル/概要補完 %d 件保存完了", library_id, updated)
+        logger.info("%s: ジャンル/概要/表紙補完 %d 件保存完了", library_id, updated)
 
     return {
         "library_id": library_id,

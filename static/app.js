@@ -511,7 +511,7 @@ async function manualFetchSource(sourceId) {
     const response = await fetch('/api/fetch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ library_id: sourceId })
+      body: JSON.stringify({ library_id: sourceId, notify_completed: true })
     });
 
     const data = await response.json();
@@ -4927,7 +4927,7 @@ document.getElementById('messagesRefreshBtn')?.addEventListener('click', loadMes
       const res = await fetch('/api/fetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ library_id: 'kindle', session_id: _kindleOtpPendingSessionId, otp }),
+        body: JSON.stringify({ library_id: 'kindle', session_id: _kindleOtpPendingSessionId, otp, notify_completed: true }),
       });
       const data = await res.json();
       if (data.success) {
