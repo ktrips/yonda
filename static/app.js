@@ -3843,6 +3843,9 @@ function renderMessageBookItem(item) {
   // レビュー列: 星 + 個人レビュー（または未レビューボタン）
   const reviewCellHtml = buildReviewCellHtml(book);
 
+  // 書評ポイント列: _bookIndex が正しく解決できるよう allBooks の実参照 (fullBook) を使う
+  const insightCellHtml = renderTableInsightCell(fullBook || book);
+
   return `
     <tr class="message-book-row">
       <td class="col-cover"><img src="${escapeHtml(book.cover_url || NO_COVER)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'"></td>
@@ -3853,7 +3856,7 @@ function renderMessageBookItem(item) {
       </td>
       <td class="col-author" title="${escapeHtml(book.author || '')}">${escapeHtml(book.author || '')}</td>
       <td class="col-review" onclick="event.stopPropagation()">${reviewCellHtml}</td>
-      <td class="col-ai-insight">${renderTableInsightCell(book)}</td>
+      <td class="col-ai-insight">${insightCellHtml}</td>
       <td class="col-summary" title="${summary ? escapeHtml(summary) : ''}">${summaryCell}</td>
       <td class="col-genre">${genre}</td>
       <td class="col-runtime">${(book.runtime_length_min || 0) > 0 ? formatRuntime(book.runtime_length_min) : '—'}</td>
