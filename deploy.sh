@@ -189,14 +189,13 @@ gcloud run deploy "${SERVICE_NAME}" \
   --execution-environment gen2 \
   --add-volume "name=data-vol,type=cloud-storage,bucket=${BUCKET_NAME}" \
   --add-volume-mount "volume=data-vol,mount-path=${DATA_MOUNT}" \
-  --set-secrets "${SECRETS_MOUNT}/auth_jp.json=${AUTH_SECRET}:latest" \
+  --set-secrets "${SECRETS_MOUNT}/auth_jp.json=${AUTH_SECRET}:latest,YONDA_INTERNAL_TOKEN=yonda-internal-token:latest" \
   --update-env-vars "\
 YONDA_DATA_DIR=${DATA_MOUNT},\
 YONDA_AUTH_FILE=${SECRETS_MOUNT}/auth_jp.json,\
 YONDA_CREDS_PATH=${DATA_MOUNT}/.credentials.json,\
 YONDA_KINDLE_SESSION_PATH=${DATA_MOUNT}/kindle_session.json,\
 YONDA_AI_CONFIG_PATH=${DATA_MOUNT}/ai_config.json" \
-  --update-secrets "YONDA_INTERNAL_TOKEN=yonda-internal-token:latest" \
   --quiet
 
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
