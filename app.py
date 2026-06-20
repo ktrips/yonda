@@ -2032,6 +2032,15 @@ def api_fetch():
                         message_payloads[lid] = previous_payloads.get(lid) or library_service.load_saved_for(lid)
                 message = _create_completed_books_message(previous_payloads, message_payloads, errors)
                 if message:
+                    # セッションからユーザー情報を付与してコミュニティフィードに保存
+                    user = get_current_user()
+                    if user:
+                        message["user"] = {
+                            "name":    user.get("name", ""),
+                            "email":   user.get("email", ""),
+                            "picture": user.get("picture", ""),
+                        }
+                    library_service.update_yonda_message(message)
                     result["message"] = message
             if errors:
                 result["errors"] = errors
@@ -2068,6 +2077,14 @@ def api_fetch():
         if notify_completed:
             message = _create_completed_books_message({library_id: previous_audible}, {library_id: payload})
             if message:
+                user = get_current_user()
+                if user:
+                    message["user"] = {
+                        "name":    user.get("name", ""),
+                        "email":   user.get("email", ""),
+                        "picture": user.get("picture", ""),
+                    }
+                library_service.update_yonda_message(message)
                 result["message"] = message
         if library_id == "setagaya":
             import threading
