@@ -223,7 +223,7 @@ jobs:
               --role="${role}" \
               --quiet 2>/dev/null || true
           done
-          for secret_name in yonda-auth-jp yondapp-auth-jp yonda-credentials; do
+          for secret_name in yonda-auth-jp yondapp-auth-jp yonda-credentials yonda-internal-token; do
             if gcloud secrets describe "${secret_name}" --format='value(name)' 2>/dev/null; then
               gcloud secrets add-iam-policy-binding "${secret_name}" \
                 --member="serviceAccount:${RUN_SA}" \
