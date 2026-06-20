@@ -195,8 +195,8 @@ YONDA_DATA_DIR=${DATA_MOUNT},\
 YONDA_AUTH_FILE=${SECRETS_MOUNT}/auth_jp.json,\
 YONDA_CREDS_PATH=${DATA_MOUNT}/.credentials.json,\
 YONDA_KINDLE_SESSION_PATH=${DATA_MOUNT}/kindle_session.json,\
-YONDA_AI_CONFIG_PATH=${DATA_MOUNT}/ai_config.json,\
-YONDA_INTERNAL_TOKEN=${YONDA_INTERNAL_TOKEN}" \
+YONDA_AI_CONFIG_PATH=${DATA_MOUNT}/ai_config.json" \
+  --update-secrets "YONDA_INTERNAL_TOKEN=yonda-internal-token:latest" \
   --quiet
 
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
