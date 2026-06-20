@@ -448,7 +448,10 @@ function sourceShortLabel(source) { return SOURCE_SHORT_LABELS[source] || SOURCE
 
 /** 7日以内に追加/同期された本かどうか */
 function isRecentBook(book, days = 7) {
-  const dateStr = book.loan_date || book.added_date || '';
+  // 既読本は completed_date を優先（Audible は loan_date が購入日のため）
+  const dateStr = (book.completed && book.completed_date)
+    ? book.completed_date
+    : (book.loan_date || book.added_date || book.completed_date || '');
   if (!dateStr) return false;
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return false;
