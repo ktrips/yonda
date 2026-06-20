@@ -171,6 +171,11 @@ def _before_request_handler():
         return
     if path in _PUBLIC_EXACT:
         return
+    # Cloud Scheduler / 内部トークンを持つリクエストは認証不要
+    if request.headers.get("X-CloudScheduler", "").lower() == "true":
+        return
+    if _INTERNAL_TOKEN and request.headers.get("X-Internal-Token", "") == _INTERNAL_TOKEN:
+        return
 
     if not get_current_user():
         if path.startswith("/api/"):
