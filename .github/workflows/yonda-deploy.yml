@@ -255,7 +255,7 @@ jobs:
             --execution-environment gen2 \
             --add-volume "name=data-vol,type=cloud-storage,bucket=${BUCKET_NAME}" \
             --add-volume-mount "volume=data-vol,mount-path=/mnt/data" \
-            --update-secrets "/secrets/auth_jp.json=${AUTH_SECRET}:latest,YONDA_INTERNAL_TOKEN=yonda-internal-token:latest" \
+            --set-secrets "/secrets/auth_jp.json=${AUTH_SECRET}:latest,YONDA_INTERNAL_TOKEN=yonda-internal-token:latest" \
             --update-env-vars "YONDA_DATA_DIR=/mnt/data,YONDA_AUTH_FILE=/secrets/auth_jp.json,YONDA_CREDS_PATH=/mnt/data/.credentials.json,YONDA_KINDLE_SESSION_PATH=/mnt/data/kindle_session.json,YONDA_AI_CONFIG_PATH=/mnt/data/ai_config.json,APP_VERSION=${{ github.sha }}" \
             --quiet
           echo "✔ Cloud Run デプロイ完了"
