@@ -153,7 +153,7 @@ def get_user_data_dir_for_session() -> Path:
 
 
 # OAuth 有効時に認証不要なパス（前方一致）
-_PUBLIC_PREFIXES = ("/auth/", "/static/", "/help")
+_PUBLIC_PREFIXES = ("/auth/", "/static/", "/help", "/api/public/")
 # OAuth 有効時に認証不要な完全一致パス
 _PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info", "/api/internal/auto-fetch", "/api/internal/auto-fetch-all"}
 
