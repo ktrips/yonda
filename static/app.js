@@ -1435,13 +1435,16 @@ async function submitFetchOtp() {
 
 function _computeBookStats() {
   if (_bookStatsCache) return _bookStatsCache;
-  const yearStr = String(new Date().getFullYear());
-  let completed = 0, inProgress = 0, unread = 0, yearlyCompleted = 0, favorite = 0;
+  const now = new Date();
+  const yearStr = String(now.getFullYear());
+  const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  let completed = 0, inProgress = 0, unread = 0, yearlyCompleted = 0, weeklyCompleted = 0, favorite = 0;
   let star5 = 0, star4 = 0, star3 = 0;
   for (const b of allBooks) {
     if (b.completed) {
       completed++;
       if (b.completed_date?.startsWith(yearStr)) yearlyCompleted++;
+      if (b.completed_date && new Date(b.completed_date) >= weekAgo) weeklyCompleted++;
     } else if (isInProgress(b)) {
       inProgress++;
     } else {
@@ -1455,7 +1458,7 @@ function _computeBookStats() {
   }
   _bookStatsCache = {
     year: +yearStr,
-    completed, inProgress, unread, yearlyCompleted, favorite,
+    completed, inProgress, unread, yearlyCompleted, weeklyCompleted, favorite,
     all: allBooks.length,
     star5, star4, star3,
   };
@@ -1465,7 +1468,15 @@ function _computeBookStats() {
 function updateStats() {
   const s = _computeBookStats();
 
-  // 最新メッセージに新規読了があればヘッダー読了数に (N) を追加
+  // 今週の読了数（直近7日）
+  const weeklyEl = document.getElementById('statWeeklyVal');
+  if (weeklyEl) weeklyEl.textContent = String(s.weeklyCompleted);
+
+  // 積読
+  const tsundokuEl = document.getElementById('statTsundokuVal');
+  if (tsundokuEl) tsundokuEl.textContent = String(s.inProgress);
+
+  // 全読了数（最新メッセージに新規読了があればバッジ表示）
   const latestNewCount = yondaMessages.length > 0
     ? (yondaMessages[0].sync_summary?.new_completed_count || yondaMessages[0].books?.length || 0)
     : 0;
@@ -1476,7 +1487,6 @@ function updateStats() {
       : String(s.completed);
   }
 
-  document.getElementById('statTsundokuVal').textContent = s.inProgress;
   updateBookTabLabels(s);
 }
 
@@ -2202,6 +2212,11 @@ function applyFilters() {
     books = books.filter(b => b.completed);
   } else if (rating === 'in_progress') {
     books = books.filter(b => isInProgress(b));
+  } else if (rating === 'weekly_completed') {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    books = books.filter(b =>
+      b.completed && b.completed_date && new Date(b.completed_date) >= weekAgo
+    );
   } else if (rating === 'yearly_completed') {
     const year = new Date().getFullYear();
     books = books.filter(b =>
@@ -6481,6 +6496,18 @@ document.querySelectorAll('.header-tab').forEach(tab => {
   });
 });
 
+document.getElementById('statWeekly')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  activeMainTab = 'yonda';
+  activeBookTab = 'read';
+  document.getElementById('ratingFilter').value = 'weekly_completed';
+  document.getElementById('sortSelect').value = 'completed_date_desc';
+  document.querySelectorAll('.book-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tabRead')?.classList.add('active');
+  updateBookTabLabels();
+  updateMainTabVisibility();
+  applyFilters();
+});
 document.getElementById('statRated')?.addEventListener('click', (e) => {
   e.preventDefault();
   // 新規更新バッジがあればメッセージへ、なければ読了リストへ
