@@ -1583,6 +1583,8 @@ function updateBookTabLabels(s) {
     if (rating === 'completed') label = `読んだ（${readCount}）`;
     else if (rating === 'in_progress') label = `途中（${inProgressCount}）`;
     else if (rating === 'not_completed') label = `未読（${unreadCount}）`;
+    else if (rating === 'weekly_completed') label = '今週の読了';
+    else if (rating === 'monthly_completed') label = '今月の読了';
     else if (rating === 'yearly_completed') label = `${year}年`;
     else if (rating === 'favorite') label = 'お気に入り';
     else if (rating === 'all') label = `すべて（${allCount}）`;
@@ -2273,6 +2275,12 @@ function applyFilters() {
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     books = books.filter(b =>
       b.completed && b.completed_date && new Date(b.completed_date) >= weekAgo
+    );
+  } else if (rating === 'monthly_completed') {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    books = books.filter(b =>
+      b.completed && b.completed_date && new Date(b.completed_date) >= monthStart
     );
   } else if (rating === 'yearly_completed') {
     const year = new Date().getFullYear();
@@ -3194,7 +3202,14 @@ function getBooksForChart() {
   if (genre !== 'all') books = books.filter(b => (b._normalizedGenre || 'その他') === genre);
   if (rating === 'completed') books = books.filter(b => b.completed);
   else if (rating === 'in_progress') books = books.filter(b => isInProgress(b));
-  else if (rating === 'yearly_completed') {
+  else if (rating === 'weekly_completed') {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    books = books.filter(b => b.completed && b.completed_date && new Date(b.completed_date) >= weekAgo);
+  } else if (rating === 'monthly_completed') {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    books = books.filter(b => b.completed && b.completed_date && new Date(b.completed_date) >= monthStart);
+  } else if (rating === 'yearly_completed') {
     const year = new Date().getFullYear();
     books = books.filter(b => b.completed && b.completed_date && b.completed_date.startsWith(String(year)));
   } else if (rating === 'not_completed') books = books.filter(b => isUnread(b));
