@@ -584,13 +584,14 @@ def api_internal_auto_fetch():
 
 @app.route("/api/internal/auto-fetch-all", methods=["POST"])
 def api_internal_auto_fetch_all():
-    """Cloud Scheduler から呼ばれる。Firestore の sources フラグを持つ全ユーザーを並列 fetch する。
+    """Cloud Scheduler から呼ばれる。202 を即返却しバックグラウンドで全ユーザーを fetch する。
     Firestore にユーザーが存在しない場合は /api/internal/auto-fetch（ファイルシステムスキャン）に
     フォールバックして同期停止を防ぐ（R2 対応）。
     認証: X-Internal-Token ヘッダー（YONDA_INTERNAL_TOKEN が設定済みの場合）
          または Cloud Scheduler が自動付与する X-CloudScheduler: true ヘッダー。"""
     import hmac as _hmac
     import concurrent.futures as _cf
+    import threading as _threading
 
     is_scheduler = request.headers.get("X-CloudScheduler", "").lower() == "true"
     token = request.headers.get("X-Internal-Token", "")
@@ -633,7 +634,7 @@ def api_internal_auto_fetch_all():
             lib_id = source_map.get(src_key, src_key)
             try:
                 prev_payloads[lib_id] = library_service.load_saved_for(lib_id)
-                # エンリッチはスキップ（タイムアウト防止）。バックグラウンドで後から補完する
+                # エンリッチはスキップ（後続のバックグラウンドスレッドで補完）
                 payload = library_service.fetch_and_save(lib_id, skip_enrich=True)
                 curr_payloads[lib_id] = payload
                 results[src_key] = {"total": payload.get("total", 0)}
@@ -666,29 +667,29 @@ def api_internal_auto_fetch_all():
             "status": "ok" if not errors else ("partial" if results else "error"),
         }
 
-    all_results: dict = {}
-    with _cf.ThreadPoolExecutor(max_workers=min(4, len(fs_users))) as executor:
-        futures = {executor.submit(_fetch_for_fs_user, u): u["uid"] for u in fs_users}
-        for future in _cf.as_completed(futures, timeout=300):
-            try:
-                uid, result = future.result(timeout=5)
-                all_results[uid] = result
-            except _cf.TimeoutError:
-                uid = futures[future]
-                logger.error("auto-fetch-all: uid=%s タイムアウト（5分）", uid)
-                all_results[uid] = {"error": "timeout"}
-            except Exception as e:
-                uid = futures[future]
-                logger.error("auto-fetch-all: uid=%s 予期しないエラー: %s", uid, e)
-                all_results[uid] = {"error": str(e)}
+    def _run_all_fetches() -> None:
+        """全ユーザーのフェッチとエンリッチをバックグラウンドで実行する。"""
+        logger.info("auto-fetch-all バックグラウンド開始: %d ユーザー", len(fs_users))
+        all_results: dict = {}
+        with _cf.ThreadPoolExecutor(max_workers=min(4, len(fs_users))) as executor:
+            futures = {executor.submit(_fetch_for_fs_user, u): u["uid"] for u in fs_users}
+            for future in _cf.as_completed(futures, timeout=600):
+                try:
+                    uid, result = future.result(timeout=5)
+                    all_results[uid] = result
+                except _cf.TimeoutError:
+                    uid = futures[future]
+                    logger.error("auto-fetch-all: uid=%s タイムアウト（10分）", uid)
+                    all_results[uid] = {"error": "timeout"}
+                except Exception as e:
+                    uid = futures[future]
+                    logger.error("auto-fetch-all: uid=%s 予期しないエラー: %s", uid, e)
+                    all_results[uid] = {"error": str(e)}
 
-    # スレッドローカルをルートに戻す
-    library_service.set_user_data_dir(library_service.DATA_DIR)
+        library_service.set_user_data_dir(library_service.DATA_DIR)
+        logger.info("auto-fetch-all フェッチ完了: %d ユーザー処理", len(all_results))
 
-    logger.info("auto-fetch-all 完了: %d ユーザー処理", len(all_results))
-
-    # フェッチ完了後、バックグラウンドでエンリッチ（ジャンル・概要補完）を実行
-    def _enrich_all_users() -> None:
+        # フェッチ完了後、バックグラウンドでエンリッチ（ジャンル・概要補完）を実行
         for u in fs_users:
             uid = u["uid"]
             sources = u.get("sources", {})
@@ -705,11 +706,11 @@ def api_internal_auto_fetch_all():
                 except Exception as e:
                     logger.warning("auto-fetch-all enrich kindle uid=%s: %s", uid, e)
         library_service.set_user_data_dir(library_service.DATA_DIR)
+        logger.info("auto-fetch-all エンリッチ完了")
 
-    import threading as _threading
-    _threading.Thread(target=_enrich_all_users, daemon=True, name="auto-fetch-enrich").start()
-
-    return jsonify({"status": "ok", "users": len(all_results), "results": all_results})
+    # 即座に 202 を返し、バックグラウンドで処理
+    _threading.Thread(target=_run_all_fetches, daemon=True, name="auto-fetch-all").start()
+    return jsonify({"status": "accepted", "users": len(fs_users)}), 202
 
 
 @app.route("/")
