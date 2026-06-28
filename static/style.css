@@ -62,6 +62,69 @@ header {
   display: flex; align-items: center; gap: 0.5rem;
   margin-left: auto;
 }
+
+/* 全ユーザー読了バブル（ヘッダー） */
+.header-user-stats {
+  display: flex; align-items: center; gap: 0.4rem;
+  flex-wrap: wrap;
+  padding: 0.25rem 0.5rem;
+}
+.user-bubble {
+  display: flex; flex-direction: column; align-items: center;
+  background: rgba(255,255,255,0.15); border: none;
+  border-radius: 0.6rem; padding: 0.25rem 0.4rem;
+  cursor: pointer; transition: background 0.2s;
+  color: var(--text-on-header, #fff); gap: 0.1rem;
+  min-width: 44px;
+}
+.user-bubble:hover { background: rgba(255,255,255,0.3); }
+.user-bubble-avatar { border-radius: 50%; display: block; }
+.user-bubble-initials {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem; font-weight: 600;
+}
+.user-bubble-count { font-size: 0.65rem; line-height: 1; opacity: 0.9; }
+
+/* ユーザー読了本モーダル */
+.modal-user-books {
+  width: min(520px, 94vw); max-height: 85vh;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.user-books-modal-user {
+  display: flex; align-items: center; gap: 0.6rem; flex: 1;
+}
+.user-books-modal-avatar { border-radius: 50%; }
+.user-books-modal-name { font-size: 1rem; font-weight: 600; }
+.user-books-modal-count {
+  font-size: 0.8rem; color: var(--text-muted, #888);
+  margin-left: 0.25rem;
+}
+.user-books-loading, .user-books-empty {
+  padding: 2rem; text-align: center; color: var(--text-muted, #888);
+}
+.user-books-list {
+  display: flex; flex-direction: column; gap: 0.75rem;
+  overflow-y: auto; padding: 0.75rem 1rem;
+}
+.user-books-item {
+  display: flex; gap: 0.75rem; align-items: flex-start;
+}
+.user-books-cover {
+  width: 50px; height: 70px; object-fit: cover;
+  border-radius: 4px; flex-shrink: 0;
+  background: var(--surface2, #f0e8e0);
+}
+.user-books-cover-placeholder { background: var(--surface2, #f0e8e0); }
+.user-books-info { display: flex; flex-direction: column; gap: 0.2rem; }
+.user-books-title { font-size: 0.9rem; font-weight: 600; line-height: 1.3; }
+.user-books-author { font-size: 0.78rem; color: var(--text-muted, #888); }
+.user-books-genre {
+  display: inline-block; font-size: 0.7rem;
+  background: var(--surface2, #f5ede8); border-radius: 0.3rem;
+  padding: 0.1rem 0.35rem; color: var(--text-secondary, #666);
+}
 .header-welcome-banner {
   background: var(--surface2, #f5ede8);
   border-bottom: 1px solid var(--border);

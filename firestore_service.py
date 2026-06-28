@@ -292,7 +292,50 @@ def list_sync_users() -> list:
         return []
 
 
-def get_user_profile(uid: str) -> dict | None:
+def update_user_stats(uid: str, completed_count: int) -> None:
+    """同期後にユーザーの読了冊数を Firestore に保存する（公開統計用）。"""
+    db = get_db()
+    if not db:
+        return
+    try:
+        db.collection("users").document(uid).update({
+            "completed_count": completed_count,
+            "stats_updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        logger.info("ユーザー統計更新: uid=%s completed=%d", uid, completed_count)
+    except Exception as e:
+        logger.warning("ユーザー統計更新エラー uid=%s: %s", uid, e)
+
+
+def list_all_users_public_stats() -> list:
+    """全ユーザーの公開統計（名前・アバター・読了数）を返す（ログイン不要で表示する用）。"""
+    db = get_db()
+    if not db:
+        return []
+    try:
+        result = []
+        for doc in db.collection("users").stream():
+            p = doc.to_dict() or {}
+            name = p.get("name", "")
+            picture = p.get("picture", "")
+            completed = p.get("completed_count", 0)
+            # 名前・アバター・読了数のどれかがあるユーザーのみ公開
+            if not name and not picture:
+                continue
+            result.append({
+                "uid":             doc.id,
+                "name":            name,
+                "picture":         picture,
+                "completed_count": completed,
+            })
+        result.sort(key=lambda u: u["completed_count"], reverse=True)
+        return result
+    except Exception as e:
+        logger.error("公開ユーザー統計取得エラー: %s", e)
+        return []
+
+
+
     """1ユーザーのプロフィールを返す（メッセージ生成用）。"""
     db = get_db()
     if not db:

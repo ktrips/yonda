@@ -653,6 +653,13 @@ def api_internal_auto_fetch_all():
             except Exception as e:
                 logger.error("auto-fetch-all: uid=%s メッセージ生成エラー: %s", target_uid, e)
 
+        # 読了冊数を Firestore に更新（公開統計）
+        try:
+            completed = library_service.count_completed_books()
+            _fs.update_user_stats(target_uid, completed)
+        except Exception as e:
+            logger.warning("auto-fetch-all: uid=%s 統計更新エラー: %s", target_uid, e)
+
         return target_uid, {
             "results": results,
             "errors": errors,
@@ -3159,6 +3166,18 @@ JSONのみ出力してください。前置きや説明は不要です。
         logger.info("AI 補完 %d 件保存: %s", updated, library_id)
 
     return updated
+
+
+@app.route("/api/public/user-stats")
+def api_public_user_stats():
+    """全ユーザーの公開統計（名前・アバター・読了数）を返す。認証不要。"""
+    try:
+        import firestore_service as _fs  # noqa: PLC0415
+        users = _fs.list_all_users_public_stats()
+    except Exception as e:
+        logger.warning("公開ユーザー統計取得エラー: %s", e)
+        users = []
+    return jsonify({"success": True, "users": users})
 
 
 @app.route("/api/messages", methods=["GET"])

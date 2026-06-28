@@ -155,6 +155,141 @@ function _showPublicOnly() {
   activeBookTab = 'community';
 }
 
+// ------------------------------------------------------------------
+// 全ユーザー読了バブル（ヘッダー常時表示）
+// ------------------------------------------------------------------
+
+let _publicUserStatsData = []; // [{uid, name, picture, completed_count}]
+
+async function loadPublicUserStats() {
+  try {
+    const res = await fetch(API.publicUserStats);
+    if (!res.ok) return;
+    const data = await res.json();
+    _publicUserStatsData = data.users || [];
+    _renderPublicUserBubbles();
+  } catch (_) {
+    // 取得失敗時は非表示のまま
+  }
+}
+
+function _renderPublicUserBubbles() {
+  const container = document.getElementById('headerUserStats');
+  if (!container) return;
+  if (!_publicUserStatsData.length) {
+    container.style.display = 'none';
+    return;
+  }
+  const html = _publicUserStatsData.map(u => {
+    const imgSrc = u.picture
+      ? (u.picture.includes('=s') ? u.picture : u.picture + '=s48-c')
+      : '';
+    const avatar = imgSrc
+      ? `<img class="user-bubble-avatar" src="${imgSrc}" alt="${_esc(u.name)}" width="28" height="28">`
+      : `<span class="user-bubble-initials">${_esc((u.name || '?')[0])}</span>`;
+    const count = u.completed_count || 0;
+    return `<button type="button" class="user-bubble" data-uid="${_esc(u.uid)}" title="${_esc(u.name)}の読了本">
+      ${avatar}
+      <span class="user-bubble-count">${count}</span>
+    </button>`;
+  }).join('');
+  container.innerHTML = html;
+  container.style.display = 'flex';
+
+  container.querySelectorAll('.user-bubble').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const uid = btn.dataset.uid;
+      const user = _publicUserStatsData.find(u => u.uid === uid);
+      if (user) _openUserBooksModal(user);
+    });
+  });
+}
+
+function _esc(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function _openUserBooksModal(user) {
+  const modal = document.getElementById('userBooksModal');
+  if (!modal) return;
+
+  // ヘッダー情報をセット
+  const avatarEl = document.getElementById('userBooksModalAvatar');
+  const nameEl = document.getElementById('userBooksModalName');
+  const countEl = document.getElementById('userBooksModalCount');
+  if (avatarEl) {
+    const src = user.picture
+      ? (user.picture.includes('=s') ? user.picture : user.picture + '=s64-c')
+      : '';
+    avatarEl.src = src;
+    avatarEl.style.display = src ? '' : 'none';
+  }
+  if (nameEl) nameEl.textContent = user.name || '';
+  if (countEl) countEl.textContent = `読了 ${user.completed_count || 0} 冊`;
+
+  // 本一覧をロード
+  const body = document.getElementById('userBooksModalBody');
+  if (body) body.innerHTML = '<div class="user-books-loading">読み込み中…</div>';
+
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  _loadUserBooksForModal(user.uid, body);
+}
+
+async function _loadUserBooksForModal(uid, bodyEl) {
+  if (!bodyEl) return;
+  try {
+    // メッセージから該当ユーザーの本を収集
+    const res = await fetch(API.messages);
+    if (!res.ok) throw new Error('messages fetch failed');
+    const data = await res.json();
+    const messages = (data.messages || []).filter(m => (m.user || {}).uid === uid);
+
+    // 重複除去しつつ本を収集（新しい順）
+    const seen = new Set();
+    const books = [];
+    for (const msg of messages) {
+      for (const b of (msg.books || [])) {
+        const key = b.title + '|' + (b.author || '');
+        if (!seen.has(key)) {
+          seen.add(key);
+          books.push(b);
+        }
+      }
+    }
+
+    if (!books.length) {
+      bodyEl.innerHTML = '<p class="user-books-empty">読了本のデータがありません。</p>';
+      return;
+    }
+
+    const html = books.map(b => {
+      const cover = b.cover
+        ? `<img class="user-books-cover" src="${_esc(b.cover)}" alt="" loading="lazy" width="50" height="70">`
+        : `<div class="user-books-cover user-books-cover-placeholder"></div>`;
+      const genre = b.genre ? `<span class="user-books-genre">${_esc(b.genre)}</span>` : '';
+      return `<div class="user-books-item">
+        ${cover}
+        <div class="user-books-info">
+          <div class="user-books-title">${_esc(b.title || '')}</div>
+          <div class="user-books-author">${_esc(b.author || '')}</div>
+          ${genre}
+        </div>
+      </div>`;
+    }).join('');
+    bodyEl.innerHTML = `<div class="user-books-list">${html}</div>`;
+  } catch (e) {
+    bodyEl.innerHTML = '<p class="user-books-empty">データを取得できませんでした。</p>';
+  }
+}
+
+function closeUserBooksModal() {
+  const modal = document.getElementById('userBooksModal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
 const API = {
   books: '/api/books',
   fetch: '/api/fetch',
@@ -175,6 +310,7 @@ const API = {
   addPaperBook: '/api/add-paper-book',
   updatePaperBook: (id) => `/api/paper-book/${id}`,
   deletePaperBook: (id) => `/api/paper-book/${id}`,
+  publicUserStats: '/api/public/user-stats',
 };
 
 let allBooks = [];
@@ -2467,6 +2603,16 @@ function saveAmazonListUrl() {
 
 document.addEventListener('DOMContentLoaded', function() {
   loadAmazonListUrl();
+
+  // ユーザー読了本モーダル: クローズボタン・オーバーレイクリックで閉じる
+  const userBooksModal = document.getElementById('userBooksModal');
+  const userBooksClose = document.getElementById('userBooksModalClose');
+  if (userBooksClose) userBooksClose.addEventListener('click', closeUserBooksModal);
+  if (userBooksModal) {
+    userBooksModal.addEventListener('click', (e) => {
+      if (e.target === userBooksModal) closeUserBooksModal();
+    });
+  }
 });
 
 // イベントデリゲーション: 検索結果の「+ Amazonリスト」ボタン
@@ -6382,6 +6528,9 @@ document.getElementById('statFavorite')?.addEventListener('click', (e) => {
 async function init() {
   // まず認証状態を確認（UIの表示制御のため最初に実行）
   await initAuth();
+
+  // 全ユーザーの読了統計を常時ロード（未ログイン時もヘッダーに表示）
+  loadPublicUserStats();
 
   // 未ログインかつ OAuth 有効の場合は書籍データ読み込みをスキップ
   if (_oauthEnabled && !_authUser) {

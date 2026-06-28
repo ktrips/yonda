@@ -487,6 +487,19 @@ def load_saved() -> Optional[dict]:
     return result
 
 
+def count_completed_books() -> int:
+    """現在の user_data_dir に対して、全ソースの読了本（completed=True）の合計冊数を返す。"""
+    total = 0
+    for lib_id in ("setagaya", "audible_jp", "kindle", "paper"):
+        payload = load_saved_for(lib_id)
+        if not payload:
+            continue
+        for b in payload.get("books", []):
+            if b.get("completed"):
+                total += 1
+    return total
+
+
 def load_saved_for(library_id: str) -> Optional[dict]:
     """特定ソースの保存済み JSON を読み込む（mtimeキャッシュ付き）"""
     path = _json_path_for(library_id)
