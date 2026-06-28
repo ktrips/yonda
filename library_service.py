@@ -280,8 +280,9 @@ def _get_credentials(library_id: str) -> LibraryCredentials:
     return LibraryCredentials(user_id=uid, password=pwd)
 
 
-def fetch_and_save(library_id: str) -> dict:
-    """読書記録を取得し、JSON + MD に保存。"""
+def fetch_and_save(library_id: str, skip_enrich: bool = False) -> dict:
+    """読書記録を取得し、JSON + MD に保存。
+    skip_enrich=True の場合は Google Books エンリッチをスキップする（自動同期時に使用）。"""
     adapter = get_adapter(library_id)
 
     if library_id == "kindle":
@@ -380,7 +381,7 @@ def fetch_and_save(library_id: str) -> dict:
             )
         raise RuntimeError("読書記録が取得できませんでした")
 
-    _enrich_library_books(records, library_id)
+    _enrich_library_books(records, library_id, skip=skip_enrich)
     payload = _build_payload(adapter, records)
     _save_json(library_id, payload)
     _save_markdown(adapter, records)
@@ -1107,8 +1108,11 @@ def _fetch_summary_and_genre_from_open_library(
     return None, None, None
 
 
-def _enrich_library_books(records: list[BookRecord], library_id: str) -> None:
-    """図書館/Kindleの本について、概要・ジャンルは Google Books / Open Library から取得。"""
+def _enrich_library_books(records: list[BookRecord], library_id: str, skip: bool = False) -> None:
+    """図書館/Kindleの本について、概要・ジャンルは Google Books / Open Library から取得。
+    skip=True の場合は何もしない（自動同期時にタイムアウトを防ぐため）。"""
+    if skip:
+        return
     if library_id not in ("setagaya", "kindle"):
         return
     base = "https://libweb.city.setagaya.tokyo.jp"

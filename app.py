@@ -633,7 +633,8 @@ def api_internal_auto_fetch_all():
             lib_id = source_map.get(src_key, src_key)
             try:
                 prev_payloads[lib_id] = library_service.load_saved_for(lib_id)
-                payload = library_service.fetch_and_save(lib_id)
+                # エンリッチはスキップ（タイムアウト防止）。バックグラウンドで後から補完する
+                payload = library_service.fetch_and_save(lib_id, skip_enrich=True)
                 curr_payloads[lib_id] = payload
                 results[src_key] = {"total": payload.get("total", 0)}
                 logger.info("auto-fetch-all: uid=%s source=%s 完了 (%d冊)",
@@ -667,6 +668,29 @@ def api_internal_auto_fetch_all():
     library_service.set_user_data_dir(library_service.DATA_DIR)
 
     logger.info("auto-fetch-all 完了: %d ユーザー処理", len(all_results))
+
+    # フェッチ完了後、バックグラウンドでエンリッチ（ジャンル・概要補完）を実行
+    def _enrich_all_users() -> None:
+        for u in fs_users:
+            uid = u["uid"]
+            sources = u.get("sources", {})
+            user_data_dir = library_service.DATA_DIR / "users" / uid
+            library_service.set_user_data_dir(user_data_dir)
+            if sources.get("setagaya"):
+                try:
+                    library_service.enrich_library_books_missing_genre("setagaya", max_books=10)
+                except Exception as e:
+                    logger.warning("auto-fetch-all enrich setagaya uid=%s: %s", uid, e)
+            if sources.get("kindle"):
+                try:
+                    library_service.enrich_library_books_missing_genre("kindle", max_books=10)
+                except Exception as e:
+                    logger.warning("auto-fetch-all enrich kindle uid=%s: %s", uid, e)
+        library_service.set_user_data_dir(library_service.DATA_DIR)
+
+    import threading as _threading
+    _threading.Thread(target=_enrich_all_users, daemon=True, name="auto-fetch-enrich").start()
+
     return jsonify({"status": "ok", "users": len(all_results), "results": all_results})
 
 
