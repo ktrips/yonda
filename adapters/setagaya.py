@@ -42,7 +42,7 @@ class SetagayaAdapter(LibraryAdapter):
 
     def login(self, session: Optional[requests.Session], credentials: Optional[LibraryCredentials]) -> bool:
         login_url = f"{BASE_URL}{LOGIN_PATH}"
-        resp = session.get(login_url, allow_redirects=True)
+        resp = session.get(login_url, allow_redirects=True, timeout=(10, 30))
         if resp.status_code != 200:
             logger.error("ログインページの取得に失敗: %s", resp.status_code)
             return False
@@ -62,7 +62,7 @@ class SetagayaAdapter(LibraryAdapter):
             "buttonLogin": "ログイン",
         }
 
-        resp2 = session.post(post_url, data=data, allow_redirects=True)
+        resp2 = session.post(post_url, data=data, allow_redirects=True, timeout=(10, 30))
         if resp2.status_code != 200:
             return False
 
@@ -100,7 +100,7 @@ class SetagayaAdapter(LibraryAdapter):
         params = {"mv": ITEMS_PER_PAGE, "pcnt": 1, "sort": 1, "list": -1}
         page = 1
         while True:
-            resp = session.get(url, params=params, allow_redirects=True)
+            resp = session.get(url, params=params, allow_redirects=True, timeout=(10, 30))
             if resp.status_code != 200:
                 break
             soup = BeautifulSoup(resp.text, "lxml")
@@ -168,7 +168,7 @@ class SetagayaAdapter(LibraryAdapter):
         conums: set[str] = set()
         # 利用者メニュー経由でセッションを確立してからお気に入りページへ
         try:
-            session.get(f"{BASE_URL}/idcheck", allow_redirects=True)
+            session.get(f"{BASE_URL}/idcheck", allow_redirects=True, timeout=(10, 30))
         except Exception:
             pass
 
@@ -176,7 +176,7 @@ class SetagayaAdapter(LibraryAdapter):
             url = f"{BASE_URL}{path}"
             page = 1
             while True:
-                resp = session.get(url, allow_redirects=True)
+                resp = session.get(url, allow_redirects=True, timeout=(10, 30))
                 if resp.status_code != 200:
                     break
                 soup = BeautifulSoup(resp.text, "lxml")
@@ -200,14 +200,14 @@ class SetagayaAdapter(LibraryAdapter):
         """お気に入り資料照会ページから書名一覧を取得（同名マッチ用）"""
         titles: set[str] = set()
         try:
-            session.get(f"{BASE_URL}/idcheck", allow_redirects=True)
+            session.get(f"{BASE_URL}/idcheck", allow_redirects=True, timeout=(10, 30))
         except Exception:
             pass
         for path in FAVORITE_PATHS:
             url = f"{BASE_URL}{path}"
             page = 1
             while True:
-                resp = session.get(url, allow_redirects=True)
+                resp = session.get(url, allow_redirects=True, timeout=(10, 30))
                 if resp.status_code != 200:
                     break
                 soup = BeautifulSoup(resp.text, "lxml")

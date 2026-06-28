@@ -668,8 +668,19 @@ def api_internal_auto_fetch_all():
 
     all_results: dict = {}
     with _cf.ThreadPoolExecutor(max_workers=min(4, len(fs_users))) as executor:
-        for uid, result in executor.map(_fetch_for_fs_user, fs_users):
-            all_results[uid] = result
+        futures = {executor.submit(_fetch_for_fs_user, u): u["uid"] for u in fs_users}
+        for future in _cf.as_completed(futures, timeout=300):
+            try:
+                uid, result = future.result(timeout=5)
+                all_results[uid] = result
+            except _cf.TimeoutError:
+                uid = futures[future]
+                logger.error("auto-fetch-all: uid=%s タイムアウト（5分）", uid)
+                all_results[uid] = {"error": "timeout"}
+            except Exception as e:
+                uid = futures[future]
+                logger.error("auto-fetch-all: uid=%s 予期しないエラー: %s", uid, e)
+                all_results[uid] = {"error": str(e)}
 
     # スレッドローカルをルートに戻す
     library_service.set_user_data_dir(library_service.DATA_DIR)
