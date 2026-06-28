@@ -292,6 +292,42 @@ def list_sync_users() -> list:
         return []
 
 
+def get_uid_by_email(email: str) -> str | None:
+    """Gmail アドレスからユーザー UID を検索する。見つからなければ None。"""
+    db = get_db()
+    if not db:
+        return None
+    try:
+        docs = db.collection("users").where("email", "==", email.lower().strip()).limit(1).stream()
+        for doc in docs:
+            return doc.id
+        return None
+    except Exception as e:
+        logger.warning("get_uid_by_email エラー: %s", e)
+        return None
+
+
+def get_user_public_profile(uid: str) -> dict | None:
+    """uid から公開プロフィール情報（名前・アバター・統計）を返す。"""
+    db = get_db()
+    if not db:
+        return None
+    try:
+        doc = db.collection("users").document(uid).get()
+        if not doc.exists:
+            return None
+        p = doc.to_dict() or {}
+        return {
+            "name":            p.get("name", ""),
+            "picture":         p.get("picture", ""),
+            "completed_count": p.get("completed_count", 0),
+            "stats_updated_at": p.get("stats_updated_at", ""),
+        }
+    except Exception as e:
+        logger.warning("get_user_public_profile エラー uid=%s: %s", uid, e)
+        return None
+
+
 def update_user_stats(uid: str, completed_count: int) -> None:
     """同期後にユーザーの読了冊数を Firestore に保存する（公開統計用）。"""
     db = get_db()

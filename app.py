@@ -153,7 +153,7 @@ def get_user_data_dir_for_session() -> Path:
 
 
 # OAuth 有効時に認証不要なパス（前方一致）
-_PUBLIC_PREFIXES = ("/auth/", "/static/", "/help", "/api/public/")
+_PUBLIC_PREFIXES = ("/auth/", "/static/", "/help", "/api/public/", "/api/v1/")
 # OAuth 有効時に認証不要な完全一致パス
 _PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info", "/api/internal/auto-fetch", "/api/internal/auto-fetch-all"}
 
@@ -3166,6 +3166,147 @@ JSONのみ出力してください。前置きや説明は不要です。
         logger.info("AI 補完 %d 件保存: %s", updated, library_id)
 
     return updated
+
+
+# ------------------------------------------------------------------
+# 外部公開 API  /api/v1/
+# ------------------------------------------------------------------
+
+def _v1_lookup_uid(email: str):
+    """メールアドレスから uid を返す。見つからない場合は None。"""
+    import firestore_service as _fs  # noqa: PLC0415
+    return _fs.get_uid_by_email(email)
+
+
+def _v1_load_books_for_uid(uid: str) -> list[dict]:
+    """指定 uid のユーザーデータディレクトリをセットして全書籍を返す。"""
+    user_data_dir = library_service.DATA_DIR / "users" / uid
+    library_service.set_user_data_dir(user_data_dir)
+    try:
+        payload = library_service.load_saved()
+        return payload.get("books", []) if payload else []
+    finally:
+        library_service.set_user_data_dir(library_service.DATA_DIR)
+
+
+def _v1_sanitize_book(b: dict) -> dict:
+    """外部公開用に不要フィールドを除いた書籍 dict を返す。"""
+    return {
+        "title":          b.get("title", ""),
+        "author":         b.get("author", ""),
+        "genre":          b.get("genre", ""),
+        "cover":          b.get("cover", ""),
+        "source":         b.get("source", ""),
+        "completed":      bool(b.get("completed")),
+        "completed_date": b.get("completed_date", ""),
+        "rating":         b.get("rating"),
+        "comment":        b.get("comment", ""),
+        "isbn":           b.get("isbn", ""),
+        "asin":           b.get("asin", ""),
+        "runtime_length_min": b.get("runtime_length_min"),
+    }
+
+
+@app.route("/api/v1/users/<path:email>/profile")
+def api_v1_user_profile(email: str):
+    """
+    外部公開 API: Gmail アドレスでユーザーのプロフィール＋統計を返す。
+
+    GET /api/v1/users/{email}/profile
+
+    Response:
+      { "name": str, "picture": str, "completed_count": int, "stats_updated_at": str }
+    """
+    import firestore_service as _fs  # noqa: PLC0415
+    uid = _v1_lookup_uid(email)
+    if not uid:
+        return jsonify({"error": "user_not_found", "message": "指定されたメールアドレスのユーザーが見つかりません"}), 404
+    profile = _fs.get_user_public_profile(uid)
+    if not profile:
+        return jsonify({"error": "user_not_found", "message": "ユーザー情報を取得できませんでした"}), 404
+    return jsonify({"success": True, "profile": profile})
+
+
+@app.route("/api/v1/users/<path:email>/books")
+def api_v1_user_books(email: str):
+    """
+    外部公開 API: Gmail アドレスでユーザーの読書リストを返す。
+
+    GET /api/v1/users/{email}/books
+
+    Query params:
+      filter  : completed (default) | recent | in_progress | all
+      days    : recent フィルター時の日数 (default: 7, max: 365)
+      source  : ソース絞り込み (kindle / setagaya / audible_jp / paper / all)
+      limit   : 最大件数 (default: 50, max: 500)
+      offset  : オフセット (default: 0)
+
+    Response:
+      { "total": int, "returned": int, "books": [...] }
+    """
+    uid = _v1_lookup_uid(email)
+    if not uid:
+        return jsonify({"error": "user_not_found", "message": "指定されたメールアドレスのユーザーが見つかりません"}), 404
+
+    # クエリパラメーター
+    filt   = request.args.get("filter",  "completed")
+    source = request.args.get("source",  "all")
+    try:
+        days   = min(int(request.args.get("days",   "7")),  365)
+        limit  = min(int(request.args.get("limit",  "50")), 500)
+        offset = max(int(request.args.get("offset", "0")),  0)
+    except ValueError:
+        return jsonify({"error": "invalid_param", "message": "days / limit / offset は整数で指定してください"}), 400
+
+    try:
+        books = _v1_load_books_for_uid(uid)
+    except Exception as e:
+        logger.warning("api_v1_user_books uid=%s: %s", uid, e)
+        return jsonify({"error": "server_error", "message": "データ取得中にエラーが発生しました"}), 500
+
+    # フィルタリング
+    if filt == "completed":
+        books = [b for b in books if b.get("completed")]
+    elif filt == "recent":
+        from datetime import datetime as _dt, timezone as _tz, timedelta as _td  # noqa: PLC0415
+        cutoff = (_dt.now(_tz.utc) - _td(days=days)).date().isoformat()
+        books = [b for b in books if b.get("completed") and (b.get("completed_date") or "") >= cutoff]
+    elif filt == "in_progress":
+        books = [b for b in books if not b.get("completed") and (b.get("loan_date") or b.get("purchase_date"))]
+    # filt == "all": 全件
+
+    if source != "all":
+        books = [b for b in books if b.get("source") == source]
+
+    # 読了日降順ソート
+    books.sort(key=lambda b: (b.get("completed_date") or b.get("loan_date") or ""), reverse=True)
+
+    total = len(books)
+    page  = books[offset: offset + limit]
+
+    return jsonify({
+        "success":  True,
+        "filter":   filt,
+        "total":    total,
+        "returned": len(page),
+        "offset":   offset,
+        "limit":    limit,
+        "books":    [_v1_sanitize_book(b) for b in page],
+    })
+
+
+@app.route("/api/v1/users/<path:email>/recent")
+def api_v1_user_recent(email: str):
+    """
+    外部公開 API: 直近の読了本を返すショートカットエンドポイント。
+
+    GET /api/v1/users/{email}/recent?days=7&limit=20
+    """
+    # books エンドポイントに委譲
+    from flask import redirect as _redir  # noqa: PLC0415
+    qs = request.query_string.decode()
+    new_qs = ("filter=recent&" + qs).rstrip("&")
+    return _redir(f"/api/v1/users/{email}/books?{new_qs}", code=302)
 
 
 @app.route("/api/public/user-stats")
