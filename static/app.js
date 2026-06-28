@@ -290,6 +290,81 @@ function closeUserBooksModal() {
   document.body.style.overflow = '';
 }
 
+// ------------------------------------------------------------------
+// 今週の読了本パネル（ヘッダー直下）
+// ------------------------------------------------------------------
+
+let _weeklyPanelOpen = false;
+
+function _toggleWeeklyBooksPanel() {
+  const panel = document.getElementById('weeklyBooksPanel');
+  if (!panel) return;
+  if (_weeklyPanelOpen) {
+    _closeWeeklyBooksPanel();
+  } else {
+    _openWeeklyBooksPanel();
+  }
+}
+
+function _openWeeklyBooksPanel() {
+  const panel = document.getElementById('weeklyBooksPanel');
+  const body  = document.getElementById('weeklyBooksBody');
+  if (!panel || !body) return;
+
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const books = allBooks
+    .filter(b => b.completed && b.completed_date && new Date(b.completed_date) >= weekAgo)
+    .sort((a, b) => (b.completed_date || '') > (a.completed_date || '') ? 1 : -1);
+
+  if (books.length === 0) {
+    body.innerHTML = '<p class="weekly-books-empty">直近7日間の読了本はありません。</p>';
+  } else {
+    body.innerHTML = books.map(b => {
+      const cover = b.cover_url || NO_COVER;
+      const rating = displayRating(b) || 0;
+      const stars  = rating > 0 ? '★'.repeat(rating) + '☆'.repeat(5 - rating) : '';
+      const date   = b.completed_date ? formatDateOnly(b.completed_date) : '';
+      const src    = { setagaya: '図', audible_jp: 'A', kindle: 'K', paper: 'P' }[b.source] || '';
+      return `<div class="weekly-book-row" data-book-id="${escapeHtml(b.book_id || '')}">
+        <img class="weekly-book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy" onerror="this.src='${NO_COVER}'">
+        <div class="weekly-book-info">
+          <div class="weekly-book-title">${escapeHtml(b.title || '—')}</div>
+          <div class="weekly-book-meta">
+            ${escapeHtml(b.author || '')}
+            ${src ? `<span class="weekly-book-src">${src}</span>` : ''}
+            ${date ? `<span class="weekly-book-date">${date}</span>` : ''}
+            ${stars ? `<span class="weekly-book-stars">${stars}</span>` : ''}
+          </div>
+          ${b.comment ? `<div class="weekly-book-comment">"${escapeHtml(b.comment.length > 50 ? b.comment.substring(0, 50) + '…' : b.comment)}"</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    body.querySelectorAll('.weekly-book-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const book = allBooks.find(b => b.book_id === row.dataset.bookId);
+        if (book) { openBookDetail(book); _closeWeeklyBooksPanel(); }
+      });
+    });
+  }
+
+  panel.style.display = 'block';
+  requestAnimationFrame(() => panel.classList.add('weekly-books-panel--open'));
+  _weeklyPanelOpen = true;
+  document.getElementById('statWeekly')?.classList.add('stat-active');
+}
+
+function _closeWeeklyBooksPanel() {
+  const panel = document.getElementById('weeklyBooksPanel');
+  if (!panel) return;
+  panel.classList.remove('weekly-books-panel--open');
+  panel.addEventListener('transitionend', () => {
+    if (!_weeklyPanelOpen) panel.style.display = 'none';
+  }, { once: true });
+  _weeklyPanelOpen = false;
+  document.getElementById('statWeekly')?.classList.remove('stat-active');
+}
+
 const API = {
   books: '/api/books',
   fetch: '/api/fetch',
@@ -6515,15 +6590,10 @@ document.querySelectorAll('.header-tab').forEach(tab => {
 
 document.getElementById('statWeekly')?.addEventListener('click', (e) => {
   e.preventDefault();
-  activeMainTab = 'yonda';
-  activeBookTab = 'read';
-  document.getElementById('ratingFilter').value = 'weekly_completed';
-  document.getElementById('sortSelect').value = 'completed_date_desc';
-  document.querySelectorAll('.book-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('tabRead')?.classList.add('active');
-  updateBookTabLabels();
-  updateMainTabVisibility();
-  applyFilters();
+  _toggleWeeklyBooksPanel();
+});
+document.getElementById('weeklyBooksClose')?.addEventListener('click', () => {
+  _closeWeeklyBooksPanel();
 });
 document.getElementById('statRated')?.addEventListener('click', (e) => {
   e.preventDefault();
