@@ -115,7 +115,7 @@ _GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 _GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 _GOOGLE_REDIRECT_URI = os.environ.get(
     "GOOGLE_REDIRECT_URI",
-    "https://yonda-305586484898.asia-northeast1.run.app/auth/callback"
+    ""  # 空の場合はリクエストホストから動的生成（_get_redirect_uri() を使用）
 )
 _OAUTH_ENABLED = bool(_GOOGLE_CLIENT_ID and _GOOGLE_CLIENT_SECRET)
 # 管理者メールアドレス（カンマ区切りで複数指定可）
@@ -234,17 +234,25 @@ def _restore_oauth_state_from_fs(state: str) -> bool:
 def auth_login():
     if not _OAUTH_ENABLED:
         return redirect(url_for("index"))
+    # 環境変数で固定 redirect_uri が指定されていれば使う。
+    # なければリクエストホストから動的生成（yonda.ktrips.net でも正常に動作する）。
+    redirect_uri = _GOOGLE_REDIRECT_URI or url_for("auth_callback", _external=True)
     state = os.urandom(16).hex()
     # FS にバックアップ（redirect_uri も含めて保存）
-    _save_oauth_state_to_fs(state, _GOOGLE_REDIRECT_URI)
+    _save_oauth_state_to_fs(state, redirect_uri)
     # authlib に同じ state を渡してリダイレクト
-    return oauth.google.authorize_redirect(_GOOGLE_REDIRECT_URI, state=state)
+    return oauth.google.authorize_redirect(redirect_uri, state=state)
 
 
 @app.route("/auth/debug-redirect")
 def auth_debug_redirect():
     """redirect_uri の確認用（開発時のみ）"""
-    return jsonify({"redirect_uri": _GOOGLE_REDIRECT_URI})
+    dynamic_uri = url_for("auth_callback", _external=True)
+    return jsonify({
+        "redirect_uri_env": _GOOGLE_REDIRECT_URI,
+        "redirect_uri_dynamic": dynamic_uri,
+        "redirect_uri_used": _GOOGLE_REDIRECT_URI or dynamic_uri,
+    })
 
 
 def _init_firestore_sources(uid_safe: str, user_dir: Path) -> None:
