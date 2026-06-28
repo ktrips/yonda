@@ -296,74 +296,43 @@ jobs:
               --quiet || true
           fi
 
-      - name: Setup Cloud Scheduler (fetch 6/12/18 JST)
+      - name: Setup Cloud Scheduler (fetch 6/12/18/21 JST)
         if: ${{ github.event.inputs.image_only != 'true' || github.event.inputs.scheduler_only == 'true' }}
         # scheduler_only=true の場合は SERVICE_URL を再取得する必要あり
+        # NOTE: `gcloud scheduler jobs update http` は --headers をサポートしないため
+        #       削除→再作成方式で常に最新設定を適用する
         run: |
           SERVICE_URL="$(gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format='value(status.url)')"
           FETCH_URL="${SERVICE_URL}/api/internal/auto-fetch-all"
           FETCH_BODY='{}'
+          LOCATION="${{ env.REGION }}"
           # YONDA_INTERNAL_TOKEN が設定済みの場合はヘッダーに追加
           TOKEN_HEADER="Content-Type=application/json,X-CloudScheduler=true"
           if [[ -n "${{ secrets.YONDA_INTERNAL_TOKEN }}" ]]; then
             TOKEN_HEADER="${TOKEN_HEADER},X-Internal-Token=${{ secrets.YONDA_INTERNAL_TOKEN }}"
           fi
+          # 削除→再作成で確実に最新設定を適用
           setup_job() {
-            local name="$1" schedule="$2"
-            if gcloud scheduler jobs describe "${name}" \
-                 --location=${{ env.REGION }} --format='value(name)' 2>/dev/null; then
-              gcloud scheduler jobs update http "${name}" \
-                --location=${{ env.REGION }} \
-                --schedule="${schedule}" \
-                --uri="${FETCH_URL}" \
-                --message-body="${FETCH_BODY}" \
-                --headers="${TOKEN_HEADER}" \
-                --time-zone="Asia/Tokyo" \
-                --attempt-deadline=1800s \
-                --quiet \
-              && echo "  ✔ ${name} (更新)" || echo "  ⚠ ${name} 更新スキップ（権限不足）"
-            else
-              gcloud scheduler jobs create http "${name}" \
-                --location=${{ env.REGION }} \
-                --schedule="${schedule}" \
-                --uri="${FETCH_URL}" \
-                --message-body="${FETCH_BODY}" \
-                --headers="${TOKEN_HEADER}" \
-                --time-zone="Asia/Tokyo" \
-                --attempt-deadline=1800s \
-                --quiet \
-              && echo "  ✔ ${name} (新規作成)" || echo "  ⚠ ${name} 作成スキップ（権限不足）"
-            fi
+            local name="$1" schedule="$2" uri="$3" body="$4" hdrs="$5"
+            gcloud scheduler jobs delete "${name}" --location="${LOCATION}" --quiet 2>/dev/null || true
+            gcloud scheduler jobs create http "${name}" \
+              --location="${LOCATION}" \
+              --schedule="${schedule}" \
+              --uri="${uri}" \
+              --message-body="${body}" \
+              --headers="${hdrs}" \
+              --time-zone="Asia/Tokyo" \
+              --attempt-deadline=1800s \
+              --quiet \
+            && echo "  ✔ ${name} (${schedule})" || echo "  ⚠ ${name} 作成スキップ（権限不足）"
           }
-          setup_job "yonda-fetch-morning" "0 6 * * *"
-          setup_job "yonda-fetch-noon"    "0 12 * * *"
-          setup_job "yonda-fetch-evening" "0 18 * * *"
+          setup_job "yonda-fetch-morning" "0 6 * * *"  "${FETCH_URL}" "${FETCH_BODY}" "${TOKEN_HEADER}"
+          setup_job "yonda-fetch-noon"    "0 12 * * *" "${FETCH_URL}" "${FETCH_BODY}" "${TOKEN_HEADER}"
+          setup_job "yonda-fetch-evening" "0 18 * * *" "${FETCH_URL}" "${FETCH_BODY}" "${TOKEN_HEADER}"
+          setup_job "yonda-fetch-night"   "0 21 * * *" "${FETCH_URL}" "${FETCH_BODY}" "${TOKEN_HEADER}"
 
           # 週次エンリッチジョブ（insights一括補完 / 日曜 03:00 JST）
           ENRICH_URL="${SERVICE_URL}/api/enrich"
-          ENRICH_BODY='{"max_books":50}'
-          if gcloud scheduler jobs describe "yonda-enrich-weekly" \
-               --location=${{ env.REGION }} --format='value(name)' 2>/dev/null; then
-            gcloud scheduler jobs update http "yonda-enrich-weekly" \
-              --location=${{ env.REGION }} \
-              --schedule="0 3 * * 0" \
-              --uri="${ENRICH_URL}" \
-              --message-body="${ENRICH_BODY}" \
-              --headers="Content-Type=application/json" \
-              --time-zone="Asia/Tokyo" \
-              --attempt-deadline=1800s \
-              --quiet \
-            && echo "  ✔ yonda-enrich-weekly (更新)" || echo "  ⚠ yonda-enrich-weekly 更新スキップ"
-          else
-            gcloud scheduler jobs create http "yonda-enrich-weekly" \
-              --location=${{ env.REGION }} \
-              --schedule="0 3 * * 0" \
-              --uri="${ENRICH_URL}" \
-              --message-body="${ENRICH_BODY}" \
-              --headers="Content-Type=application/json" \
-              --time-zone="Asia/Tokyo" \
-              --attempt-deadline=1800s \
-              --quiet \
-            && echo "  ✔ yonda-enrich-weekly (新規作成)" || echo "  ⚠ yonda-enrich-weekly 作成スキップ"
-          fi
+          setup_job "yonda-enrich-weekly" "0 3 * * 0" "${ENRICH_URL}" '{"max_books":50}' "Content-Type=application/json"
+
           echo "  ℹ Cloud Scheduler の権限が不足している場合はローカルで手動設定してください"
