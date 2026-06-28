@@ -3180,6 +3180,27 @@ def api_public_user_stats():
     return jsonify({"success": True, "users": users})
 
 
+@app.route("/api/internal/update-stats", methods=["POST"])
+def api_internal_update_stats():
+    """同期なしで既存データから各ユーザーの読了冊数を集計しFirestoreに保存する。"""
+    import firestore_service as _fs  # noqa: PLC0415
+    fs_users = _fs.list_sync_users()
+    results = []
+    for u in fs_users:
+        uid = u["uid"]
+        user_data_dir = library_service.DATA_DIR / "users" / uid
+        library_service.set_user_data_dir(user_data_dir)
+        try:
+            count = library_service.count_completed_books()
+            _fs.update_user_stats(uid, count)
+            results.append({"uid": uid, "completed_count": count})
+        except Exception as e:
+            logger.warning("update-stats uid=%s: %s", uid, e)
+            results.append({"uid": uid, "error": str(e)})
+    library_service.set_user_data_dir(library_service.DATA_DIR)
+    return jsonify({"status": "ok", "results": results})
+
+
 @app.route("/api/messages", methods=["GET"])
 def api_messages():
     """Yonda内メッセージ一覧を返す。同期のタイミングで古いメッセージを自動アーカイブ。"""
