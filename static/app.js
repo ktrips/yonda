@@ -539,29 +539,34 @@ function titleSupplementHtml(book) {
 }
 
 /** カード内の著者行の下: 星 + 個人レビュー + 未レビューボタン */
-function bookRatingRowHtml(book, { showUnrated = false } = {}) {
+function bookRatingRowHtml(book, { showUnrated = false, communityUnrated = false } = {}) {
   const rating = displayRating(book) || 0;
-  const comment = (book.source === 'audible_jp' ? book.review_headline : book.comment) || '';
+  const comment = (book.source === 'audible_jp' ? (book.review_headline || book.comment) : book.comment) || '';
   const reviewText = comment.trim();
   const hasReview = rating > 0 || !!reviewText;
 
-  // 未レビューボタン（完了済み & レビューなし & showUnrated=true のみ表示）
-  const unratedBtn = (showUnrated && book.completed && !hasReview)
-    ? (() => {
-        // 紙の本は編集モーダルの評価・書評欄へ直接遷移
-        if (book.source === 'paper' && book.book_id) {
-          return `<span class="btn-unrated btn-unrated-card" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</span>`;
-        }
+  // 未レビューボタン（完了済み & レビューなし のみ表示）
+  let unratedEl = '';
+  if (book.completed && !hasReview) {
+    if (showUnrated) {
+      // 自分の本: クリックで書評ページへ
+      if (book.source === 'paper' && book.book_id) {
+        unratedEl = `<span class="btn-unrated btn-unrated-card" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</span>`;
+      } else {
         const url = reviewUrlForBook(book);
-        return url
+        unratedEl = url
           ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener"
                class="btn-unrated btn-unrated-card" title="レビューを入力"
                onclick="event.stopPropagation()">未レビュー</a>`
           : `<span class="btn-unrated btn-unrated-card" onclick="event.stopPropagation();openBookDetail(_bookByIdMap.get('${escapeHtml(book.book_id||'')}'))">未レビュー</span>`;
-      })()
-    : '';
+      }
+    } else if (communityUnrated) {
+      // 他人の本: グレーの未レビューラベル（クリック不可）
+      unratedEl = `<span class="btn-unrated btn-unrated-other">未レビュー</span>`;
+    }
+  }
 
-  if (!hasReview && !unratedBtn) return '';
+  if (!hasReview && !unratedEl) return '';
 
   const stars = rating > 0
     ? (book.source === 'audible_jp'
@@ -571,7 +576,7 @@ function bookRatingRowHtml(book, { showUnrated = false } = {}) {
   const reviewHtml = reviewText
     ? `<span class="card-review-text">"${escapeHtml(reviewText.length > 60 ? reviewText.substring(0, 60) + '…' : reviewText)}"</span>`
     : '';
-  return `<div class="book-card-rating-row">${stars}${reviewHtml}${unratedBtn}</div>`;
+  return `<div class="book-card-rating-row">${stars}${reviewHtml}${unratedEl}</div>`;
 }
 
 const AUDIBLE_LIBRARY_URL = 'https://www.audible.co.jp/library/audiobooks';
@@ -2013,6 +2018,7 @@ function _renderCommunityFromCache(listEl) {
           extraClass: 'community-book-card-item',
           extraAttrs: `data-cache-key="${cacheKey}"`,
           showUnrated: !!(myBook && myBook !== book) && !!_authUser,
+          communityUnrated: true,
           showProgress: false,
         });
       }).join('');
@@ -4805,7 +4811,7 @@ function _compressImageToBase64(file, maxW, maxH) {
  *   showUnrated  {boolean} 未レビューボタンを表示するか
  *   showProgress {boolean} Kindle進捗バーを表示するか（デフォルトtrue）
  */
-function renderBookCardHtml(book, { extraClass = '', extraAttrs = '', showUnrated = false, showProgress = true } = {}) {
+function renderBookCardHtml(book, { extraClass = '', extraAttrs = '', showUnrated = false, communityUnrated = false, showProgress = true } = {}) {
   const cover = book.cover_url || NO_COVER;
   const srcClass = book.source === 'audible_jp' ? ' source-audible' : '';
   const srcLabel_map = { setagaya: '図書館', audible_jp: 'Audible', kindle: 'Kindle', paper: 'Paper' };
@@ -4859,7 +4865,7 @@ function renderBookCardHtml(book, { extraClass = '', extraAttrs = '', showUnrate
       <div class="book-card-body">
         <div class="book-card-title">${newBadge}${escapeHtml(book.title || '—')}</div>
         <div class="book-card-author">${escapeHtml(book.author || '')}${authorExtra}${completedExtra}${srcBadge ? `<span class="book-card-src-inline">${srcBadge}</span>` : ''}</div>
-        ${bookRatingRowHtml(book, { showUnrated })}
+        ${bookRatingRowHtml(book, { showUnrated, communityUnrated })}
         ${progressBarHtml}
         ${progressMeta}
         <div class="book-card-top-row">${favoriteBadge}</div>

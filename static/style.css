@@ -2363,6 +2363,17 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
   transition: background 0.15s, color 0.15s;
 }
 .btn-unrated:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-unrated-other {
+  margin-top: 0; margin-left: 0.3rem;
+  font-size: 0.62rem; padding: 0.1rem 0.35rem;
+  vertical-align: middle;
+  cursor: default;
+  background: transparent;
+  color: var(--text-muted);
+  border-color: var(--border);
+  opacity: 0.6;
+}
+.btn-unrated-other:hover { background: transparent; color: var(--text-muted); border-color: var(--border); }
 .btn-unrated-card {
   margin-top: 0; margin-left: 0.3rem;
   font-size: 0.62rem; padding: 0.1rem 0.35rem;
