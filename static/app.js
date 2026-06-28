@@ -1991,6 +1991,17 @@ function _renderCommunityFromCache(listEl) {
         return true;
       }));
 
+      // 読了日降順 → 未読は末尾
+      allMsgBooks.sort((a, b) => {
+        const ba = a.book || a, bb = b.book || b;
+        const da = ba.completed_date || '';
+        const db = bb.completed_date || '';
+        if (da && db) return da > db ? -1 : da < db ? 1 : 0;
+        if (da) return -1;
+        if (db) return 1;
+        return 0;
+      });
+
       const bookCards = allMsgBooks.map(item => {
         const book = item.book || item;
         const cacheKey = `c${cacheIdx++}`;
