@@ -206,7 +206,7 @@ function _renderPublicUserBubbles() {
 }
 
 function _esc(s) {
-  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return escapeHtml(String(s || ''));
 }
 
 function _openUserBooksModal(user) {
