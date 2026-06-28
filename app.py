@@ -3184,9 +3184,10 @@ def api_public_user_stats():
 def api_internal_update_stats():
     """同期なしで既存データから各ユーザーの読了冊数を集計しFirestoreに保存する。"""
     import firestore_service as _fs  # noqa: PLC0415
-    fs_users = _fs.list_sync_users()
+    # sources 設定有無に関わらず全ユーザーを対象にする
+    all_users = _fs.list_all_users_public_stats()
     results = []
-    for u in fs_users:
+    for u in all_users:
         uid = u["uid"]
         user_data_dir = library_service.DATA_DIR / "users" / uid
         library_service.set_user_data_dir(user_data_dir)
