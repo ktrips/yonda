@@ -1860,6 +1860,9 @@ function _renderCommunityFromCache(listEl) {
         });
       }).join('');
 
+      // 本が0冊のフィードは表示しない
+      if (allMsgBooks.length === 0) return;
+
       userBlocks.push(`<div class="ig-post-card">
         <div class="ig-post-header">
           ${avatarHtml}
@@ -1870,10 +1873,13 @@ function _renderCommunityFromCache(listEl) {
       </div>`);
     });
 
-    fragments.push(`<div class="community-date-group">
-      <div class="community-date-header">${escapeHtml(dateKey)}</div>
-      ${userBlocks.join('')}
-    </div>`);
+    // 本が1冊以上あるブロックのみ残った日付グループを出力
+    if (userBlocks.length > 0) {
+      fragments.push(`<div class="community-date-group">
+        <div class="community-date-header">${escapeHtml(dateKey)}</div>
+        ${userBlocks.join('')}
+      </div>`);
+    }
   });
 
   listEl.innerHTML = fragments.join('');
