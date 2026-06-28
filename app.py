@@ -115,7 +115,7 @@ _GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
 _GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 _GOOGLE_REDIRECT_URI = os.environ.get(
     "GOOGLE_REDIRECT_URI",
-    ""  # 空の場合はリクエストホストから動的生成（_get_redirect_uri() を使用）
+    "https://yonda-305586484898.asia-northeast1.run.app/auth/callback"
 )
 _OAUTH_ENABLED = bool(_GOOGLE_CLIENT_ID and _GOOGLE_CLIENT_SECRET)
 # 管理者メールアドレス（カンマ区切りで複数指定可）
@@ -187,7 +187,7 @@ def _before_request_handler():
 _OAUTH_STATE_DIR = Path(os.environ.get("YONDA_DATA_DIR", "data")) / ".oauth_states"
 
 
-def _save_oauth_state_to_fs(state: str, redirect_uri: str) -> None:
+def _save_oauth_state_to_fs(state: str, redirect_uri: str, return_host: str = "") -> None:
     """OAuth state をファイルシステムにバックアップする（Cookie 消失対策）"""
     try:
         _OAUTH_STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -195,6 +195,7 @@ def _save_oauth_state_to_fs(state: str, redirect_uri: str) -> None:
         sf.write_text(json.dumps({
             "state": state,
             "redirect_uri": redirect_uri,
+            "return_host": return_host,
             "created_at": time.time(),
         }))
         logger.debug("OAuth state saved to FS: %s", state)
@@ -223,6 +224,9 @@ def _restore_oauth_state_from_fs(state: str) -> bool:
             "state": state,
             "redirect_uri": data.get("redirect_uri", ""),
         }
+        # return_host をセッションに保存（コールバック後のクロスドメインリダイレクト用）
+        if data.get("return_host"):
+            session["_oauth_return_host"] = data["return_host"]
         logger.info("OAuth state restored from FS: %s → session[%s]", state, session_key)
         return True
     except Exception as e:
@@ -234,12 +238,12 @@ def _restore_oauth_state_from_fs(state: str) -> bool:
 def auth_login():
     if not _OAUTH_ENABLED:
         return redirect(url_for("index"))
-    # 環境変数で固定 redirect_uri が指定されていれば使う。
-    # なければリクエストホストから動的生成（yonda.ktrips.net でも正常に動作する）。
     redirect_uri = _GOOGLE_REDIRECT_URI or url_for("auth_callback", _external=True)
+    # コールバック後に元のホスト（yonda.ktrips.net など）に戻れるよう保存
+    return_host = request.host  # 例: "yonda.ktrips.net"
     state = os.urandom(16).hex()
-    # FS にバックアップ（redirect_uri も含めて保存）
-    _save_oauth_state_to_fs(state, redirect_uri)
+    # FS にバックアップ（redirect_uri + return_host も含めて保存）
+    _save_oauth_state_to_fs(state, redirect_uri, return_host=return_host)
     # authlib に同じ state を渡してリダイレクト
     return oauth.google.authorize_redirect(redirect_uri, state=state)
 
@@ -247,12 +251,7 @@ def auth_login():
 @app.route("/auth/debug-redirect")
 def auth_debug_redirect():
     """redirect_uri の確認用（開発時のみ）"""
-    dynamic_uri = url_for("auth_callback", _external=True)
-    return jsonify({
-        "redirect_uri_env": _GOOGLE_REDIRECT_URI,
-        "redirect_uri_dynamic": dynamic_uri,
-        "redirect_uri_used": _GOOGLE_REDIRECT_URI or dynamic_uri,
-    })
+    return jsonify({"redirect_uri": _GOOGLE_REDIRECT_URI})
 
 
 def _init_firestore_sources(uid_safe: str, user_dir: Path) -> None:
@@ -356,12 +355,13 @@ def auth_callback():
         return redirect(url_for("auth_login"))
     user_info = token.get("userinfo") or oauth.google.userinfo()
     uid_safe = re.sub(r"[^a-zA-Z0-9_\-]", "_", user_info.get("sub", "anonymous"))
-    session["user"] = {
+    user_data = {
         "sub": user_info.get("sub"),
         "email": user_info.get("email"),
         "name": user_info.get("name"),
         "picture": user_info.get("picture"),
     }
+    session["user"] = user_data
     _migrate_root_data_to_user(uid_safe)
     # ログインのたびに認証ファイルの存在を保証（センチネルに依存しない）
     _ensure_user_credentials(library_service.DATA_DIR / "users" / uid_safe)
@@ -371,6 +371,41 @@ def auth_callback():
         firestore_service.upsert_user_profile(uid_safe, dict(session["user"]))
     except Exception as e:
         logger.warning("ユーザープロフィール作成スキップ: %s", e)
+
+    # 元のホスト（yonda.ktrips.net など）と現在のコールバックホストが異なる場合、
+    # ワンタイムトークンで元のドメインにセッションを引き渡す
+    return_host = session.pop("_oauth_return_host", "")
+    callback_host = request.host
+    if return_host and return_host != callback_host:
+        from itsdangerous import URLSafeTimedSerializer  # noqa: PLC0415
+        s = URLSafeTimedSerializer(app.secret_key)
+        exchange_token = s.dumps(user_data, salt="auth-exchange")
+        scheme = "https" if not return_host.startswith("localhost") else "http"
+        return redirect(f"{scheme}://{return_host}/auth/exchange?token={exchange_token}")
+
+    return redirect(url_for("index"))
+
+
+@app.route("/auth/exchange")
+def auth_exchange():
+    """クロスドメイン認証引き渡し用エンドポイント。
+    /auth/callback が別ドメインで実行された後、署名済みトークンでセッションを設定する。
+    """
+    token = request.args.get("token", "")
+    if not token:
+        return redirect(url_for("index"))
+    from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired  # noqa: PLC0415
+    s = URLSafeTimedSerializer(app.secret_key)
+    try:
+        user_data = s.loads(token, salt="auth-exchange", max_age=120)
+    except (BadSignature, SignatureExpired) as e:
+        logger.warning("auth/exchange: 無効またはトークン期限切れ: %s", e)
+        return redirect(url_for("auth_login"))
+    session["user"] = user_data
+    uid_safe = re.sub(r"[^a-zA-Z0-9_\-]", "_", user_data.get("sub", "anonymous"))
+    _migrate_root_data_to_user(uid_safe)
+    _ensure_user_credentials(library_service.DATA_DIR / "users" / uid_safe)
+    logger.info("auth/exchange: セッション設定完了 uid=%s host=%s", uid_safe, request.host)
     return redirect(url_for("index"))
 
 
