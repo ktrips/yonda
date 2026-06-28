@@ -65,7 +65,7 @@ app = Flask(
 )
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 # 静的ファイルの max-age を短く設定（キャッシュバスティング用 ?v= クエリと併用）
-app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 60
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000  # 1年（?v= バスティング済み）
 def _get_stable_secret_key() -> str:
     """FLASK_SECRET_KEY 未設定時は複数インスタンスで共有できるキーを生成する。
     Google Client Secret から派生させることで Cloud Run 全インスタンスで一致させる。"""
@@ -1677,15 +1677,16 @@ def api_books():
     try:
         data = library_service.load_saved()
         if data is None:
-            resp = jsonify({
-                "success": True,
-                "books": [],
-                "sources": [],
-                "total": 0,
-            })
+            payload = {"success": True, "books": [], "sources": [], "total": 0}
         else:
-            resp = jsonify({"success": True, **data})
-        resp.headers["Cache-Control"] = "private, max-age=60"
+            payload = {"success": True, **data}
+        import hashlib as _hl  # noqa: PLC0415
+        etag = _hl.md5(str(len(payload.get("books", []))).encode()).hexdigest()[:12]
+        if request.headers.get("If-None-Match") == etag:
+            return "", 304
+        resp = jsonify(payload)
+        resp.headers["Cache-Control"] = "private, max-age=120"
+        resp.headers["ETag"] = etag
         return resp
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500

@@ -1388,10 +1388,45 @@ async function loadFromFile() {
   if (error) error.style.display = 'none';
   if (empty) empty.style.display = 'none';
 
-  try {
+  // localStorage キャッシュキー（バージョン＋ユーザー単位）
+  const cacheKey = `yonda_books_${APP_VERSION}_${_authUser?.email || 'anon'}`;
+  const CACHE_TTL_MS = 3 * 60 * 1000; // 3分
+
+  async function fetchBooks() {
     const res = await fetch(API.books);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error || 'データなし');
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data }));
+    } catch (_) {}
+    return data;
+  }
+
+  let data;
+  try {
+    // キャッシュ確認
+    const cached = (() => {
+      try { return JSON.parse(localStorage.getItem(cacheKey) || 'null'); } catch (_) { return null; }
+    })();
+    if (cached && (Date.now() - cached.ts) < CACHE_TTL_MS) {
+      data = cached.data;
+      // バックグラウンドで最新を取得してキャッシュ更新（stale-while-revalidate）
+      fetchBooks().then(fresh => {
+        allBooks = fresh.books || [];
+        for (const b of allBooks) b._normalizedGenre = normalizeGenre(b.genre || '');
+        _rebuildBookIndexMap();
+        _bookStatsCache = null;
+        updateStats();
+        populateSourceFilter(fresh.sources || []);
+        updateMenuSyncDates(fresh.sources || []);
+        populateGenreFilter();
+        applyFilters();
+      }).catch(() => {});
+    } else {
+      data = await fetchBooks();
+    }
+
     allBooks = data.books || [];
     for (const b of allBooks) b._normalizedGenre = normalizeGenre(b.genre || '');
     _rebuildBookIndexMap();
@@ -1461,6 +1496,10 @@ async function fetchFromLibrary(opts = {}) {
       throw new Error(data.error || '取得に失敗しました');
     } else {
       allBooks = data.books || [];
+      // 同期後はキャッシュを無効化して次回ロード時に最新データを取得
+      try {
+        Object.keys(localStorage).filter(k => k.startsWith('yonda_books_')).forEach(k => localStorage.removeItem(k));
+      } catch (_) {}
       const sources = data.sources || [];
       updateStats();
       populateSourceFilter(sources);
@@ -3845,13 +3884,14 @@ function renderBooks() {
   window._currentPageBooks = pageBooks;
   const isCard = document.getElementById('viewCard').classList.contains('active');
 
-  if (isCard) {
-    list.className = 'book-grid';
-    list.innerHTML = renderCardView(pageBooks, selectedGenre, prevBook, subGenreCounts);
-  } else {
-    list.className = '';
-    list.innerHTML = renderTableView(pageBooks, selectedGenre, prevBook, subGenreCounts);
-  }
+  const html = isCard
+    ? renderCardView(pageBooks, selectedGenre, prevBook, subGenreCounts)
+    : renderTableView(pageBooks, selectedGenre, prevBook, subGenreCounts);
+
+  // DocumentFragment 経由で DOM 更新回数を1回に抑える
+  const frag = document.createRange().createContextualFragment(html);
+  list.className = isCard ? 'book-grid' : '';
+  list.replaceChildren(frag);
 
   list.style.display = isCard ? 'grid' : 'block';
   renderPagination(start);
@@ -6655,7 +6695,11 @@ async function init() {
   activeMainTab = getDefaultPage();
 
   try {
-    const libRes = await fetch(API.libraries);
+    // ライブラリ一覧と書籍データを並列取得
+    const [libRes] = await Promise.all([
+      fetch(API.libraries),
+      loadFromFile(),
+    ]);
     const libData = await libRes.json();
     const sel = document.getElementById('librarySelect');
     if (sel && libData.success && libData.libraries && libData.libraries.length > 0) {
@@ -6667,18 +6711,6 @@ async function init() {
   if (document.getElementById('menuSourceLink')) updateMenuSourceLink();
   if (document.getElementById('menuCredStatus')) updateCredentialStatus();
 
-  try {
-    await loadFromFile();
-  } catch (err) {
-    console.error('loadFromFile error:', err);
-    const empty = document.getElementById('emptyState');
-    const error = document.getElementById('error');
-    if (empty) empty.style.display = 'block';
-    if (error) {
-      error.textContent = 'データの読み込みに失敗しました。メニューから「読書記録を取込み」を実行してください。';
-      error.style.display = 'block';
-    }
-  }
   updateMainTabVisibility();
   loadAmazonList();
 }
