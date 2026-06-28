@@ -151,26 +151,119 @@
 
 ---
 
-### REST API v1
+### REST API v1（外部公開 API）
 
-外部連携用の読み取り専用 REST API。
+認証不要で外部から読書データを取得できる読み取り専用 REST API。
 
-| エンドポイント | 説明 |
-|---|---|
-| `GET /api/v1/books` | 読書記録一覧（フィルタ・検索・ページネーション対応） |
-| `GET /api/v1/books/stats` | 統計情報（読了数・ソース別集計など） |
-| `GET /api/v1/books/<catalog_number>` | ASIN・図書館番号で1冊の詳細を取得 |
+**ベース URL:** `https://yonda.ktrips.net`
 
-**`/api/v1/books` クエリパラメータ:**
+---
 
-| パラメータ | 値 | デフォルト |
+#### プロフィール取得
+
+```
+GET /api/v1/users/{gmail}/profile
+```
+
+```json
+{
+  "success": true,
+  "profile": {
+    "name": "Kenichi Yoshida",
+    "picture": "https://...",
+    "completed_count": 1932,
+    "stats_updated_at": "2026-06-28T12:40:34+00:00"
+  }
+}
+```
+
+---
+
+#### 読書リスト取得
+
+```
+GET /api/v1/users/{gmail}/books
+```
+
+| パラメーター | デフォルト | 説明 |
 |---|---|---|
-| `status` | `read` / `unread` / `in_progress` / `all` | `all` |
-| `source` | `setagaya` / `audible_jp` / `kindle` / `paper` / `all` | `all` |
-| `q` | タイトル・著者の部分一致検索 | — |
-| `sort` | `loan_date_desc` / `completed_date_desc` / `percent_desc` / `title_asc` | `loan_date_desc` |
-| `limit` | 1〜200 | `50` |
-| `offset` | 0以上 | `0` |
+| `filter` | `completed` | `completed`（読了）/ `recent`（直近）/ `in_progress`（読中）/ `all` |
+| `days` | `7` | `recent` 時の日数（最大 365） |
+| `source` | `all` | `kindle` / `setagaya` / `audible_jp` / `paper` / `all` |
+| `limit` | `50` | 最大件数（最大 500） |
+| `offset` | `0` | ページネーション用オフセット |
+
+**使用例:**
+
+```bash
+# 読了本（直近30日）
+curl "https://yonda.ktrips.net/api/v1/users/you@gmail.com/books?filter=recent&days=30"
+
+# Kindle の全読了本（100件）
+curl "https://yonda.ktrips.net/api/v1/users/you@gmail.com/books?source=kindle&limit=100"
+
+# 全ソース 500件目以降
+curl "https://yonda.ktrips.net/api/v1/users/you@gmail.com/books?filter=all&limit=500&offset=500"
+```
+
+**レスポンス例:**
+
+```json
+{
+  "success": true,
+  "filter": "recent",
+  "total": 12,
+  "returned": 5,
+  "offset": 0,
+  "limit": 5,
+  "books": [
+    {
+      "title": "〇〇の本",
+      "author": "著者名",
+      "genre": "文学・フィクション",
+      "cover": "https://...",
+      "source": "audible_jp",
+      "completed": true,
+      "completed_date": "2026-06-28T00:00:00+09:00",
+      "rating": 4,
+      "comment": "面白かった",
+      "isbn": "",
+      "asin": "B0XXXXXX",
+      "runtime_length_min": 480
+    }
+  ]
+}
+```
+
+---
+
+#### 直近読了ショートカット
+
+```
+GET /api/v1/users/{gmail}/recent?days=7&limit=20
+```
+
+---
+
+#### 全ユーザー統計（公開）
+
+```
+GET /api/public/user-stats
+```
+
+```json
+{
+  "success": true,
+  "users": [
+    {
+      "name": "Kenichi Yoshida",
+      "picture": "https://...",
+      "completed_count": 1932,
+      "uid": "..."
+    }
+  ]
+}
+```
 
 ---
 

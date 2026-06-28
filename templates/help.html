@@ -105,6 +105,16 @@
         <li>Basic Information の <strong>Signing Secret</strong> をコピーし、環境変数 <code>SLACK_SIGNING_SECRET</code> に設定</li>
       </ul>
 
+      <h2>外部 API（REST API v1）</h2>
+      <p>認証不要で外部から読書データを取得できる読み取り専用 API です。</p>
+      <ul>
+        <li><code>GET /api/v1/users/{Gmail}/profile</code> — プロフィール・読了冊数</li>
+        <li><code>GET /api/v1/users/{Gmail}/books</code> — 読書リスト（<code>filter</code> / <code>days</code> / <code>source</code> / <code>limit</code> / <code>offset</code> 対応）</li>
+        <li><code>GET /api/v1/users/{Gmail}/recent</code> — 直近読了ショートカット</li>
+        <li><code>GET /api/public/user-stats</code> — 全ユーザー統計（ログイン不要）</li>
+      </ul>
+      <p>詳細は <a href="{{ url_for('help_usage_page') }}#api">使い方ページの「外部 API」</a> をご確認ください。</p>
+
       <h2>AI推し・写真検索（APIエラーが出る場合）</h2>
       <p>AI推し（５質問で推し、MBTI診断で推し、強み診断で推し）や写真から本を検索するには、メニュー → アプリ設定 で API キーを登録してください。</p>
       <ul>

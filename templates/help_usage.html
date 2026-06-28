@@ -40,6 +40,7 @@
         <a href="#oshi">AI推し</a>
         <a href="#settings">アプリ設定</a>
         <a href="#flags">非公開・非表示</a>
+        <a href="#api">外部 API</a>
         <a href="{{ url_for('help_page') }}">設定のヘルプ</a>
       </nav>
 
@@ -224,6 +225,39 @@
         <li>即座にサーバーに保存されます</li>
       </ol>
       <p>テーブル表示でも各行の右端にある「非公開」列でチェックを変更できます。</p>
+
+      <!-- ===== 外部 API ===== -->
+      <h2 id="api">外部 API（REST API v1）</h2>
+      <p>認証不要で外部から読書データを取得できる読み取り専用 API です。Gmail アドレスでユーザーを指定します。</p>
+      <p><strong>ベース URL:</strong> <code>https://yonda.ktrips.net</code></p>
+
+      <h3>プロフィール取得</h3>
+      <p><code>GET /api/v1/users/{Gmail アドレス}/profile</code></p>
+      <p>ユーザーの名前・アバター・読了冊数を返します。</p>
+
+      <h3>読書リスト取得</h3>
+      <p><code>GET /api/v1/users/{Gmail アドレス}/books</code></p>
+      <table class="help-table">
+        <thead><tr><th>パラメーター</th><th>デフォルト</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr><td><code>filter</code></td><td><code>completed</code></td><td><code>completed</code>（読了）/ <code>recent</code>（直近）/ <code>in_progress</code>（読中）/ <code>all</code></td></tr>
+          <tr><td><code>days</code></td><td><code>7</code></td><td><code>recent</code> 時の日数（最大 365）</td></tr>
+          <tr><td><code>source</code></td><td><code>all</code></td><td><code>kindle</code> / <code>setagaya</code> / <code>audible_jp</code> / <code>paper</code> / <code>all</code></td></tr>
+          <tr><td><code>limit</code></td><td><code>50</code></td><td>最大件数（最大 500）</td></tr>
+          <tr><td><code>offset</code></td><td><code>0</code></td><td>ページネーション用オフセット</td></tr>
+        </tbody>
+      </table>
+
+      <h3>直近読了ショートカット</h3>
+      <p><code>GET /api/v1/users/{Gmail アドレス}/recent?days=7&amp;limit=20</code></p>
+
+      <h3>全ユーザー統計（公開）</h3>
+      <p><code>GET /api/public/user-stats</code></p>
+      <p>全ユーザーの名前・アバター・読了冊数を返します。ログイン不要。</p>
+
+      <div class="help-note">
+        本の各フィールド: <code>title</code> / <code>author</code> / <code>genre</code> / <code>cover</code> / <code>source</code> / <code>completed</code> / <code>completed_date</code> / <code>rating</code> / <code>comment</code> / <code>isbn</code> / <code>asin</code> / <code>runtime_length_min</code>
+      </div>
 
     </div>
   </div>
