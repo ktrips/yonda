@@ -153,7 +153,7 @@ def get_user_data_dir_for_session() -> Path:
 
 
 # OAuth 有効時に認証不要なパス（前方一致）
-_PUBLIC_PREFIXES = ("/auth/", "/static/", "/help", "/api/public/", "/api/v1/")
+_PUBLIC_PREFIXES = ("/auth/", "/static/", "/help", "/api/public/", "/api/v1/", "/dev-guide")
 # OAuth 有効時に認証不要な完全一致パス
 _PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info", "/api/internal/auto-fetch", "/api/internal/auto-fetch-all"}
 
@@ -733,6 +733,26 @@ def help_page():
 def help_usage_page():
     """Yondaの使い方ページ"""
     return render_template("help_usage.html")
+
+
+@app.route("/dev-guide")
+def dev_guide_page():
+    """Cursor + Claude アプリ開発ガイドページ"""
+    import markdown as _md
+    guide_path = Path(__file__).parent / "docs" / "cursor_claude_amazon_app.md"
+    if not guide_path.exists():
+        return "ガイドが見つかりません", 404
+    raw = guide_path.read_text(encoding="utf-8")
+    html = _md.markdown(
+        raw,
+        extensions=["tables", "fenced_code", "toc", "nl2br"],
+    )
+    # h1 タイトルを抽出
+    import re as _re
+    title_match = _re.search(r"<h1[^>]*>(.*?)</h1>", html)
+    title = title_match.group(1) if title_match else "開発ガイド"
+    title = _re.sub(r"<[^>]+>", "", title)  # HTMLタグを除去
+    return render_template("dev_guide.html", content=html, title=title)
 
 
 @app.route("/api/isbn/<isbn>")

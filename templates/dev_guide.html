@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }} — Yonda</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .guide-wrap {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 4rem;
+    }
+    .guide-back {
+      display: inline-block;
+      margin-bottom: 1.25rem;
+      font-size: 0.85rem;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .guide-back:hover { text-decoration: underline; }
+
+    .guide-body h1 {
+      font-size: 1.5rem;
+      line-height: 1.4;
+      margin: 0 0 0.5rem;
+      color: var(--accent);
+    }
+    .guide-body > p:first-of-type {
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+      margin-bottom: 2rem;
+      border-left: 3px solid var(--accent);
+      padding-left: 0.75rem;
+    }
+    .guide-body h2 {
+      font-size: 1.15rem;
+      margin: 2.5rem 0 0.75rem;
+      padding-bottom: 0.3rem;
+      border-bottom: 2px solid var(--accent);
+      color: var(--text);
+    }
+    .guide-body h3 {
+      font-size: 1rem;
+      margin: 1.5rem 0 0.5rem;
+      color: var(--text);
+    }
+    .guide-body h4 {
+      font-size: 0.95rem;
+      margin: 1.25rem 0 0.4rem;
+      color: var(--text-secondary);
+    }
+    .guide-body p {
+      font-size: 0.9rem;
+      line-height: 1.8;
+      color: var(--text-secondary);
+      margin-bottom: 0.75rem;
+    }
+    .guide-body ul, .guide-body ol {
+      font-size: 0.9rem;
+      line-height: 1.7;
+      color: var(--text-secondary);
+      padding-left: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .guide-body li { margin-bottom: 0.25rem; }
+    .guide-body a { color: var(--accent); }
+    .guide-body a:hover { text-decoration: underline; }
+    .guide-body strong { color: var(--text); }
+    .guide-body code {
+      font-family: 'Menlo', 'Consolas', monospace;
+      font-size: 0.82em;
+      background: var(--surface2);
+      padding: 0.15em 0.4em;
+      border-radius: 3px;
+      color: var(--text);
+    }
+    .guide-body pre {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      margin: 0.75rem 0 1.25rem;
+    }
+    .guide-body pre code {
+      background: none;
+      padding: 0;
+      font-size: 0.82rem;
+      line-height: 1.6;
+    }
+    .guide-body table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-bottom: 1.25rem;
+      overflow-x: auto;
+      display: block;
+    }
+    .guide-body th, .guide-body td {
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.65rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    .guide-body th {
+      background: var(--surface2);
+      font-weight: 600;
+      color: var(--text);
+    }
+    .guide-body blockquote {
+      border-left: 4px solid var(--accent);
+      margin: 0 0 1rem;
+      padding: 0.5rem 1rem;
+      background: var(--surface2);
+      border-radius: 0 var(--radius) var(--radius) 0;
+    }
+    .guide-body blockquote p {
+      margin: 0;
+      font-style: italic;
+    }
+    .guide-body hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2rem 0;
+    }
+
+    /* 目次スタイル */
+    .guide-toc {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      margin-bottom: 2rem;
+      font-size: 0.85rem;
+    }
+    .guide-toc summary {
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      margin-bottom: 0.5rem;
+    }
+    .guide-toc ol { margin: 0.5rem 0 0; padding-left: 1.25rem; }
+    .guide-toc li { margin-bottom: 0.2rem; line-height: 1.5; }
+
+    @media (max-width: 600px) {
+      .guide-body pre { font-size: 0.75rem; }
+      .guide-body h1 { font-size: 1.25rem; }
+      .guide-body h2 { font-size: 1.05rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="guide-wrap">
+      <a href="{{ url_for('help_usage_page') }}" class="guide-back">← Yondaの使い方へ戻る</a>
+      <div class="guide-body">
+        {{ content | safe }}
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -42,6 +42,7 @@
         <a href="#flags">非公開・非表示</a>
         <a href="#api">外部 API</a>
         <a href="{{ url_for('help_page') }}">設定のヘルプ</a>
+        <a href="{{ url_for('dev_guide_page') }}" target="_blank">📖 開発ガイド</a>
       </nav>
 
       <!-- ===== 読書記録取込み ===== -->
@@ -258,6 +259,23 @@
       <div class="help-note">
         本の各フィールド: <code>title</code> / <code>author</code> / <code>genre</code> / <code>cover</code> / <code>source</code> / <code>completed</code> / <code>completed_date</code> / <code>rating</code> / <code>comment</code> / <code>isbn</code> / <code>asin</code> / <code>runtime_length_min</code>
       </div>
+
+      <!-- ===== 開発者向け ===== -->
+      <h2 id="devguide">このアプリの作り方</h2>
+      <p>Yonda は <strong>Cursor + Claude</strong> を使って週末だけで開発しました。同様のアプリを自分で作りたい方向けに、設計・実装・デプロイの全工程を解説した開発ガイドを公開しています。</p>
+      <ul>
+        <li>マルチユーザー対応の仕組み（threading.local によるデータ分離）</li>
+        <li>任意の市区町村図書館に対応できる汎用アダプタ設計</li>
+        <li>Audible・Kindle からの自動データ取得</li>
+        <li>Cloud Run へのデプロイ・定期同期の仕組み</li>
+        <li>Cursor + Claude を使った AI 駆動開発の進め方</li>
+      </ul>
+      <p>
+        <a href="{{ url_for('dev_guide_page') }}" target="_blank"
+           style="display:inline-block;padding:0.5rem 1.2rem;background:var(--accent);color:#fff;border-radius:var(--radius);text-decoration:none;font-size:0.9rem;font-weight:600;">
+          📖 開発ガイドを読む →
+        </a>
+      </p>
 
     </div>
   </div>
