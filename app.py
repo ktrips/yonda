@@ -605,10 +605,41 @@ def api_internal_auto_fetch_all():
     # Firestore からユーザー一覧を取得
     fs_users = _fs.list_sync_users()
 
-    # Firestore にユーザーが未登録の場合はファイルシステムスキャンにフォールバック（R2 対応）
+    # Firestore に sources フラグがない場合、ファイルシステムの credentials.json を見てフラグを補完
     if not fs_users:
-        logger.info("auto-fetch-all: Firestore にユーザーなし → /api/internal/auto-fetch にフォールバック")
-        return api_internal_auto_fetch()
+        users_dir = library_service.DATA_DIR / "users"
+        if users_dir.exists():
+            for user_dir in users_dir.iterdir():
+                if not user_dir.is_dir():
+                    continue
+                uid_candidate = user_dir.name
+                sources_candidate: dict = {}
+                creds_file = user_dir / "credentials.json"
+                if creds_file.exists():
+                    try:
+                        import json as _json  # noqa: PLC0415
+                        creds = _json.loads(creds_file.read_text(encoding="utf-8"))
+                        if creds.get("setagaya", {}).get("user_id"):
+                            sources_candidate["setagaya"] = True
+                        if creds.get("kindle", {}).get("user_id"):
+                            sources_candidate["kindle"] = True
+                    except Exception:
+                        pass
+                if (user_dir / "auth_jp.json").exists():
+                    sources_candidate["audible"] = True
+                if sources_candidate:
+                    # Firestore に sources フラグを自動設定して同期対象に含める
+                    try:
+                        for src, enabled in sources_candidate.items():
+                            _fs.update_user_sources(uid_candidate, src, enabled)
+                        logger.warning("auto-fetch-all: uid=%s の sources フラグを自動設定: %s",
+                                       uid_candidate, sources_candidate)
+                    except Exception as e:
+                        logger.warning("auto-fetch-all: sources 自動設定エラー uid=%s: %s", uid_candidate, e)
+                    fs_users.append({"uid": uid_candidate, "sources": sources_candidate})
+        if not fs_users:
+            logger.warning("auto-fetch-all: 同期対象ユーザーなし")
+            return jsonify({"status": "no_users"}), 200
 
     source_map = {"setagaya": "setagaya", "audible": "audible_jp", "kindle": "kindle"}
 
