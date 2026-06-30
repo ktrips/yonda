@@ -652,7 +652,7 @@ def api_internal_auto_fetch_all():
             return target_uid, {"error": "データディレクトリが見つかりません"}
 
         library_service.set_user_data_dir(user_data_dir)
-        profile = _fs.get_user_profile(target_uid)
+        profile = _fs.get_user_public_profile(target_uid)
 
         results: dict = {}
         errors: dict = {}
