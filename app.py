@@ -137,8 +137,11 @@ if _OAUTH_ENABLED:
 
 
 def get_current_user() -> dict | None:
-    """セッションからログイン中ユーザー情報を返す。未ログインなら None。"""
-    return session.get("user")
+    """セッションからログイン中ユーザー情報を返す。未ログインまたはコンテキスト外なら None。"""
+    try:
+        return session.get("user")
+    except RuntimeError:
+        return None
 
 
 def get_user_data_dir_for_session() -> Path:
@@ -662,12 +665,40 @@ def api_internal_auto_fetch_all():
             lib_id = source_map.get(src_key, src_key)
             try:
                 prev_payloads[lib_id] = library_service.load_saved_for(lib_id)
-                # エンリッチはスキップ（yonda-enrich-daily で補完）
+                # エンリッチはスキップするが既存ジャンル・概要を引き継ぐ
                 payload = library_service.fetch_and_save(lib_id, skip_enrich=True)
                 curr_payloads[lib_id] = payload
                 results[src_key] = {"total": payload.get("total", 0)}
                 logger.warning("auto-fetch-all: uid=%s source=%s 完了 (%d冊)",
                                target_uid, src_key, payload.get("total", 0))
+                # 図書館・Kindleのみ: ジャンルなし本を小バッチで補完（API + AI）
+                if lib_id in ("setagaya", "kindle"):
+                    try:
+                        enrich_result = library_service.enrich_library_books_missing_genre(
+                            library_id=lib_id, max_books=20
+                        )
+                        updated_by_api = enrich_result.get("updated", 0)
+                        # 外部APIで取れなかった本はAIで補完
+                        still_missing = [
+                            b for b in enrich_result.get("books", [])
+                            if not b.get("genre")
+                        ]
+                        ai_updated = 0
+                        if still_missing:
+                            try:
+                                ai_updated = _enrich_missing_books_with_ai(lib_id, still_missing)
+                            except Exception as ai_err:
+                                logger.warning("auto-fetch-all: uid=%s %s AI補完エラー: %s",
+                                               target_uid, lib_id, ai_err)
+                        total_updated = updated_by_api + ai_updated
+                        if total_updated:
+                            logger.warning(
+                                "auto-fetch-all: uid=%s %s ジャンル補完 %d 件 (API=%d AI=%d)",
+                                target_uid, lib_id, total_updated, updated_by_api, ai_updated
+                            )
+                    except Exception as enrich_err:
+                        logger.warning("auto-fetch-all: uid=%s %s ジャンル補完エラー: %s",
+                                       target_uid, lib_id, enrich_err)
             except Exception as e:
                 logger.error("auto-fetch-all: uid=%s source=%s エラー: %s", target_uid, src_key, e)
                 errors[src_key] = str(e)
@@ -3117,11 +3148,28 @@ def api_enrich():
 @app.route("/api/enrich-library-genre", methods=["POST"])
 def api_enrich_library_genre():
     """図書館本のジャンル・概要が未設定の直近N冊を補完する。
-    Open Library / Google Books API 取得後、取れなかった本は AI で推定する。"""
+    Open Library / Google Books API 取得後、取れなかった本は AI で推定する。
+    uid パラメータを指定すると内部トークン認証で任意ユーザーのデータを処理できる。"""
+    import hmac as _hmac
+    import firestore_service as _fs  # noqa: PLC0415
+
     try:
         body = request.get_json(silent=True) or {}
         library_id = body.get("library_id", "setagaya")
         max_books = int(body.get("max_books", 10))
+        target_uid = body.get("uid")
+
+        # uid 指定時は内部トークン認証が必要
+        if target_uid:
+            is_scheduler = request.headers.get("X-CloudScheduler", "").lower() == "true"
+            token = request.headers.get("X-Internal-Token", "")
+            token_ok = _INTERNAL_TOKEN and _hmac.compare_digest(token, _INTERNAL_TOKEN)
+            if not is_scheduler and not token_ok:
+                uid = _get_current_uid()
+                if uid != target_uid:
+                    return jsonify({"error": "unauthorized"}), 401
+            user_data_dir = library_service.DATA_DIR / "users" / target_uid
+            library_service.set_user_data_dir(user_data_dir)
 
         result = library_service.enrich_library_books_missing_genre(
             library_id=library_id, max_books=max_books
@@ -3133,6 +3181,9 @@ def api_enrich_library_genre():
             ai_updated = _enrich_missing_books_with_ai(library_id, still_missing)
             result["ai_updated"] = ai_updated
             result["updated"] = result.get("updated", 0) + ai_updated
+
+        if target_uid:
+            library_service.set_user_data_dir(library_service.DATA_DIR)
 
         return jsonify({"success": True, **result})
     except Exception as e:

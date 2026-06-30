@@ -4056,13 +4056,41 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 .header-user-avatar {
   width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
   border: 2px solid rgba(255,255,255,0.6);
+  flex-shrink: 0;
+}
+.header-user-info {
+  display: flex; flex-direction: column; gap: 0;
+  min-width: 0;
 }
 .header-user-name {
   font-size: 0.78rem; color: var(--header-text, #fff);
   max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  line-height: 1.2;
+}
+.header-user-completed {
+  font-size: 0.65rem; color: rgba(255,255,255,0.8);
+  white-space: nowrap; line-height: 1.2;
 }
 @media (max-width: 600px) {
   .header-user-name { display: none; }
+  .header-user-completed { display: none; }
+}
+
+/* 未ログイン時の全読了数表示 */
+.header-total-completed {
+  display: inline-flex; align-items: baseline; gap: 0.2rem;
+  margin-right: 0.4rem; padding: 0.15rem 0.5rem;
+  border-radius: 1rem; background: rgba(255,255,255,0.15);
+}
+.header-total-count {
+  font-size: 1rem; font-weight: 700; color: #fff; line-height: 1;
+}
+.header-total-label {
+  font-size: 0.65rem; color: rgba(255,255,255,0.85);
+}
+@media (max-width: 600px) {
+  .header-total-completed { margin-right: 0.25rem; padding: 0.12rem 0.4rem; }
+  .header-total-count { font-size: 0.9rem; }
 }
 
 .header-login-btn {

@@ -1123,18 +1123,17 @@ def _fetch_summary_and_genre_from_open_library(
 
 def _enrich_library_books(records: list[BookRecord], library_id: str, skip: bool = False) -> None:
     """図書館/Kindleの本について、概要・ジャンルは Google Books / Open Library から取得。
-    skip=True の場合は何もしない（自動同期時にタイムアウトを防ぐため）。"""
-    if skip:
-        return
+    skip=True の場合は外部APIコールはスキップするが、既存ファイルのデータは引き継ぐ。"""
     if library_id not in ("setagaya", "kindle"):
         return
     base = "https://libweb.city.setagaya.tokyo.jp"
     summary_count = genre_count = cover_count = 0
     google_api_key = _get_google_api_key()
-    if google_api_key:
-        logger.info("%s: Google Books API キーを使用してエンリッチ", library_id)
-    else:
-        logger.warning("%s: Google Books API キー未設定。レート制限に注意", library_id)
+    if not skip:
+        if google_api_key:
+            logger.info("%s: Google Books API キーを使用してエンリッチ", library_id)
+        else:
+            logger.warning("%s: Google Books API キー未設定。レート制限に注意", library_id)
     existing_by_key: dict[str, dict] = {}
     existing_by_title_author: dict[str, dict] = {}
     try:
@@ -1177,6 +1176,11 @@ def _enrich_library_books(records: list[BookRecord], library_id: str, skip: bool
         needs_summary = not (book.full_summary or book.summary or "").strip()
         needs_genre = not (book.genre or "").strip()
         needs_cover = bool(is_placeholder)
+        # skip=True のときは外部APIを呼ばない（既存データの引き継ぎのみ）
+        if skip:
+            if needs_cover:
+                book.cover_url = LIBRARY_COVER_URL
+            continue
         # ジャンル・概要・表紙が未設定であれば、未読・既読を問わず外部APIから補完する。
         # （新規追加時および未読→既読の遷移時どちらでも補完される）
         enrich_allowed = True
@@ -1282,14 +1286,22 @@ def enrich_library_books_missing_genre(
     updated = 0
     skipped = 0
     errors = 0
+    # ジャンル・概要なし本を優先してtargetsに追加（カバーのみ欠損は後回し）
     targets = []
+    targets_cover_only = []
     for book in books:
-        if updated + len(targets) >= max_books:
-            break
-        needs_summary = not (book.get("genre") or "").strip() or not (book.get("summary") or book.get("full_summary") or "").strip()
+        needs_genre = not (book.get("genre") or "").strip()
+        needs_text = not (book.get("summary") or book.get("full_summary") or "").strip()
         needs_cover = not (book.get("cover_url") or "").strip() or book.get("cover_url") == LIBRARY_COVER_URL
-        if needs_summary or needs_cover:
+        if needs_genre or needs_text:
             targets.append(book)
+        elif needs_cover:
+            targets_cover_only.append(book)
+    # ジャンル・概要なし本がmax_books未満ならカバーのみ欠損も補完
+    remaining = max_books - len(targets)
+    if remaining > 0:
+        targets.extend(targets_cover_only[:remaining])
+    targets = targets[:max_books]
 
     for book in targets:
         title = (book.get("title") or "").strip()

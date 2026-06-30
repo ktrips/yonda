@@ -55,6 +55,7 @@ function _applyAuthUI() {
 
   if (_authUser) {
     if (loginBtn) loginBtn.style.display = 'none';
+    document.getElementById('headerTotalCompleted')?.style.setProperty('display', 'none');
     if (userEl) userEl.style.display = '';
     if (avatarEl && _authUser.picture) {
       avatarEl.src = _authUser.picture.includes('=s') ? _authUser.picture : _authUser.picture + '=s64-c';
@@ -75,6 +76,7 @@ function _applyAuthUI() {
     document.getElementById('headerWelcomeBanner')?.style.setProperty('display', 'none');
     document.getElementById('hamburgerBtn')?.style.setProperty('display', '');
     _showAllTabs();
+    _updateHeaderCompletedCount();
   } else {
     if (loginBtn) loginBtn.style.display = '';
     if (userEl) userEl.style.display = 'none';
@@ -83,6 +85,7 @@ function _applyAuthUI() {
     if (menuLoginBtn) menuLoginBtn.style.display = '';
     if (menuLoggedInSection) menuLoggedInSection.style.display = 'none';
     document.getElementById('headerWelcomeBanner')?.style.setProperty('display', '');
+    _updateHeaderCompletedCount();
     // 未ログイン時はハンバーガーを非表示
     document.getElementById('hamburgerBtn')?.style.setProperty('display', 'none');
     _showPublicOnly();
@@ -168,8 +171,31 @@ async function loadPublicUserStats() {
     const data = await res.json();
     _publicUserStatsData = data.users || [];
     _renderPublicUserBubbles();
+    _updateHeaderCompletedCount();
   } catch (_) {
     // 取得失敗時は非表示のまま
+  }
+}
+
+function _updateHeaderCompletedCount() {
+  const totalEl = document.getElementById('headerTotalCompleted');
+  const totalCountEl = document.getElementById('headerTotalCount');
+  const userCompletedEl = document.getElementById('headerUserCompleted');
+
+  if (_authUser) {
+    // ログイン済み: 自分の読了数を表示
+    if (totalEl) totalEl.style.display = 'none';
+    const myUid = _authUser.sub;
+    const myStats = _publicUserStatsData.find(u => u.uid === myUid);
+    const myCount = myStats ? (myStats.completed_count || 0) : 0;
+    if (userCompletedEl) {
+      userCompletedEl.textContent = myCount > 0 ? `${myCount}冊読了` : '';
+    }
+  } else {
+    // 未ログイン: 全ユーザー合計読了数を表示
+    const total = _publicUserStatsData.reduce((sum, u) => sum + (u.completed_count || 0), 0);
+    if (totalCountEl) totalCountEl.textContent = total.toLocaleString();
+    if (totalEl) totalEl.style.display = total > 0 ? 'flex' : 'none';
   }
 }
 

@@ -56,9 +56,18 @@
 
       <!-- ログイン状態表示・ログインボタン・ハンバーガー（右端グループ） -->
       <div class="header-right">
+        <!-- ログイン済み: アイコン + 名前 + 読了数 -->
         <div class="header-user" id="headerUser" style="display:none;" onclick="confirmLogout()" title="タップでログアウト">
           <img class="header-user-avatar" id="headerUserAvatar" src="" alt="" width="28" height="28">
-          <span class="header-user-name" id="headerUserName"></span>
+          <div class="header-user-info">
+            <span class="header-user-name" id="headerUserName"></span>
+            <span class="header-user-completed" id="headerUserCompleted"></span>
+          </div>
+        </div>
+        <!-- 未ログイン: 全ユーザー合計読了数 -->
+        <div class="header-total-completed" id="headerTotalCompleted" style="display:none;">
+          <span class="header-total-count" id="headerTotalCount">0</span>
+          <span class="header-total-label">冊読了</span>
         </div>
         <a href="/auth/login" class="header-login-btn" id="headerLoginBtn" style="display:none;">Googleログイン</a>
         <button type="button" class="hamburger-btn" id="hamburgerBtn" aria-label="メニュー">
