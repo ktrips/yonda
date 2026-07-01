@@ -4067,28 +4067,32 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 
 /* 未ログイン時の全読了数表示 */
 .header-total-completed {
-  display: inline-flex; align-items: baseline; gap: 0.1rem;
-  margin-right: 0.35rem; padding: 0.1rem 0.4rem;
-  border-radius: 1rem; background: rgba(255,255,255,0.15);
+  display: inline-flex;
+  flex-direction: column;   /* 縦積み: みんな / 〇冊 */
+  align-items: center;
+  gap: 0;
+  margin-right: 0.3rem; padding: 0.15rem 0.45rem;
+  border-radius: 0.6rem; background: rgba(255,255,255,0.15);
+  line-height: 1.1;
 }
 .header-total-label-pre {
-  font-size: 0.6rem; color: rgba(255,255,255,0.8); line-height: 1;
+  font-size: 0.55rem; color: rgba(255,255,255,0.8); white-space: nowrap;
+}
+/* 〇冊 を横並びでまとめる */
+.header-total-bottom {
+  display: inline-flex; align-items: baseline; gap: 0.08rem;
 }
 .header-total-count {
-  font-size: 0.85rem; font-weight: 700; color: #fff; line-height: 1;
+  font-size: 0.82rem; font-weight: 700; color: #fff; line-height: 1;
 }
 .header-total-label {
-  font-size: 0.6rem; color: rgba(255,255,255,0.85);
-}
-@media (max-width: 600px) {
-  .header-total-completed { margin-right: 0.2rem; padding: 0.08rem 0.3rem; }
-  .header-total-count { font-size: 0.78rem; }
+  font-size: 0.55rem; color: rgba(255,255,255,0.85);
 }
 
 .header-login-btn {
   display: inline-block;
-  font-size: 0.72rem; font-weight: 600;
-  padding: 0.25rem 0.6rem; border-radius: 1rem;
+  font-size: 0.65rem; font-weight: 600;
+  padding: 0.22rem 0.5rem; border-radius: 1rem;
   background: #fff; color: var(--accent);
   text-decoration: none;
   white-space: nowrap;
