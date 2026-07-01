@@ -327,10 +327,10 @@ header {
 /* === Hamburger === */
 .hamburger-btn {
   background: none; border: none; cursor: pointer;
-  display: flex; flex-direction: column; gap: 5px; padding: 8px; margin-left: 0.5rem;
+  display: flex; flex-direction: column; gap: 4px; padding: 6px; margin-left: 0.3rem;
 }
 .hamburger-btn span {
-  display: block; width: 22px; height: 2px;
+  display: block; width: 18px; height: 2px;
   background: var(--text-on-header); border-radius: 2px;
 }
 .hamburger-menu {
@@ -4028,15 +4028,15 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 }
 /* ---- ログイン UI ---- */
 .header-user {
-  display: inline-flex; align-items: center; gap: 0.4rem;
-  margin-right: 0.5rem; cursor: pointer;
-  padding: 0.2rem 0.4rem; border-radius: 1rem;
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  margin-right: 0.35rem; cursor: pointer;
+  padding: 0.15rem 0.3rem; border-radius: 1rem;
   transition: background 0.15s;
 }
 .header-user:hover { background: rgba(255,255,255,0.15); }
 .header-user-avatar {
-  width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
-  border: 2px solid rgba(255,255,255,0.6);
+  width: 24px; height: 24px; border-radius: 50%; object-fit: cover;
+  border: 1.5px solid rgba(255,255,255,0.6);
   flex-shrink: 0;
 }
 .header-user-info {
@@ -4044,12 +4044,12 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
   min-width: 0;
 }
 .header-user-name {
-  font-size: 0.78rem; color: var(--header-text, #fff);
-  max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.7rem; color: var(--header-text, #fff);
+  max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   line-height: 1.2;
 }
 .header-user-completed {
-  font-size: 0.65rem; color: rgba(255,255,255,0.8);
+  font-size: 0.6rem; color: rgba(255,255,255,0.8);
   white-space: nowrap; line-height: 1.2;
 }
 @media (max-width: 600px) {
@@ -4059,34 +4059,37 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 
 /* 未ログイン時の全読了数表示 */
 .header-total-completed {
-  display: inline-flex; align-items: baseline; gap: 0.2rem;
-  margin-right: 0.4rem; padding: 0.15rem 0.5rem;
+  display: inline-flex; align-items: baseline; gap: 0.1rem;
+  margin-right: 0.35rem; padding: 0.1rem 0.4rem;
   border-radius: 1rem; background: rgba(255,255,255,0.15);
 }
+.header-total-label-pre {
+  font-size: 0.6rem; color: rgba(255,255,255,0.8); line-height: 1;
+}
 .header-total-count {
-  font-size: 1rem; font-weight: 700; color: #fff; line-height: 1;
+  font-size: 0.85rem; font-weight: 700; color: #fff; line-height: 1;
 }
 .header-total-label {
-  font-size: 0.65rem; color: rgba(255,255,255,0.85);
+  font-size: 0.6rem; color: rgba(255,255,255,0.85);
 }
 @media (max-width: 600px) {
-  .header-total-completed { margin-right: 0.25rem; padding: 0.12rem 0.4rem; }
-  .header-total-count { font-size: 0.9rem; }
+  .header-total-completed { margin-right: 0.2rem; padding: 0.08rem 0.3rem; }
+  .header-total-count { font-size: 0.78rem; }
 }
 
 .header-login-btn {
   display: inline-block;
-  font-size: 0.78rem; font-weight: 600;
-  padding: 0.3rem 0.75rem; border-radius: 1rem;
+  font-size: 0.7rem; font-weight: 600;
+  padding: 0.22rem 0.55rem; border-radius: 1rem;
   background: #fff; color: var(--accent);
-  text-decoration: none; margin-right: 0.5rem;
+  text-decoration: none; margin-right: 0.4rem;
   white-space: nowrap;
 }
 .header-login-btn:hover { background: #f0f0f0; }
 @media (max-width: 600px) {
   .header-login-btn {
-    font-size: 0.7rem; padding: 0.25rem 0.5rem;
-    margin-right: 0.25rem;
+    font-size: 0.65rem; padding: 0.18rem 0.4rem;
+    margin-right: 0.2rem;
   }
 }
 
