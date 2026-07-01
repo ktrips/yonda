@@ -1749,7 +1749,14 @@ def api_books():
         else:
             payload = {"success": True, **data}
         import hashlib as _hl  # noqa: PLC0415
-        etag = _hl.md5(str(len(payload.get("books", []))).encode()).hexdigest()[:12]
+        # 冊数だけでなく各本のIDと読了日を使ってハッシュを生成
+        # → 内容変更（評価・読了フラグ更新等）を正しく検知できる
+        books = payload.get("books", [])
+        _fingerprint = "|".join(
+            f"{b.get('catalog_number') or b.get('title','')[:20]}:{b.get('completed_date','')[:10]}:{b.get('rating',0)}"
+            for b in books[:500]  # 先頭500冊のみでハッシュ（パフォーマンスと精度のバランス）
+        ) + f"|total={len(books)}"
+        etag = _hl.md5(_fingerprint.encode()).hexdigest()[:16]
         if request.headers.get("If-None-Match") == etag:
             return "", 304
         resp = jsonify(payload)
@@ -3407,7 +3414,10 @@ def api_public_user_stats():
     except Exception as e:
         logger.warning("公開ユーザー統計取得エラー: %s", e)
         users = []
-    return jsonify({"success": True, "users": users})
+    resp = jsonify({"success": True, "users": users})
+    # 公開統計は頻繁に変わらないため5分間キャッシュ可
+    resp.headers["Cache-Control"] = "public, max-age=300, stale-while-revalidate=60"
+    return resp
 
 
 @app.route("/api/internal/update-stats", methods=["POST"])

@@ -200,35 +200,7 @@ function _updateHeaderCompletedCount() {
 }
 
 function _renderPublicUserBubbles() {
-  const container = document.getElementById('headerUserStats');
-  if (!container) return;
-  if (!_publicUserStatsData.length) {
-    container.style.display = 'none';
-    return;
-  }
-  const html = _publicUserStatsData.map(u => {
-    const imgSrc = u.picture
-      ? (u.picture.includes('=s') ? u.picture : u.picture + '=s48-c')
-      : '';
-    const avatar = imgSrc
-      ? `<img class="user-bubble-avatar" src="${imgSrc}" alt="${_esc(u.name)}" width="28" height="28">`
-      : `<span class="user-bubble-initials">${_esc((u.name || '?')[0])}</span>`;
-    const count = u.completed_count || 0;
-    return `<button type="button" class="user-bubble" data-uid="${_esc(u.uid)}" title="${_esc(u.name)}の読了本">
-      ${avatar}
-      <span class="user-bubble-count">${count}</span>
-    </button>`;
-  }).join('');
-  container.innerHTML = html;
-  container.style.display = 'flex';
-
-  container.querySelectorAll('.user-bubble').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const uid = btn.dataset.uid;
-      const user = _publicUserStatsData.find(u => u.uid === uid);
-      if (user) _openUserBooksModal(user);
-    });
-  });
+  // ユーザーバブルは非表示（_updateHeaderCompletedCount で合計数のみ表示）
 }
 
 function _esc(s) {
@@ -352,6 +324,26 @@ const _bookByCatalogMap = new Map();
 const _bookByTitleAuthorMap = new Map();
 /** book_id (UUID) → book のルックアップ Map */
 const _bookByIdMap = new Map();
+
+/**
+ * 全書籍データに検索・フィルタ用のキャッシュフィールドを事前計算する。
+ * applyFilters() のループ内で毎回計算するコストを排除する。
+ *   _normalizedGenre  : 正規化済みジャンル文字列
+ *   _normalizedTitle  : 正規化済みタイトル（検索用）
+ *   _normalizedAuthor : 正規化済み著者名（検索用）
+ *   _normalizedComment: 正規化済みコメント（検索用）
+ *   _completedDateStr : completed_date の YYYY-MM-DD 文字列（日付比較を文字列演算に変換）
+ */
+function _preprocessBooks(books) {
+  for (const b of books) {
+    b._normalizedGenre   = normalizeGenre(b.genre || '');
+    b._normalizedTitle   = normalizeForSearch(b.title  || '');
+    b._normalizedAuthor  = normalizeForSearch(b.author || '');
+    b._normalizedComment = normalizeForSearch(b.comment || '');
+    // ISO文字列の先頭10文字が YYYY-MM-DD なので文字列比較で日付フィルタ可能
+    b._completedDateStr  = (b.completed_date || '').slice(0, 10);
+  }
+}
 
 function _rebuildBookIndexMap() {
   _bookIndexMap.clear();
@@ -504,10 +496,14 @@ function normalizeForSearch(str) {
     .replace(/[－―ー\-‐−]/g, '');         // ハイフン類
 }
 
-/** 正規化した検索語がテキストに含まれるか */
-function matchesSearch(normalizedQuery, text) {
+/** 正規化した検索語がテキストに含まれるか
+ * @param {string} normalizedQuery - 正規化済みクエリ
+ * @param {string} text - 検索対象（生テキスト or 事前正規化済み）
+ * @param {boolean} [alreadyNormalized=false] - text が既に正規化済みなら true
+ */
+function matchesSearch(normalizedQuery, text, alreadyNormalized = false) {
   if (!normalizedQuery) return true;
-  const n = normalizeForSearch(text);
+  const n = alreadyNormalized ? (text || '') : normalizeForSearch(text);
   return n.includes(normalizedQuery);
 }
 
@@ -1174,7 +1170,7 @@ async function _submitPaperBookAdd() {
     window._lastBookInfo = null;
     if (data.books) {
       allBooks = data.books;
-      for (const b of allBooks) b._normalizedGenre = normalizeGenre(b.genre || '');
+      _preprocessBooks(allBooks);
       _rebuildBookIndexMap();
       applyFilters();
       if (activeMainTab === 'yomu') renderBookSearchResults();
@@ -1366,7 +1362,7 @@ async function loadFromFile() {
       // バックグラウンドで最新を取得してキャッシュ更新（stale-while-revalidate）
       fetchBooks().then(fresh => {
         allBooks = fresh.books || [];
-        for (const b of allBooks) b._normalizedGenre = normalizeGenre(b.genre || '');
+        _preprocessBooks(allBooks);
         _rebuildBookIndexMap();
         _bookStatsCache = null;
         updateStats();
@@ -1380,7 +1376,7 @@ async function loadFromFile() {
     }
 
     allBooks = data.books || [];
-    for (const b of allBooks) b._normalizedGenre = normalizeGenre(b.genre || '');
+    _preprocessBooks(allBooks);
     _rebuildBookIndexMap();
     const sources = data.sources || [];
     updateStats();
@@ -2278,13 +2274,23 @@ function applyFilters() {
   const genre = document.getElementById('genreFilter').value;
   const rating = document.getElementById('ratingFilter').value;
 
+  // 日付フィルタ用のカットオフ文字列をループ外で1回だけ計算（new Date を2000回生成しない）
+  const _now = Date.now();
+  const weekAgoStr  = new Date(_now - 7  * 86400000).toISOString().slice(0, 10);
+  const monthAgoStr = (() => {
+    const d = new Date(_now); d.setDate(1);
+    return d.toISOString().slice(0, 10);
+  })();
+  const yearStr = String(new Date(_now).getFullYear());
+
   let books = allBooks.slice();
 
   if (searchNorm) {
+    // 事前計算済みの正規化フィールドを使うので normalizeForSearch の再実行なし
     books = books.filter(b =>
-      matchesSearch(searchNorm, b.title) ||
-      matchesSearch(searchNorm, b.author) ||
-      matchesSearch(searchNorm, b.comment)
+      matchesSearch(searchNorm, b._normalizedTitle,   true) ||
+      matchesSearch(searchNorm, b._normalizedAuthor,  true) ||
+      matchesSearch(searchNorm, b._normalizedComment, true)
     );
   }
   if (source !== 'all') {
@@ -2298,21 +2304,12 @@ function applyFilters() {
   } else if (rating === 'in_progress') {
     books = books.filter(b => isInProgress(b));
   } else if (rating === 'weekly_completed') {
-    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    books = books.filter(b =>
-      b.completed && b.completed_date && new Date(b.completed_date) >= weekAgo
-    );
+    // 文字列比較（YYYY-MM-DD の辞書順 = 日付順）で new Date() 生成を回避
+    books = books.filter(b => b.completed && b._completedDateStr >= weekAgoStr);
   } else if (rating === 'monthly_completed') {
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    books = books.filter(b =>
-      b.completed && b.completed_date && new Date(b.completed_date) >= monthStart
-    );
+    books = books.filter(b => b.completed && b._completedDateStr >= monthAgoStr);
   } else if (rating === 'yearly_completed') {
-    const year = new Date().getFullYear();
-    books = books.filter(b =>
-      b.completed && b.completed_date && b.completed_date.startsWith(String(year))
-    );
+    books = books.filter(b => b.completed && b._completedDateStr.startsWith(yearStr));
   } else if (rating === 'not_completed') {
     books = books.filter(b => isUnread(b));
   } else if (rating === 'favorite') {
@@ -4942,7 +4939,7 @@ function renderBookCardHtml(book, { extraClass = '', extraAttrs = '', showUnrate
   return `
     <div class="book-card${book.completed ? ' completed' : ''}${srcClass}${extraClass ? ' ' + extraClass : ''}"
          role="button" tabindex="0" style="background:${cardBg}; cursor:pointer;" ${extraAttrs}>
-      <img class="book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy"
+      <img class="book-cover" src="${escapeHtml(cover)}" alt="" loading="lazy" decoding="async"
            onerror="this.src='${NO_COVER}'">
       <div class="book-card-body">
         <div class="book-card-title">${newBadge}${escapeHtml(book.title || '—')}</div>
