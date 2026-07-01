@@ -20,6 +20,18 @@
 - **ユーザーごとのデータ同期** の仕組み
 - **任意の市区町村図書館** に対応できる汎用アダプタ設計
 - Google Cloud Run へのデプロイと運用
+- テスト・監視・コスト管理の実践
+
+### 対象読者
+
+- Python の基礎知識がある方（関数・クラスが書ける程度）
+- Web アプリを作ったことがない、または初挑戦の方
+- 既存のコード生成ツールをもっと効果的に使いたい方
+- 趣味の開発を本番環境で動かしたい方
+
+### 本書の読み方
+
+コードは「写経」より「理解」を重視しています。各セクションに **「なぜそうするか」** の説明を入れており、それを Claude に聞くための質問例も載せています。詰まったら気軽に Claude に聞いてください。
 
 ---
 
@@ -43,8 +55,15 @@
 16. [Amazon 連携とアフィリエイト](#16-amazon連携とアフィリエイト)
 17. [コミュニティ機能](#17-コミュニティ機能)
 18. [Google Cloud Run へのデプロイ](#18-cloud-runへのデプロイ)
-19. [セキュリティの考慮事項](#19-セキュリティの考慮事項)
-20. [Cursor + Claude を使った開発の進め方](#20-cursor--claudeを使った開発の進め方)
+19. [ローカル開発・デバッグ手法](#19-ローカル開発デバッグ手法)
+20. [テスト戦略](#20-テスト戦略)
+21. [パフォーマンス最適化](#21-パフォーマンス最適化)
+22. [運用・監視・ログ](#22-運用監視ログ)
+23. [セキュリティの考慮事項](#23-セキュリティの考慮事項)
+24. [コスト最適化](#24-コスト最適化)
+25. [トラブルシューティング集](#25-トラブルシューティング集)
+26. [AI ツール・モデル完全比較](#26-aiツールモデル完全比較)
+27. [Cursor + Claude を使った開発の進め方](#27-cursor--claudeを使った開発の進め方)
 
 ---
 
@@ -103,6 +122,16 @@
 | AI | OpenAI GPT-4o / Google Gemini |
 | 書誌情報 | Google Books API / Open Library API |
 
+### なぜこの技術スタックを選んだか
+
+**Flask（軽量 Web フレームワーク）**: Django と比べてファイル数が少なく、AI が全体像を把握しやすい。1 ファイルで動く最小構成から始められる。
+
+**Vanilla JavaScript**: React / Vue / Svelte などのフレームワークは Claude が生成しやすいが、ビルドステップが不要な素の JS のほうが「ファイルを変更してリロード」だけで動く。趣味開発の速度に最適。
+
+**Firestore（ドキュメント DB）**: スキーマレスなので「後でフィールドを追加する」が自由にできる。Cloud Run との IAM 統合で認証設定が不要。無料枠が充実（1 日 5 万読取、2 万書込）。
+
+**Cloud Run（コンテナ実行）**: サーバー管理不要。使った分だけ課金。スケールゼロ（アクセスがない時は料金ゼロ）。
+
 ### データモデル
 
 #### BookRecord（書籍 1 冊のデータ構造）
@@ -149,6 +178,27 @@ community/
   messages_meta/
     items/
       {message_id}               ← みんなの読書記録メッセージ
+```
+
+### データフロー詳細
+
+```
+【同期フロー】
+Cloud Scheduler
+  → POST /api/internal/auto-fetch-all
+    → Firestore から同期対象ユーザー一覧を取得
+      → 各ユーザーの data/users/{uid}/ を参照
+        → AudibleAdapter / KindleAdapter / LibraryAdapter で取得
+          → library_service.fetch_and_save() で保存
+            → JSON ファイル (GCS) + Firestore に書き込み
+
+【読み込みフロー】
+ブラウザ GET /api/books
+  → Flask: session から uid を取得
+    → library_service.load_saved() を呼び出し
+      → キャッシュチェック（mtime ベース）
+        → Firestore から読み込み（失敗時はJSONフォールバック）
+          → JSON レスポンスとして返却
 ```
 
 ---
@@ -203,6 +253,67 @@ myapp/
     └── .gitkeep
 ```
 
+### requirements.txt の作成
+
+```
+flask>=3.0.0
+flask-compress>=1.14
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+gunicorn>=21.0.0
+authlib>=1.3.0
+google-cloud-firestore>=2.16.0
+google-cloud-storage>=2.16.0
+openai>=1.30.0
+google-generativeai>=0.5.0
+audible>=0.10.0
+python-dotenv>=1.0.0
+```
+
+### .env ファイルの設定
+
+ローカル開発では `.env` ファイルに環境変数を設定します。**絶対に git にコミットしないこと**。
+
+```bash
+# .env（.gitignore に追加すること）
+FLASK_SECRET_KEY=local-dev-secret-change-in-production
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+DATA_DIR=data
+YONDA_INTERNAL_TOKEN=local-dev-internal-token
+```
+
+```python
+# app.py の先頭で読み込む
+from dotenv import load_dotenv
+load_dotenv()
+```
+
+### .gitignore の設定
+
+```gitignore
+# 環境変数・認証情報
+.env
+*.json  # credentials は除外（例外はあとで追加）
+!requirements*.json
+
+# 開発用データ
+data/
+!data/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# IDE
+.DS_Store
+.idea/
+*.swp
+```
+
 ---
 
 ## 3. Flask アプリの基盤構築
@@ -230,6 +341,25 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
 @app.before_request
 def _before_request_handler():
     library_service.set_user_data_dir(get_user_data_dir_for_session())
+```
+
+### API ルートの設計方針
+
+```python
+# 公開API（ログイン不要）
+GET  /api/books              ← 全書籍一覧（自分のデータ）
+GET  /api/stats              ← 統計情報
+GET  /api/public-user-stats  ← 全ユーザーの読了数（公開）
+
+# 認証が必要なAPI
+POST /api/books/{id}/rating    ← 評価の更新
+POST /api/books/{id}/comment   ← コメントの更新
+POST /api/enrich-library-genre ← ジャンル補完
+GET  /api/ai-recommend         ← AI選書
+POST /api/book-insights/generate ← AI書評生成
+
+# 内部API（Cloud Scheduler専用）
+POST /api/internal/auto-fetch-all ← 全ユーザー同期
 ```
 
 ### スレッドローカルによるユーザーデータ分離
@@ -265,6 +395,16 @@ def load_saved() -> Optional[dict]:
     _saved_caches[key] = result
     _saved_cache_mtimes[key] = max_mtime
     return result
+```
+
+### レスポンスの gzip 圧縮効果
+
+書籍 2,000 冊の JSON は素のまま約 1.5 MB あります。`flask-compress` を有効にするだけで自動的に gzip 圧縮され、転送量が **約 80% 削減**（300 KB 程度）されます。
+
+```python
+from flask_compress import Compress
+Compress(app)
+# ← これだけで全レスポンスが自動圧縮される
 ```
 
 ---
@@ -355,6 +495,31 @@ def _restore_oauth_state_from_fs(state: str) -> bool:
     }
     state_file.unlink(missing_ok=True)
     return True
+```
+
+### ログアウト実装
+
+```python
+@app.route("/auth/logout")
+def auth_logout():
+    session.clear()
+    return redirect("/")
+```
+
+### ログイン状態の確認
+
+```python
+def get_current_user() -> dict | None:
+    """セッションからログイン中ユーザー情報を返す"""
+    try:
+        return session.get("user")
+    except RuntimeError:
+        # バックグラウンドスレッドからの呼び出し時はNoneを返す
+        return None
+
+def _get_current_uid() -> str | None:
+    user = get_current_user()
+    return user["sub"] if user else None
 ```
 
 ---
@@ -476,6 +641,29 @@ def auth_callback():
     return redirect("/")
 ```
 
+### 公開プロフィールの設計
+
+ユーザーの一部情報（読了数など）を他のユーザーに公開する機能です。
+
+```python
+def get_user_public_profile(uid: str) -> dict:
+    """他ユーザーに公開するプロフィール情報を返す"""
+    db = get_db()
+    if not db:
+        return {}
+    doc = db.collection("users").document(uid).get()
+    if not doc.exists:
+        return {}
+    data = doc.to_dict() or {}
+    # 公開情報のみを返す（メールアドレスなどは含めない）
+    return {
+        "uid":             uid,
+        "name":            data.get("name", ""),
+        "picture":         data.get("picture", ""),
+        "completed_count": data.get("completed_count", 0),
+    }
+```
+
 ---
 
 ## 6. Audible 連携
@@ -555,6 +743,54 @@ def _fetch_finished_status(self) -> dict[str, dict]:
     return result
 ```
 
+### BookRecord への変換
+
+```python
+def _to_book_record(self, item: dict, finished: dict) -> BookRecord:
+    asin = item.get("asin", "")
+    title = item.get("title", "")
+    runtime_min = item.get("runtime_length_min", 0)
+
+    fin_info = finished.get(asin, {})
+    percent = fin_info.get("percent", 0.0)
+    is_finished = fin_info.get("is_finished", False) or percent >= 0.95
+
+    return BookRecord(
+        title          = title,
+        author         = self._get_author(item),
+        loan_date      = item.get("purchase_date", "")[:10],
+        loan_location  = "Audible",
+        catalog_number = asin,
+        cover_url      = item.get("product_images", {}).get("500", ""),
+        detail_url     = f"https://www.audible.co.jp/pd/{asin}",
+        completed      = is_finished,
+        percent_complete = percent,
+        source         = "audible_jp",
+        runtime_length_min = runtime_min,
+        catalog_rating = item.get("overall_distribution", {}).get("average_rating", 0.0),
+    )
+```
+
+### Audible API レート制限への対処
+
+```python
+import time
+
+def _fetch_with_retry(self, endpoint: str, **kwargs) -> dict:
+    """レート制限時に指数バックオフでリトライ"""
+    for attempt in range(3):
+        try:
+            return self._client.get(endpoint, **kwargs)
+        except audible.exceptions.AudibleError as e:
+            if "429" in str(e) or "rate" in str(e).lower():
+                wait = 2 ** attempt
+                logger.warning("Audible レート制限。%d秒待機...", wait)
+                time.sleep(wait)
+            else:
+                raise
+    raise RuntimeError("Audible API のレート制限に達しました")
+```
+
 ---
 
 ## 7. Kindle 連携
@@ -597,6 +833,62 @@ def api_kindle_login():
         session_id = str(uuid.uuid4())
         _kindle_otp_sessions[session_id] = {"adapter": adapter, **data}
         return jsonify({"needs_otp": True, "session_id": session_id})
+```
+
+### FIONA API からの取得
+
+Amazon の内部 API（コードネーム FIONA）を使って、購入済み Kindle 本の一覧を取得します。
+
+```python
+def _fetch_from_amazon(self) -> list[BookRecord]:
+    """FIONA API で Kindle ライブラリを全取得"""
+    base_url = "https://read.amazon.co.jp/kindle-library/search"
+    books = []
+    batch_number = 0
+
+    while True:
+        params = {
+            "query":       "",
+            "libraryType": "BOOKS",
+            "sortType":    "recency",
+            "batchSize":   50,
+            "startIndex":  batch_number * 50,
+        }
+        resp = self._session.get(base_url, params=params, timeout=30)
+        data = resp.json()
+        items = data.get("itemsList", [])
+        if not items:
+            break
+
+        for item in items:
+            books.append(self._item_to_record(item))
+        batch_number += 1
+
+        if batch_number * 50 >= data.get("librarySize", 0):
+            break
+
+    return books
+```
+
+### 読書進捗の同期
+
+```python
+def _fetch_reading_progress(self, asin_list: list[str]) -> dict[str, float]:
+    """各本の読書進捗（%）を取得"""
+    progress = {}
+    # 50冊ずつバッチで取得
+    for i in range(0, len(asin_list), 50):
+        batch = asin_list[i:i+50]
+        params = {"asin": ",".join(batch)}
+        resp = self._session.get(
+            "https://read.amazon.co.jp/reading-progress",
+            params=params, timeout=20
+        )
+        for item in resp.json().get("progressList", []):
+            asin = item.get("asin", "")
+            pct  = item.get("positionPercent", 0.0)
+            progress[asin] = pct / 100.0
+    return progress
 ```
 
 ---
@@ -780,7 +1072,7 @@ LIBRARY_REGISTRY: dict[str, LibraryConfig] = {
 }
 ```
 
-### アダプタのアダプタファクトリ
+### アダプタファクトリ
 
 ```python
 # adapters/__init__.py
@@ -818,6 +1110,10 @@ def get_adapter(source_id: str):
 | NEC CAREAL | `#lend-history` テーブル形式 | `<table id="lend-history">` 確認 |
 | OCLC WorldCat | 英語UIの場合も | ログインページの言語で判定 |
 | NDL デジタル | `/nw/` パス | URL パターンで判定 |
+
+### スクレイピングの注意点
+
+図書館 Web サイトのスクレイピングは、**個人利用の範囲内**で行ってください。利用規約をよく確認し、サーバーに負荷をかけないよう `time.sleep(1)` などの適切な間隔を空けることを推奨します。
 
 ---
 
@@ -878,6 +1174,79 @@ def api_ai_extract_book():
         )
         result = json.loads(response.choices[0].message.content)
         return jsonify(result)
+```
+
+### ISBN バーコードスキャン
+
+スマホのカメラでバーコード（ISBN）をスキャンして書誌情報を自動取得する方法です。
+
+```javascript
+// ZXing ライブラリを使ったバーコードスキャン
+async function scanISBN() {
+    const { BrowserMultiFormatReader } = await import(
+        "https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/+esm"
+    );
+    const reader = new BrowserMultiFormatReader();
+    const videoEl = document.getElementById("scannerVideo");
+
+    const result = await reader.decodeFromVideoDevice(null, videoEl, (res, err) => {
+        if (res) {
+            const isbn = res.getText();
+            fetchBookByISBN(isbn);
+            reader.reset();
+        }
+    });
+}
+
+async function fetchBookByISBN(isbn) {
+    const resp = await fetch(`/api/book-by-isbn?isbn=${isbn}`);
+    const data = await resp.json();
+    if (data.title) {
+        document.getElementById("paperBookTitle").value = data.title;
+        document.getElementById("paperBookAuthor").value = data.author;
+    }
+}
+```
+
+```python
+@app.route("/api/book-by-isbn")
+def api_book_by_isbn():
+    isbn = request.args.get("isbn", "").replace("-", "")
+    # Open Library でISBN検索
+    resp = requests.get(
+        f"https://openlibrary.org/api/books?bibkeys=ISBN:{isbn}&format=json&jscmd=data",
+        timeout=8
+    )
+    data = resp.json()
+    key = f"ISBN:{isbn}"
+    if key in data:
+        book = data[key]
+        return jsonify({
+            "title":  book.get("title", ""),
+            "author": book.get("authors", [{}])[0].get("name", ""),
+            "cover":  book.get("cover", {}).get("medium", ""),
+        })
+    return jsonify({"error": "見つかりませんでした"}), 404
+```
+
+### 手動登録フォーム
+
+```html
+<form id="paperBookForm">
+  <input type="text" id="paperBookTitle" placeholder="タイトル" required>
+  <input type="text" id="paperBookAuthor" placeholder="著者">
+  <input type="date" id="paperBookDate">
+  <select id="paperBookRating">
+    <option value="0">未評価</option>
+    <option value="1">★</option>
+    <option value="2">★★</option>
+    <option value="3">★★★</option>
+    <option value="4">★★★★</option>
+    <option value="5">★★★★★</option>
+  </select>
+  <textarea id="paperBookComment" placeholder="感想"></textarea>
+  <button type="submit">登録</button>
+</form>
 ```
 
 ---
@@ -943,6 +1312,60 @@ def _enrich_book(book_dict: dict) -> None:
         book_dict["genre"] = normalize_genre(genre)
 ```
 
+### ジャンルの正規化
+
+Google Books と Open Library はジャンルが英語・複数形など様々な表記で返ってきます。統一した日本語ジャンルに変換します。
+
+```python
+_GENRE_MAP = {
+    "Fiction":              "小説",
+    "Nonfiction":           "ノンフィクション",
+    "Non-fiction":          "ノンフィクション",
+    "Science Fiction":      "SF・ファンタジー",
+    "Mystery":              "ミステリー",
+    "Business & Economics": "ビジネス",
+    "Self-Help":            "自己啓発",
+    "Psychology":           "心理学",
+    "History":              "歴史",
+    "Biography":            "伝記・自叙伝",
+    "Technology":           "テクノロジー",
+    "Computers":            "テクノロジー",
+    "Health":               "健康・医学",
+    "Cooking":              "料理・グルメ",
+    "Travel":               "旅行",
+    "Children":             "児童書",
+}
+
+def normalize_genre(raw: str) -> str:
+    for en, ja in _GENRE_MAP.items():
+        if en.lower() in raw.lower():
+            return ja
+    return raw  # マップにない場合はそのまま返す
+```
+
+### AI によるジャンル補完
+
+外部 API でジャンルが取得できなかった本は AI に推定させます。
+
+```python
+def _ai_guess_genre(title: str, author: str, summary: str = "") -> str:
+    """タイトル・著者・概要からジャンルを AI で推定"""
+    genres = ["小説", "ノンフィクション", "ビジネス", "自己啓発",
+              "テクノロジー", "歴史", "心理学", "SF・ファンタジー",
+              "ミステリー", "子育て・教育", "健康・医学", "その他"]
+
+    prompt = f"""以下の本のジャンルをリストから1つ選んでください。
+タイトル: {title}
+著者: {author}
+概要: {summary[:200] if summary else "不明"}
+
+選択肢: {', '.join(genres)}
+ジャンル名のみ返してください。"""
+
+    # AI 呼び出し（省略）
+    ...
+```
+
 ---
 
 ## 11. Firestore データベース統合
@@ -956,6 +1379,29 @@ def _enrich_book(book_dict: dict) -> None:
 | スケール | ◎ | ○ | ✗ |
 | 無料枠 | ◎ 50K 読取/日 | ✗ | ◎ |
 | ユーザー分離 | ◎（パス）| ○（行）| △ |
+
+### 接続の初期化
+
+```python
+# firestore_service.py
+from google.cloud import firestore
+import os
+
+_db = None
+
+def get_db():
+    """Firestoreクライアントをシングルトンで返す"""
+    global _db
+    if _db is not None:
+        return _db
+    try:
+        project = os.environ.get("GCP_PROJECT")
+        _db = firestore.Client(project=project) if project else firestore.Client()
+        return _db
+    except Exception as e:
+        logger.warning("Firestore接続失敗: %s", e)
+        return None
+```
 
 ### バッチ書き込み（500 件制限の対処）
 
@@ -1016,6 +1462,26 @@ def load_saved() -> Optional[dict]:
             data = json.loads(path.read_text())
             all_books.extend(data.get("books", []))
     return {"books": all_books, "total": len(all_books)} if all_books else None
+```
+
+### Firestore のインデックス設計
+
+複合クエリを使う場合はインデックスが必要です。Firebase Console でインデックスを作成するか、`firestore.indexes.json` に記述します。
+
+```json
+{
+  "indexes": [
+    {
+      "collectionGroup": "books",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "source", "order": "ASCENDING"},
+        {"fieldPath": "completed", "order": "ASCENDING"},
+        {"fieldPath": "completed_date", "order": "DESCENDING"}
+      ]
+    }
+  ]
+}
 ```
 
 ---
@@ -1188,21 +1654,6 @@ def api_save_credentials():
             pass
 
     return jsonify({"success": True})
-
-@app.route("/api/credentials/<library_id>", methods=["DELETE"])
-def api_delete_credentials(library_id):
-    # ... 認証情報を削除 ...
-
-    # Firestore の sources フラグを無効化
-    uid = library_service.get_current_uid()
-    if uid:
-        try:
-            import firestore_service
-            firestore_service.update_user_sources(uid, library_id, False)
-        except Exception:
-            pass
-
-    return jsonify({"success": True})
 ```
 
 ### 2 人目以降のユーザーオンボーディング
@@ -1291,6 +1742,44 @@ threading.Thread(
 ).start()
 ```
 
+### AI プロバイダーの切り替え
+
+OpenAI と Gemini を簡単に切り替えられる設計にしておくと、コスト最適化が容易になります。
+
+```python
+def _call_ai(prompt: str, max_tokens: int = 500) -> str:
+    """設定されたプロバイダーで AI を呼び出す"""
+    ai_config = library_service.load_ai_config()
+    provider = ai_config.get("provider", "")
+
+    if provider == "openai":
+        import openai
+        client = openai.OpenAI(api_key=ai_config["api_key"])
+        resp = client.chat.completions.create(
+            model=ai_config.get("model", "gpt-4o-mini"),
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+        )
+        return resp.choices[0].message.content or ""
+
+    elif provider == "gemini":
+        import google.generativeai as genai
+        genai.configure(api_key=ai_config["api_key"])
+        m = genai.GenerativeModel(ai_config.get("model", "gemini-1.5-flash"))
+        return m.generate_content(prompt).text or ""
+
+    raise ValueError(f"未知のAIプロバイダー: {provider}")
+```
+
+### コスト管理：モデルの使い分け
+
+| 用途 | 推奨モデル | 理由 |
+|------|----------|------|
+| ジャンル推定 | gpt-4o-mini / gemini-flash | 軽量タスク、低コスト |
+| 書評生成 | gpt-4o / gemini-pro | 品質重視 |
+| 画像からタイトル抽出 | gpt-4o | Vision 対応が必要 |
+| 選書推薦チャット | gpt-4o | 対話品質重視 |
+
 ---
 
 ## 14. AI 選書機能
@@ -1341,6 +1830,29 @@ def api_ai_recommend():
                 yield f"data: {json.dumps({'content': delta})}\n\n"
             yield "data: [DONE]\n\n"
         return Response(generate(), mimetype="text/event-stream")
+```
+
+### 読書履歴をコンテキストに含める
+
+```python
+def _build_history_context(uid: str) -> str:
+    """ユーザーの読書履歴を AI コンテキスト用テキストに変換"""
+    data = library_service.load_saved()
+    if not data:
+        return ""
+
+    completed = [b for b in data.get("books", []) if b.get("completed")]
+    rated = sorted(
+        [b for b in completed if b.get("rating", 0) >= 4],
+        key=lambda b: b.get("rating", 0), reverse=True
+    )[:20]
+
+    lines = ["【過去に読んで高評価だった本】"]
+    for b in rated:
+        genre = b.get("genre", "")
+        lines.append(f"- 『{b['title']}』{b.get('author', '')} ({genre}) ★{b['rating']}")
+
+    return "\n".join(lines)
 ```
 
 ---
@@ -1412,6 +1924,99 @@ function renderBooks() {
 }
 ```
 
+### フィルタリングの実装
+
+```javascript
+function applyFilters() {
+    const searchText = document.getElementById("searchInput").value.toLowerCase();
+    const sourceFilter = document.getElementById("sourceFilter").value;
+    const statusFilter = document.getElementById("statusFilter").value;
+    const genreFilter  = document.getElementById("genreFilter").value;
+    const ratingFilter = parseInt(document.getElementById("ratingFilter").value, 10);
+
+    filteredBooks = allBooks.filter(book => {
+        if (searchText && !(
+            book.title?.toLowerCase().includes(searchText) ||
+            book.author?.toLowerCase().includes(searchText)
+        )) return false;
+        if (sourceFilter && book.source !== sourceFilter) return false;
+        if (genreFilter  && book.genre  !== genreFilter)  return false;
+        if (ratingFilter > 0 && (book.rating || 0) < ratingFilter) return false;
+
+        // ステータスフィルター
+        if (statusFilter === "completed" && !book.completed)   return false;
+        if (statusFilter === "reading"   && book.completed)    return false;
+        if (statusFilter === "weekly_completed") {
+            const daysAgo7 = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+            if (!book.completed || (book.completed_date || "") < daysAgo7) return false;
+        }
+        if (statusFilter === "monthly_completed") {
+            const daysAgo30 = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+            if (!book.completed || (book.completed_date || "") < daysAgo30) return false;
+        }
+        return true;
+    });
+
+    currentPage = 1;
+    renderBooks();
+}
+```
+
+### グラフの描画（Chart.js）
+
+```javascript
+function renderGenreChart(books) {
+    const genreCount = {};
+    books.filter(b => b.completed).forEach(b => {
+        const g = b.genre || "未分類";
+        genreCount[g] = (genreCount[g] || 0) + 1;
+    });
+
+    const sorted = Object.entries(genreCount).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const ctx = document.getElementById("genreChart").getContext("2d");
+
+    new Chart(ctx, {
+        type: "doughnut",
+        data: {
+            labels: sorted.map(([g]) => g),
+            datasets: [{
+                data: sorted.map(([, n]) => n),
+                backgroundColor: ["#4A90D9","#50C878","#FF6B6B","#FFD700",
+                                   "#9B59B6","#E67E22","#1ABC9C","#95A5A6"],
+            }],
+        },
+        options: { plugins: { legend: { position: "right" } } },
+    });
+}
+```
+
+### モバイル対応 CSS の要点
+
+```css
+/* モバイルファースト：デフォルトはスマホ向け */
+.book-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+    padding: 12px;
+}
+
+/* タブレット以上では列を増やす */
+@media (min-width: 768px) {
+    .book-list {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 16px;
+    }
+}
+
+/* PC では大きく */
+@media (min-width: 1200px) {
+    .book-list {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+}
+```
+
 ---
 
 ## 16. Amazon 連携とアフィリエイト
@@ -1442,9 +2047,24 @@ function getBookSearchUrls(book) {
         kindle:  `https://www.amazon.co.jp/s?k=${query}&i=digital-text${tagParam}`,
         audible: `https://www.audible.co.jp/search?keywords=${query}`,
         bookoff: `https://www.bookoffonline.co.jp/old/search?q=${query}`,
-        calil:   `https://calil.jp/book/search?q=${query}`,  // 全国図書館横断検索
+        calil:   `https://calil.jp/book/search?q=${query}`,
     };
 }
+```
+
+### Audible の ASIN から直接リンク
+
+```python
+def get_audible_link(asin: str) -> str:
+    """AudibleのASINから商品ページURLを生成"""
+    return f"https://www.audible.co.jp/pd/{asin}"
+
+def get_kindle_link(asin: str, affiliate_tag: str = "") -> str:
+    """KindleのASINから商品ページURLを生成"""
+    url = f"https://www.amazon.co.jp/dp/{asin}"
+    if affiliate_tag:
+        url += f"?tag={affiliate_tag}"
+    return url
 ```
 
 ---
@@ -1477,6 +2097,26 @@ def _create_completed_books_message(
         "books":     new_books[:10],
         "user":      user,
     }
+```
+
+### 公開ユーザー統計の集計
+
+```python
+@app.route("/api/public-user-stats")
+def api_public_user_stats():
+    """全ユーザーの公開統計を返す（未ログイン時のトップページ用）"""
+    try:
+        import firestore_service as fs
+        users = fs.list_sync_users()
+        result = []
+        for u in users:
+            profile = fs.get_user_public_profile(u["uid"])
+            if profile:
+                result.append(profile)
+        return jsonify({"users": result})
+    except Exception as e:
+        logger.warning("public-user-stats エラー: %s", e)
+        return jsonify({"users": []})
 ```
 
 ---
@@ -1583,9 +2223,520 @@ jobs:
             YONDA_INTERNAL_TOKEN=${{ secrets.YONDA_INTERNAL_TOKEN }}
 ```
 
+### デプロイの確認
+
+```bash
+# デプロイ後のURL確認
+gcloud run services describe myapp --region asia-northeast1 --format 'value(status.url)'
+
+# ログのリアルタイム監視
+gcloud logging tail "resource.type=cloud_run_revision AND resource.labels.service_name=myapp" \
+  --format="value(textPayload)"
+
+# 最新リビジョンのヘルスチェック
+curl -I $(gcloud run services describe myapp --region asia-northeast1 --format 'value(status.url)')
+```
+
 ---
 
-## 19. セキュリティの考慮事項
+## 19. ローカル開発・デバッグ手法
+
+### ローカルサーバーの起動
+
+```bash
+# 仮想環境を有効化
+source venv/bin/activate
+
+# 開発サーバーを起動（ファイル変更時に自動リロード）
+FLASK_DEBUG=1 python app.py
+
+# または gunicorn で本番環境に近い形で起動
+gunicorn --bind 0.0.0.0:5002 --workers 1 --threads 2 \
+         --reload app:app
+```
+
+### 環境変数のローカル上書き
+
+本番では GCS マウントされたパスを使いますが、ローカルでは `data/` ディレクトリを使います。
+
+```python
+# config_paths.py
+import os
+from pathlib import Path
+
+# 環境変数 DATA_DIR が設定されていればそちらを使う
+# ローカル: data/  本番: /mnt/data
+DATA_DIR = Path(os.environ.get("DATA_DIR", "data"))
+```
+
+### デバッグ用のデータダンプ
+
+```python
+@app.route("/debug/books-summary")
+def debug_books_summary():
+    """開発環境でのみアクセス可能なデバッグエンドポイント"""
+    if not app.debug:
+        return jsonify({"error": "not available in production"}), 403
+
+    data = library_service.load_saved()
+    if not data:
+        return jsonify({"error": "no data"})
+
+    books = data.get("books", [])
+    summary = {
+        "total": len(books),
+        "by_source": {},
+        "completed_count": sum(1 for b in books if b.get("completed")),
+        "no_genre": sum(1 for b in books if not b.get("genre")),
+        "no_cover": sum(1 for b in books if not b.get("cover_url")),
+    }
+    for book in books:
+        src = book.get("source", "unknown")
+        summary["by_source"][src] = summary["by_source"].get(src, 0) + 1
+
+    return jsonify(summary)
+```
+
+### Cloud Logging をローカルでシミュレート
+
+```python
+import logging
+import sys
+
+# ローカル開発時はコンソールに色付きログを出力
+if os.environ.get("FLASK_DEBUG"):
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    ))
+    logging.getLogger().addHandler(handler)
+    logging.getLogger().setLevel(logging.DEBUG)
+```
+
+### gcloud CLI でのローカル認証
+
+```bash
+# ローカルで Google Cloud API を使う
+gcloud auth application-default login
+
+# 特定のサービスアカウントを使う
+gcloud auth activate-service-account --key-file=service-account.json
+export GOOGLE_APPLICATION_CREDENTIALS=service-account.json
+```
+
+### Cloud Run エミュレーター
+
+```bash
+# Cloud Run のエミュレーター（Docker が必要）
+pip install cloud-run-local
+
+cloud-run-local --service-account-key service-account.json \
+                --env-vars-file .env \
+                --port 8080 \
+                -- python app.py
+```
+
+### よく使うデバッグコマンド
+
+```bash
+# GCS バケット内のファイル一覧と更新日時
+gsutil ls -l gs://your-bucket/users/
+
+# 特定ユーザーの本データを確認
+gsutil cat gs://your-bucket/users/USER_UID/library_books.json | python3 -m json.tool | head -50
+
+# Cloud Run のリアルタイムログ
+gcloud logging read "resource.type=cloud_run_revision" \
+  --limit=50 --freshness=1h \
+  --format="table(timestamp,textPayload)"
+
+# Firestore のユーザー一覧確認
+python3 -c "
+import firestore_service as fs
+for u in fs.list_sync_users():
+    print(u['uid'][:8], u.get('name'), u.get('sources'))
+"
+```
+
+---
+
+## 20. テスト戦略
+
+### テストの方針
+
+完璧なカバレッジより「壊れたら困る部分だけをテストする」を優先します。特に以下の 3 点は必ずテストしてください。
+
+1. **データ変換ロジック** — アダプタが BookRecord を正しく生成するか
+2. **認証フロー** — ログインしていないユーザーが他のデータにアクセスできないか
+3. **同期の冪等性** — 同じデータを 2 回同期しても壊れないか
+
+### pytest の設定
+
+```bash
+pip install pytest pytest-flask pytest-cov
+```
+
+```ini
+# pytest.ini
+[pytest]
+testpaths = tests
+addopts = -v --tb=short
+```
+
+### アダプタのユニットテスト
+
+```python
+# tests/test_adapters.py
+import pytest
+from adapters.audible import AudibleAdapter
+
+def test_audible_to_book_record():
+    """Audible API レスポンスを BookRecord に正しく変換できるか"""
+    adapter = AudibleAdapter()
+    item = {
+        "asin":         "B09ABC123",
+        "title":        "テスト本",
+        "authors":      [{"name": "山田太郎"}],
+        "purchase_date": "2024-01-15T00:00:00Z",
+        "runtime_length_min": 360,
+        "product_images": {"500": "https://example.com/cover.jpg"},
+    }
+    finished = {
+        "B09ABC123": {"is_finished": True, "percent": 1.0, "date_heard": "2024-02-01"}
+    }
+
+    record = adapter._to_book_record(item, finished)
+
+    assert record.title == "テスト本"
+    assert record.author == "山田太郎"
+    assert record.catalog_number == "B09ABC123"
+    assert record.completed is True
+    assert record.runtime_length_min == 360
+    assert record.source == "audible_jp"
+```
+
+### Flask ルートのテスト
+
+```python
+# tests/test_routes.py
+import pytest
+from app import app
+
+@pytest.fixture
+def client():
+    app.config["TESTING"] = True
+    app.config["SECRET_KEY"] = "test-secret"
+    with app.test_client() as c:
+        yield c
+
+def test_books_api_without_login(client):
+    """未ログイン時でも /api/books は200を返すこと"""
+    resp = client.get("/api/books")
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert "books" in data
+
+def test_internal_api_without_token(client):
+    """内部トークンなしで /api/internal/auto-fetch-all は401を返すこと"""
+    resp = client.post("/api/internal/auto-fetch-all",
+                       json={},
+                       headers={"X-Internal-Token": "wrong-token"})
+    assert resp.status_code == 401
+
+def test_internal_api_with_valid_token(client, monkeypatch):
+    """正しいトークンで /api/internal/auto-fetch-all は202を返すこと"""
+    monkeypatch.setenv("YONDA_INTERNAL_TOKEN", "test-token")
+    import app as a
+    a._INTERNAL_TOKEN = "test-token"
+    resp = client.post("/api/internal/auto-fetch-all",
+                       json={},
+                       headers={"X-Internal-Token": "test-token"})
+    assert resp.status_code in (202, 200)
+```
+
+### マルチユーザー分離のテスト
+
+```python
+# tests/test_multiuser.py
+import pytest
+import json
+from pathlib import Path
+import library_service
+
+def test_user_data_isolation(tmp_path):
+    """2つのユーザーが互いのデータを参照しないこと"""
+    user1_dir = tmp_path / "user1"
+    user2_dir = tmp_path / "user2"
+    user1_dir.mkdir()
+    user2_dir.mkdir()
+
+    # ユーザー1のデータを作成
+    (user1_dir / "audible_books.json").write_text(json.dumps({
+        "books": [{"title": "ユーザー1の本", "source": "audible_jp"}],
+        "total": 1
+    }))
+
+    # ユーザー2のデータを作成
+    (user2_dir / "audible_books.json").write_text(json.dumps({
+        "books": [{"title": "ユーザー2の本", "source": "audible_jp"}],
+        "total": 1
+    }))
+
+    # ユーザー1としてデータを読み込む
+    library_service.set_user_data_dir(user1_dir)
+    data1 = library_service.load_saved_for("audible_jp")
+    assert data1["books"][0]["title"] == "ユーザー1の本"
+
+    # ユーザー2としてデータを読み込む
+    library_service.set_user_data_dir(user2_dir)
+    data2 = library_service.load_saved_for("audible_jp")
+    assert data2["books"][0]["title"] == "ユーザー2の本"
+```
+
+### テストの実行
+
+```bash
+# 全テストを実行
+pytest
+
+# カバレッジ付きで実行
+pytest --cov=. --cov-report=html
+
+# 特定ファイルのみ
+pytest tests/test_adapters.py -v
+
+# 特定のテストのみ
+pytest tests/test_routes.py::test_books_api_without_login -v
+```
+
+---
+
+## 21. パフォーマンス最適化
+
+### API レスポンスの最適化
+
+書籍データが増えると JSON レスポンスが大きくなります。不要なフィールドを除外してレスポンスサイズを削減します。
+
+```python
+# 一覧取得時は軽量フィールドのみ返す
+BOOK_LIST_FIELDS = {
+    "title", "author", "cover_url", "source", "completed",
+    "completed_date", "rating", "genre", "catalog_number", "loan_date"
+}
+
+def _slim_book(book: dict) -> dict:
+    return {k: v for k, v in book.items() if k in BOOK_LIST_FIELDS}
+
+@app.route("/api/books")
+def api_books():
+    data = library_service.load_saved() or {"books": [], "total": 0}
+    books = [_slim_book(b) for b in data.get("books", [])]
+    return jsonify({"books": books, "total": len(books)})
+```
+
+### フロントエンドのキャッシュ戦略
+
+```javascript
+const _cache = new Map();
+
+async function fetchBooks(forceRefresh = false) {
+    const cacheKey = "books";
+    const cached = _cache.get(cacheKey);
+
+    if (!forceRefresh && cached && Date.now() - cached.ts < 5 * 60 * 1000) {
+        return cached.data;  // 5分間のキャッシュ
+    }
+
+    const resp = await fetch("/api/books");
+    const data = await resp.json();
+    _cache.set(cacheKey, { data, ts: Date.now() });
+    return data;
+}
+```
+
+### 画像の遅延読み込み
+
+```javascript
+// Intersection Observer で画面外の画像を遅延読み込み
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            const img = entry.target;
+            img.src = img.dataset.src;
+            observer.unobserve(img);
+        }
+    });
+}, { rootMargin: "200px" });
+
+document.querySelectorAll("img[data-src]").forEach(img => observer.observe(img));
+```
+
+### バーチャルスクロール
+
+2,000 冊以上の大量リストを高速に表示するバーチャルスクロールの実装です。
+
+```javascript
+class VirtualList {
+    constructor(container, items, renderItem, itemHeight = 200) {
+        this.container = container;
+        this.items = items;
+        this.renderItem = renderItem;
+        this.itemHeight = itemHeight;
+        this.visibleCount = Math.ceil(window.innerHeight / itemHeight) + 5;
+
+        container.style.height = `${items.length * itemHeight}px`;
+        container.style.position = "relative";
+
+        window.addEventListener("scroll", () => this._render());
+        this._render();
+    }
+
+    _render() {
+        const scrollTop = window.scrollY;
+        const startIdx = Math.max(0, Math.floor(scrollTop / this.itemHeight) - 2);
+        const endIdx   = Math.min(this.items.length, startIdx + this.visibleCount);
+
+        this.container.innerHTML = "";
+        for (let i = startIdx; i < endIdx; i++) {
+            const el = document.createElement("div");
+            el.style.position = "absolute";
+            el.style.top = `${i * this.itemHeight}px`;
+            el.innerHTML = this.renderItem(this.items[i]);
+            this.container.appendChild(el);
+        }
+    }
+}
+```
+
+### Firestore クエリの最適化
+
+全件読み込みを避け、必要なデータだけを取得します。
+
+```python
+def load_recent_books(uid: str, limit: int = 100) -> list[dict]:
+    """最近追加された本を限定取得"""
+    db = get_db()
+    if not db:
+        return []
+
+    docs = (
+        db.collection("users").document(uid).collection("books")
+        .order_by("_updated_at", direction=firestore.Query.DESCENDING)
+        .limit(limit)
+        .stream()
+    )
+    return [doc.to_dict() for doc in docs]
+```
+
+---
+
+## 22. 運用・監視・ログ
+
+### Cloud Logging の活用
+
+```python
+import logging
+import google.cloud.logging
+
+# 本番環境では Cloud Logging に送る
+if os.environ.get("K_SERVICE"):  # Cloud Run 環境の識別子
+    client = google.cloud.logging.Client()
+    client.setup_logging()
+
+logger = logging.getLogger(__name__)
+
+# 構造化ログ（Cloud Logging で検索しやすい）
+logger.info("同期完了", extra={
+    "json_fields": {
+        "uid":    uid,
+        "source": src_key,
+        "total":  payload.get("total", 0),
+    }
+})
+```
+
+### ヘルスチェックエンドポイント
+
+```python
+@app.route("/healthz")
+def healthz():
+    """Cloud Run のヘルスチェック用エンドポイント"""
+    return jsonify({
+        "status": "ok",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version":   os.environ.get("K_REVISION", "local"),
+    })
+```
+
+### Cloud Monitoring でアラートを設定
+
+```bash
+# エラーレートが 1% を超えたらアラート
+gcloud alpha monitoring policies create \
+  --policy-from-file=monitoring/error-rate-policy.yaml
+```
+
+```yaml
+# monitoring/error-rate-policy.yaml
+displayName: "Cloud Run Error Rate Alert"
+conditions:
+  - displayName: "Error rate > 1%"
+    conditionThreshold:
+      filter: |
+        resource.type="cloud_run_revision"
+        AND metric.type="run.googleapis.com/request_count"
+        AND metric.label.response_code_class="5xx"
+      comparison: COMPARISON_GT
+      thresholdValue: 0.01
+      duration: 300s
+notificationChannels:
+  - projects/YOUR_PROJECT/notificationChannels/YOUR_CHANNEL_ID
+```
+
+### 定期的な GCS バックアップ
+
+```bash
+# 毎週バックアップを GCS の別バケットにコピー
+gcloud scheduler jobs create http backup-weekly \
+  --schedule="0 3 * * 0" \
+  --time-zone="Asia/Tokyo" \
+  --uri="https://your-app.run.app/api/internal/backup" \
+  --http-method=POST \
+  --headers="X-Internal-Token=${YONDA_INTERNAL_TOKEN}"
+```
+
+```python
+@app.route("/api/internal/backup", methods=["POST"])
+def api_internal_backup():
+    """GCS内のユーザーデータを別バケットにバックアップ"""
+    from google.cloud import storage
+    client = storage.Client()
+    src_bucket  = client.bucket(os.environ["GCS_BUCKET"])
+    dst_bucket  = client.bucket(os.environ["GCS_BACKUP_BUCKET"])
+    today = datetime.now().strftime("%Y%m%d")
+
+    copied = 0
+    for blob in src_bucket.list_blobs(prefix="users/"):
+        dst_name = f"backup/{today}/{blob.name}"
+        src_bucket.copy_blob(blob, dst_bucket, dst_name)
+        copied += 1
+
+    return jsonify({"status": "ok", "copied": copied})
+```
+
+### Cloud Run のスケーリング設定
+
+```bash
+# 最小インスタンス数を1に設定（コールドスタート防止）
+gcloud run services update myapp \
+  --min-instances 1 \
+  --max-instances 5 \
+  --region asia-northeast1
+```
+
+---
+
+## 23. セキュリティの考慮事項
 
 ### XSS 対策
 
@@ -1622,12 +2773,578 @@ def add_security_headers(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # HTTPS 強制（本番環境のみ）
+    if not app.debug:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
     return response
+```
+
+### レート制限の実装
+
+```python
+from collections import defaultdict
+import time
+
+_rate_limit_store: dict[str, list[float]] = defaultdict(list)
+
+def _check_rate_limit(key: str, limit: int = 60, window: int = 60) -> bool:
+    """1分間に limit 回を超えたら False を返す"""
+    now = time.time()
+    calls = _rate_limit_store[key]
+    # 古いレコードを削除
+    calls = [t for t in calls if now - t < window]
+    _rate_limit_store[key] = calls
+    if len(calls) >= limit:
+        return False
+    calls.append(now)
+    return True
+
+@app.route("/api/ai-recommend", methods=["POST"])
+def api_ai_recommend():
+    uid = _get_current_uid() or request.remote_addr
+    if not _check_rate_limit(f"ai:{uid}", limit=10, window=60):
+        return jsonify({"error": "レート制限: 1分間に10回まで"}), 429
+    # ... AI 呼び出し ...
+```
+
+### 認証情報の暗号化保存
+
+```python
+from cryptography.fernet import Fernet
+
+def _get_encryption_key() -> bytes:
+    """環境変数から暗号化キーを取得"""
+    key = os.environ.get("CREDENTIALS_ENCRYPTION_KEY", "")
+    if not key:
+        # キーがない場合は平文保存（開発環境）
+        return None
+    return key.encode()
+
+def save_credentials_encrypted(uid: str, creds: dict) -> None:
+    key = _get_encryption_key()
+    data = json.dumps(creds).encode()
+    if key:
+        f = Fernet(key)
+        data = f.encrypt(data)
+    path = library_service.DATA_DIR / "users" / uid / "credentials.json"
+    path.write_bytes(data)
+    path.chmod(0o600)
 ```
 
 ---
 
-## 20. Cursor + Claude を使った開発の進め方
+## 24. コスト最適化
+
+### Google Cloud の料金構造
+
+| サービス | 無料枠 | 超過時の料金 |
+|---------|--------|------------|
+| Cloud Run | 月 200 万リクエスト | $0.40 / 百万リクエスト |
+| Cloud Run CPU | 月 360,000 vCPU 秒 | $0.000024 / vCPU 秒 |
+| Firestore | 1 日 50,000 読取 | $0.06 / 10 万読取 |
+| GCS | 5 GB ストレージ | $0.023 / GB |
+| Cloud Scheduler | 3 ジョブ | $0.10 / ジョブ / 月 |
+
+趣味アプリであれば、ほぼ無料枠内に収まります。
+
+### Cloud Run のコスト最適化
+
+```bash
+# スケールゼロ有効化（トラフィックがない時間帯は無料）
+gcloud run services update myapp \
+  --min-instances 0 \
+  --region asia-northeast1
+
+# CPU を リクエスト中のみに制限（アイドル時間の課金なし）
+gcloud run services update myapp \
+  --cpu-throttling \
+  --region asia-northeast1
+```
+
+### Firestore の読み取り数を削減
+
+```python
+# キャッシュを活用して Firestore 読み取りを減らす
+_FIRESTORE_CACHE: dict[str, tuple[dict, float]] = {}
+_CACHE_TTL = 300  # 5分
+
+def load_books_cached(uid: str) -> Optional[dict]:
+    now = time.time()
+    if uid in _FIRESTORE_CACHE:
+        data, ts = _FIRESTORE_CACHE[uid]
+        if now - ts < _CACHE_TTL:
+            return data
+
+    data = _load_books_from_firestore(uid)
+    if data:
+        _FIRESTORE_CACHE[uid] = (data, now)
+    return data
+```
+
+### AI API のコスト管理
+
+```python
+_AI_CALL_LOG: list[dict] = []
+
+def _log_ai_call(model: str, input_tokens: int, output_tokens: int):
+    _AI_CALL_LOG.append({
+        "ts":            time.time(),
+        "model":         model,
+        "input_tokens":  input_tokens,
+        "output_tokens": output_tokens,
+    })
+
+def _get_monthly_ai_cost() -> float:
+    """今月の推定 AI コスト（USD）を返す"""
+    start = datetime.now().replace(day=1, hour=0, minute=0, second=0).timestamp()
+    costs = {
+        "gpt-4o":         {"input": 5.0 / 1e6, "output": 15.0 / 1e6},
+        "gpt-4o-mini":    {"input": 0.15 / 1e6, "output": 0.60 / 1e6},
+        "gemini-1.5-flash": {"input": 0.075 / 1e6, "output": 0.30 / 1e6},
+    }
+    total = 0.0
+    for log in _AI_CALL_LOG:
+        if log["ts"] >= start:
+            model_costs = costs.get(log["model"], {})
+            total += log["input_tokens"]  * model_costs.get("input", 0)
+            total += log["output_tokens"] * model_costs.get("output", 0)
+    return total
+```
+
+### コスト削減チェックリスト
+
+- `--min-instances 0` でスケールゼロを有効化
+- Firestore のキャッシュ TTL を 5 分以上に設定
+- AI 書評生成は gpt-4o-mini または gemini-flash を使う
+- 画像取得 URL は GCS に保存して都度 API 呼び出しを避ける
+- Cloud Scheduler のジョブ数を 3 以内に収める
+
+---
+
+## 25. トラブルシューティング集
+
+### よくあるエラーと解決策
+
+| エラー | 原因 | 解決策 |
+|--------|------|--------|
+| `MismatchingStateError` | Cloud Run 複数インスタンスでセッション不一致 | OAuth ステートを GCS ファイルにバックアップ |
+| `Working outside of request context` | バックグラウンドスレッドで `session` を参照 | `get_current_user()` に `try/except RuntimeError` を追加 |
+| `Firestore: 500件制限` | バッチ書き込み制限 | 499件ごとにコミット分割 |
+| Kindle OTP 要求 | Amazon の二段階認証 | OTP セッションストアを実装 |
+| 図書館スクレイピング失敗 | サイトのHTML変更 | セレクタを修正、Claude に新しいHTMLを見せて再生成 |
+| `ModuleNotFoundError: audible` | パッケージ未インストール | `pip install audible` |
+| Cloud Run タイムアウト | 同期処理が60秒を超える | バックグラウンドスレッド化 + 202 即返し |
+| GCS マウント失敗 | 権限不足 | サービスアカウントに `roles/storage.objectAdmin` を付与 |
+
+### デバッグの手順
+
+同期が失敗する場合の調査手順です。
+
+```bash
+# Step 1: 最近のログを確認
+gcloud logging read \
+  "resource.type=cloud_run_revision AND textPayload:ERROR" \
+  --limit=20 --freshness=1h \
+  --format="table(timestamp,textPayload)"
+
+# Step 2: 手動で同期をテスト
+curl -X POST https://your-app.run.app/api/internal/auto-fetch-all \
+  -H "X-Internal-Token: ${YONDA_INTERNAL_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+# Step 3: GCS のファイルの更新日時を確認
+gsutil ls -l gs://your-bucket/users/USER_UID/
+
+# Step 4: Firestore の sources フラグを確認
+python3 -c "
+import firestore_service as fs
+for u in fs.list_sync_users():
+    print(u)
+"
+```
+
+### Cloud Run のコールドスタート問題
+
+```
+症状: 朝一番のアクセスが遅い（10〜30秒かかる）
+原因: min-instances=0 の場合、長時間アクセスがないとインスタンスが0になる
+解決:
+  1. min-instances=1 に設定（月 $数ドル程度の追加コスト）
+  2. Cloud Scheduler で5分おきにヘルスチェックを叩く（無料枠内）
+```
+
+```bash
+# 5分おきのウォームアップ
+gcloud scheduler jobs create http warmup-job \
+  --schedule="*/5 * * * *" \
+  --uri="https://your-app.run.app/healthz" \
+  --http-method=GET
+```
+
+### ジャンルが取得できない本の対処
+
+```python
+# ジャンルなし本の状況を確認
+python3 -c "
+import json, sys
+data = json.loads(open('data/users/USER_UID/library_books.json').read())
+no_genre = [b['title'] for b in data['books'] if not b.get('genre')]
+print(f'ジャンルなし: {len(no_genre)}冊')
+for t in no_genre[:10]:
+    print(' -', t)
+"
+
+# AI で一括補完
+curl -X POST https://your-app.run.app/api/enrich-library-genre \
+  -H "X-Internal-Token: ${YONDA_INTERNAL_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"library_id": "setagaya", "max_books": 50, "uid": "USER_UID"}'
+```
+
+### セッションが頻繁に切れる問題
+
+```
+症状: ログイン後しばらくするとセッションが切れる
+原因: Flask のセッション Cookie のサイズ超過（デフォルト 4KB）
+解決: セッションに大きなデータを入れない
+```
+
+```python
+# NG: セッションに書籍データを入れる
+session["books"] = all_books  # セッションが肥大化
+
+# OK: セッションにはUIDだけ入れ、データはDBから取得
+session["user"] = {"sub": uid, "email": email, "name": name}
+```
+
+---
+
+## 26. AI ツール・モデル完全比較
+
+アプリ開発に使える AI ツールは急速に増えています。本章では **エディタ（IDE）** と **AI モデル（LLM）** の 2 つの軸で比較し、用途ごとの最適な組み合わせを解説します。
+
+---
+
+### AI コードエディタの比較
+
+#### Cursor
+
+2023 年に登場した AI ネイティブのコードエディタ。VS Code をフォークしており、既存の VS Code 拡張機能をそのまま使えます。
+
+**強み**
+- `@ファイル名` でコンテキストを指定したチャットが直感的
+- Composer（Agent モード）で複数ファイルをまたいだ変更が 1 回の指示で完結
+- Tab 補完の精度が高い（GPT-4o / Claude Sonnet をリアルタイムで使用）
+- コードベース全体をインデックス化して「このプロジェクトのどこで〇〇している？」が答えられる
+
+**弱み**
+- 月額 $20（Pro）の有料プランが実質必須
+- 大きすぎるファイルはコンテキストウィンドウに入りきらない
+- UI が VS Code と微妙に異なりショートカットに慣れが必要
+
+**料金**
+| プラン | 月額 | AI 利用 |
+|--------|------|--------|
+| Free | $0 | 月 50 回（遅いモデル）|
+| Pro | $20 | 無制限（低速）+ 高速モデル 500 回/月 |
+| Business | $40/人 | チーム管理機能付き |
+
+#### GitHub Copilot
+
+GitHub（Microsoft）が提供する AI コーディング支援ツール。VS Code・JetBrains・Neovim などほぼすべての主要 IDE に対応しています。
+
+**強み**
+- VS Code 拡張として軽量に動作（エディタ全体の置き換え不要）
+- GitHub リポジトリとの連携が自然
+- 企業向けのセキュリティ・コンプライアンス対応が充実
+- Chat・Inline Edit・Workspace Agent と機能が揃ってきた
+
+**弱み**
+- Cursor のような「プロジェクト全体を理解した回答」が弱い
+- マルチファイル編集は Cursor より手間がかかる
+- GPT-4o / Claude Sonnet を使えるが切り替えが面倒
+
+**料金**
+| プラン | 月額 | 備考 |
+|--------|------|------|
+| Individual | $10 | 個人利用 |
+| Business | $19/人 | 組織管理機能 |
+| Enterprise | $39/人 | セキュリティ強化版 |
+
+#### Windsurf（旧 Codeium）
+
+AI エージェント特化型の新興エディタ。「Cascade」と呼ばれるエージェントが自律的にタスクを実行します。
+
+**強み**
+- 無料プランが充実（GPT-4o クラスのモデルを一定回数無料で使える）
+- Cascade エージェントが Cursor の Composer に相当する自律編集をより積極的に実行
+- 軽量で起動が速い
+
+**弱み**
+- Cursor ほどのコミュニティと情報量がない
+- 拡張機能のエコシステムが VS Code より限定的
+
+#### VS Code + GitHub Copilot / Cline
+
+「エディタはそのまま、拡張機能で AI を追加」するアプローチ。Cline は VS Code 拡張として Claude や GPT-4o を使ったエージェント機能を提供します。
+
+**強み**
+- 既存の VS Code 環境を変えずに済む
+- Cline は OSS でモデルを自由に選べる（Ollama によるローカルモデルも可）
+
+**弱み**
+- Cursor の Tab 補完ほどシームレスではない
+- コンテキスト管理を自分で行う必要がある
+
+#### エディタ総合比較表
+
+| 項目 | Cursor | GitHub Copilot | Windsurf | Cline（VS Code）|
+|------|--------|----------------|----------|----------------|
+| 無料で使える | △（制限あり）| △（Pro必須推奨）| ◎ | ◎（OSS）|
+| Tab 補完精度 | ◎ | ○ | ○ | △ |
+| マルチファイル編集 | ◎ | ○ | ◎ | ○ |
+| プロジェクト全体理解 | ◎ | ○ | ○ | △ |
+| 既存 IDE との互換性 | ○（VSCode互換）| ◎ | ○ | ◎ |
+| 日本語対応 | ○ | ○ | ○ | ○ |
+| **本書での推奨** | **◎ 第一選択** | ○ | ○ | △ |
+
+---
+
+### AI モデル（LLM）の比較
+
+エディタとは別に、バックエンドで使う AI モデルの選択も重要です。本アプリではジャンル補完・書評生成・選書推薦に AI を使います。
+
+#### Claude（Anthropic）
+
+**シリーズ: Claude 3.5 / Claude 3 Opus / Claude 3 Haiku**
+
+Anthropic が開発する LLM。コード生成能力が非常に高く、長い文脈（200K トークン）を正確に処理できます。本書の参考アプリ yonda の開発では **Claude Sonnet をメインに使用**しました。
+
+**コード生成での特徴**
+- 複雑な Python コードの生成精度が高い
+- 「このコードのバグを直して」という修正指示への追従が正確
+- 長いファイル全体を渡して「この関数をリファクタリングして」が得意
+- 安全性を重視した設計のため、危険な操作には自動で注意を添える
+
+**API 料金（2026年6月時点の目安）**
+
+| モデル | 入力 | 出力 | 用途 |
+|--------|------|------|------|
+| Claude 3.5 Haiku | $0.80/MTok | $4.00/MTok | ジャンル推定・軽量タスク |
+| Claude 3.5 Sonnet | $3.00/MTok | $15.00/MTok | 書評生成・コード補完 |
+| Claude 3 Opus | $15.00/MTok | $75.00/MTok | 高品質な長文生成 |
+
+#### OpenAI GPT シリーズ
+
+**シリーズ: GPT-4o / GPT-4o mini / o1 / o3**
+
+最も広く使われている LLM。ライブラリ・ドキュメント・サンプルコードが豊富で、困ったときに検索すれば情報が見つかりやすいです。
+
+**コード生成での特徴**
+- 幅広い言語・フレームワークに対応
+- GPT-4o は画像入力にも対応（本の表紙写真からタイトル抽出に最適）
+- o1 / o3 シリーズは「考える」ステップを踏むため複雑な論理タスクに強い
+- 関数呼び出し（Function Calling）の実装が成熟している
+
+**API 料金（2026年6月時点の目安）**
+
+| モデル | 入力 | 出力 | 用途 |
+|--------|------|------|------|
+| gpt-4o-mini | $0.15/MTok | $0.60/MTok | ジャンル推定（最安） |
+| gpt-4o | $5.00/MTok | $15.00/MTok | 書評生成・画像解析 |
+| o1-mini | $3.00/MTok | $12.00/MTok | 複雑なロジック生成 |
+| o3 | $10.00/MTok | $40.00/MTok | 最高精度が必要な場合 |
+
+#### Google Gemini
+
+**シリーズ: Gemini 2.0 Flash / Gemini 1.5 Pro / Gemini Ultra**
+
+Google が開発する LLM。Google Cloud との統合が自然で、Cloud Run + Firestore との組み合わせで IAM 認証を使った安全な呼び出しができます。
+
+**コード生成での特徴**
+- Gemini 2.0 Flash は高速・低コストでジャンル補完などの軽量タスクに最適
+- Google Workspace（Google Docs / Sheets）との連携が得意
+- 無料枠（1 分 15 リクエスト、1 日 1,500 リクエスト）が比較的大きい
+
+**API 料金（2026年6月時点の目安）**
+
+| モデル | 入力 | 出力 | 無料枠 |
+|--------|------|------|--------|
+| gemini-2.0-flash | $0.075/MTok | $0.30/MTok | あり |
+| gemini-1.5-pro | $1.25/MTok | $5.00/MTok | あり（制限小）|
+| gemini-ultra | $7.00/MTok | $21.00/MTok | なし |
+
+#### ローカル LLM（Ollama）
+
+Ollama を使うと、MacBook / Linux 上で LLM をローカル実行できます。API 料金ゼロ・データがクラウドに送られないという強みがあります。
+
+```bash
+# Ollama のインストール
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# モデルのダウンロードと実行
+ollama pull llama3.2
+ollama run llama3.2
+
+# Python から API 呼び出し（OpenAI 互換インターフェース）
+from openai import OpenAI
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+```
+
+**向いているケース**
+- 社内の機密データを含むコード生成
+- 開発コストをゼロに抑えたい実験段階
+- インターネット接続なしでの開発
+
+**向いていないケース**
+- 本番環境での API 呼び出し（M1 Mac でも GPT-4o より遅い）
+- 日本語品質が重要な書評生成
+
+---
+
+### 用途別モデル選択ガイド
+
+#### コード生成（開発時）
+
+| 優先事項 | 推奨 | 理由 |
+|---------|------|------|
+| **品質最優先** | Claude 3.5 Sonnet（Cursor 経由）| コード精度・文脈理解が最高水準 |
+| **コスト最小** | gpt-4o-mini / gemini-2.0-flash | 1 リクエスト 0.1 円以下 |
+| **オフライン** | Ollama + llama3.2 / qwen2.5-coder | ローカル実行 |
+
+#### 書評・ジャンル生成（本番 API）
+
+```python
+# 用途別モデル推奨設定
+AI_MODEL_SETTINGS = {
+    "genre_detection": {
+        "openai":  "gpt-4o-mini",       # 最安・十分な精度
+        "gemini":  "gemini-2.0-flash",  # 無料枠活用
+        "anthropic": "claude-3-haiku",  # 高速・低コスト
+    },
+    "book_review": {
+        "openai":  "gpt-4o",            # 高品質な書評
+        "gemini":  "gemini-1.5-pro",    # バランスが良い
+        "anthropic": "claude-3-sonnet", # 長文品質が高い
+    },
+    "image_recognition": {
+        "openai":  "gpt-4o",            # Vision 必須
+        "gemini":  "gemini-1.5-pro",    # マルチモーダル対応
+        # anthropic: claude-3-sonnet も画像対応
+    },
+}
+```
+
+#### プロバイダー切り替えの実装
+
+```python
+def _call_ai_auto(prompt: str, task: str = "genre_detection",
+                  max_tokens: int = 200) -> str:
+    """タスクに応じた最適モデルで AI を呼び出す。
+    環境変数 AI_PROVIDER でプロバイダーを切り替え可能。"""
+    ai_config = library_service.load_ai_config()
+    provider = ai_config.get("provider", "openai")
+    model = AI_MODEL_SETTINGS.get(task, {}).get(provider, "")
+
+    if not model:
+        raise ValueError(f"プロバイダー {provider} のタスク {task} 用モデルが未定義")
+
+    return _call_ai_with_model(provider, model, prompt, max_tokens, ai_config)
+
+def _call_ai_with_model(provider: str, model: str, prompt: str,
+                        max_tokens: int, config: dict) -> str:
+    if provider == "openai":
+        import openai
+        client = openai.OpenAI(api_key=config["api_key"])
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+        )
+        return resp.choices[0].message.content or ""
+
+    if provider == "gemini":
+        import google.generativeai as genai
+        genai.configure(api_key=config["api_key"])
+        m = genai.GenerativeModel(model)
+        return m.generate_content(prompt).text or ""
+
+    if provider == "anthropic":
+        import anthropic
+        client = anthropic.Anthropic(api_key=config["api_key"])
+        msg = client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return msg.content[0].text or ""
+
+    raise ValueError(f"未知のプロバイダー: {provider}")
+```
+
+---
+
+### Cursor と Claude の組み合わせが最強の理由
+
+このアプリ開発で最終的に **Cursor（エディタ）× Claude（モデル）** の組み合わせを選んだ理由を整理します。
+
+**① マルチファイル編集の一貫性**
+
+Flask アプリでは `app.py`・`library_service.py`・`firestore_service.py` が密結合しています。「`library_service.py` の関数 A のシグネチャを変えて、`app.py` の呼び出し元も全部修正して」という指示が、Cursor の Composer + Claude では 1 回で完結します。
+
+**② 長い Python ファイルの理解力**
+
+`app.py` は 4,000 行を超えています。Claude はこのサイズのファイルを渡しても「〇〇行目の関数との関係を考慮した上で修正して」という指示を正確に理解します。GPT-4o も優秀ですが、長いコンテキストの一貫性は Claude のほうが安定しています。
+
+**③ エラーへの的確な対応**
+
+このアプリ開発で発生した `MismatchingStateError`・`Working outside of request context`・Firestore バッチ制限などのエラーは、すべてスタックトレースを Claude に貼るだけで根本原因と修正コードが返ってきました。
+
+**④ 「なぜ」を説明してくれる**
+
+```
+「threading.local() を使う理由を、マルチユーザーとの関係で
+小学生でもわかるように説明して」
+```
+
+この質問に対して Claude は図解を含めた分かりやすい説明を返します。コードを書くだけでなく、理解を深めながら開発できる点が GPT-4o との差別化ポイントです。
+
+---
+
+### 2026年現在のベストプラクティス
+
+```
+【開発フェーズ別推奨構成】
+
+企画・設計:
+  Cursor Chat + Claude 3.5 Sonnet
+  → アーキテクチャ相談・技術選定
+
+実装:
+  Cursor Composer + Claude 3.5 Sonnet（Tab補完）
+  → マルチファイル編集・バグ修正
+
+本番API（ジャンル補完）:
+  gpt-4o-mini または gemini-2.0-flash
+  → コスト効率優先
+
+本番API（書評生成）:
+  gpt-4o または claude-3-sonnet
+  → 品質優先
+
+画像認識（表紙→タイトル抽出）:
+  gpt-4o（Vision）
+  → マルチモーダル必須
+
+コスト削減フェーズ:
+  Gemini の無料枠を最大活用
+  → 無料枠内ではほぼ0円で運用可能
+```
+
+---
+
+## 27. Cursor + Claude を使った開発の進め方
 
 ### なぜ Cursor + Claude か
 
@@ -1714,6 +3431,30 @@ Cursor は複数ファイルを同時に編集できます。
 ページネーションと DocumentFragment を使って改善して」
 ```
 
+### Cursor の主要機能と使い方
+
+#### Chat（チャット）
+
+現在開いているファイルを自動的にコンテキストとして参照します。
+
+```
+「@app.py の auth_callback 関数に
+エラーハンドリングを追加して」
+```
+
+#### Composer（コンポーザー）
+
+複数ファイルにまたがる変更を一度に行います。
+
+```
+「@app.py @library_service.py @firestore_service.py
+の3つを修正して、マルチユーザーの自動同期機能を追加して」
+```
+
+#### Tab 補完
+
+コードを書きながら Claude がリアルタイムで次のコードを提案します。
+
 ### 週末開発のタイムライン例
 
 ```
@@ -1749,6 +3490,42 @@ Cursor は複数ファイルを同時に編集できます。
 | 図書館の自動同期がタイムアウト | HTTP リクエストにタイムアウト設定なし | `timeout=(10, 30)` を全リクエストに追加 |
 | マルチユーザーでデータが混在 | グローバル変数にデータを保持 | threading.local でスレッドごとに分離 |
 | Firestore への書き込みが失敗 | バッチ書き込みの 500 件制限 | 499 件ごとにコミットを分割 |
+| ジャンル補完が途中で止まる | 外部 API のレート制限 | 指数バックオフ + AI フォールバック |
+| 同期後に既存のジャンルが消える | skip_enrich=True で全データを上書き | 既存データを保持した上でスキップ |
+
+### Cursor + Claude での失敗パターンと回避策
+
+#### 失敗1: 一度に大きすぎる変更を依頼する
+
+```
+# NG: 一度に全部頼む
+「全部作って」「アプリをマルチユーザー化して」
+
+# OK: 小さく分けて依頼する
+「まず library_service.py に threading.local を追加して」
+「次に before_request でユーザーデータディレクトリをセットして」
+「最後に Firestore の同期設定フラグを追加して」
+```
+
+#### 失敗2: コードを見ずに「動いた」と思い込む
+
+Claude の生成コードは必ず動作確認が必要です。特に以下の点を確認してください。
+
+- エラーハンドリングが適切か
+- セキュリティホールがないか
+- パフォーマンスに問題がないか
+
+#### 失敗3: コンテキストを提供しない
+
+```
+# NG: コンテキストなし
+「エラーを直して」
+
+# OK: ファイルとエラーを含める
+「@app.py の以下のエラーを直して。
+エラー内容: [スタックトレース全文]
+関連コード: [エラー箇所のコード]」
+```
 
 ---
 
@@ -1762,17 +3539,306 @@ Cursor は複数ファイルを同時に編集できます。
 4. **汎用化も AI に頼む** — 「世田谷区立図書館専用の実装を、どの図書館でも動く汎用設計に書き直して」という指示が通る
 5. **ドキュメントまで自動生成** — このドキュメント自体も Cursor + Claude で生成
 
+### このガイドで作ったもの
+
+- **認証**: Google OAuth 2.0 + Cloud Run 対応セッション管理
+- **データ収集**: Audible（1,000 冊以上対応）・Kindle（FIONA API）・任意図書館（汎用スクレイピング）・紙の本（カメラ + AI）
+- **書誌情報補完**: Google Books + Open Library + AI フォールバック
+- **マルチユーザー**: スレッドローカル + Firestore + 定期自動同期
+- **AI 機能**: 書評生成・選書推薦（OpenAI / Gemini 対応）
+- **インフラ**: Cloud Run + GCS + Firestore + Cloud Scheduler
+
 ### 次のステップ
 
 このガイドをベースに、さらに拡張できる機能：
 
-- [ ] Kindle ハイライト連携（読書メモの自動取込み）
-- [ ] 読書ペース予測（今の積読をいつ読み終えるか）
-- [ ] 読書サークル機能（グループでの読書記録共有）
-- [ ] 書評ブログへの自動投稿（WordPress / note 連携）
-- [ ] LINE / Slack Bot で読了報告
-- [ ] 楽天 Kobo / honto 連携
-- [ ] 都道府県横断の図書館横断検索（カーリル API 活用）
+- Kindle ハイライト連携（読書メモの自動取込み）
+- 読書ペース予測（今の積読をいつ読み終えるか）
+- 読書サークル機能（グループでの読書記録共有）
+- 書評ブログへの自動投稿（WordPress / note 連携）
+- LINE / Slack Bot で読了報告
+- 楽天 Kobo / honto 連携
+- 都道府県横断の図書館横断検索（カーリル API 活用）
+- 読書統計ダッシュボード（月別・ジャンル別の分析）
+- 積読管理と読書優先順位 AI 提案
+
+---
+
+## 付録 A — よくある質問（FAQ）
+
+### Q1. Python の経験がほとんどないが作れるか？
+
+**A.** 作れます。このガイドで必要な Python の知識は「関数・クラス・辞書・リスト」が分かる程度です。詰まった箇所は Claude に「このコードを初心者向けに説明して」と聞けば、動作原理から教えてくれます。
+
+実際に、以下のプロンプトだけで Flask の基本を学びながら実装できます。
+
+```
+「Pythonはある程度書けるがWebアプリは初めて。
+Flaskで/にアクセスしたら"Hello World"を返す
+最もシンプルなapp.pyを作って、各行を説明して」
+```
+
+### Q2. Google Cloud は無料で使えるか？
+
+**A.** ほぼ無料枠内に収まります。目安は以下の通りです。
+
+| サービス | 月間無料枠 | 個人利用での想定使用量 |
+|---------|-----------|---------------------|
+| Cloud Run | 200 万リクエスト | 数千〜数万リクエスト |
+| Firestore | 読取 50K/日、書込 20K/日 | 数千/日 |
+| GCS | 5 GB | 数 MB〜数十 MB |
+| Cloud Scheduler | 3 ジョブ | 2〜3 ジョブ |
+
+新規アカウントは $300 の無料クレジットが 90 日間付与されます。クレジット消費前に必ず **予算アラート** を設定してください。
+
+```bash
+gcloud billing budgets create \
+  --billing-account=YOUR_BILLING_ACCOUNT_ID \
+  --display-name="yonda monthly budget" \
+  --budget-amount=1000JPY \
+  --threshold-rule=percent=80
+```
+
+### Q3. Audible の認証が OTP で弾かれる
+
+**A.** Amazon アカウントが二段階認証（2FA）を有効にしていると、`audible-cli` でのログイン時に OTP が要求されます。
+
+```bash
+# OTP 対応版のクイックスタート
+audible quickstart --country jp
+# → ブラウザが開く → Amazon でログイン → OTP を入力 → auth_jp.json 生成
+```
+
+生成された `auth_jp.json` を GCS にアップロードします。
+
+```bash
+gsutil cp auth_jp.json gs://your-bucket/users/USER_UID/auth_jp.json
+```
+
+### Q4. 図書館のパスワードが平文で保存されるのは危険では？
+
+**A.** 危険な設計です。本番運用では必ず暗号化してください。
+
+```bash
+# 暗号化キーの生成
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# → 生成されたキーを Cloud Run の環境変数 CREDENTIALS_ENCRYPTION_KEY に設定
+```
+
+`cryptography` ライブラリの `Fernet` で AES-128 暗号化すると、仮に GCS バケットが漏洩しても平文パスワードは読めません。
+
+### Q5. Cloud Run で複数インスタンスが起動したら同じ同期が二重実行されるのでは？
+
+**A.** Cloud Scheduler が `POST /api/internal/auto-fetch-all` を 1 回送るため、1 つのインスタンスだけがそのリクエストを受け取ります。ただし Cloud Scheduler の「最低 1 回」配信保証により、まれに重複実行されます。
+
+防止策：
+
+```python
+# Firestore に「同期中」フラグを立て、既に実行中なら早期リターン
+def _is_sync_running(uid: str) -> bool:
+    db = get_db()
+    doc = db.collection("users").document(uid).get()
+    data = doc.to_dict() or {}
+    last_sync_start = data.get("sync_started_at", "")
+    if not last_sync_start:
+        return False
+    start_time = datetime.fromisoformat(last_sync_start)
+    # 30分以内に同期が開始されていれば実行中と判断
+    return (datetime.now(timezone.utc) - start_time).total_seconds() < 1800
+```
+
+### Q6. AI の API キーが漏洩した場合の対処法
+
+**A.** 即座に以下を実行してください。
+
+```bash
+# 1. OpenAI キーを無効化
+# → https://platform.openai.com/api-keys → Revoke
+
+# 2. 新しいキーを生成して Secret Manager を更新
+gcloud secrets versions add myapp-openai-key --data-file=<(echo -n "sk-new-key")
+
+# 3. Cloud Run を再デプロイして新キーを反映
+gcloud run services update myapp --region asia-northeast1
+
+# 4. 過去の使用状況を確認（不正使用がないか）
+# → OpenAI Dashboard → Usage
+```
+
+---
+
+## 付録 B — API リファレンス早見表
+
+### Flask エンドポイント一覧
+
+| メソッド | パス | 認証 | 説明 |
+|---------|------|------|------|
+| GET | `/` | 不要 | トップページ |
+| GET | `/api/books` | 不要 | 全書籍一覧 |
+| GET | `/api/stats` | 不要 | 統計情報 |
+| GET | `/api/public-user-stats` | 不要 | 全ユーザー読了数 |
+| POST | `/api/books/{id}/rating` | ログイン | 評価更新 |
+| POST | `/api/books/{id}/comment` | ログイン | コメント更新 |
+| POST | `/api/paper-book` | ログイン | 紙の本を登録 |
+| GET | `/api/ai-recommend` | ログイン | AI 選書 |
+| POST | `/api/book-insights/generate` | ログイン | AI 書評生成 |
+| POST | `/api/enrich-library-genre` | ログイン / 内部トークン | ジャンル補完 |
+| POST | `/api/credentials` | ログイン | 認証情報保存 |
+| DELETE | `/api/credentials/{id}` | ログイン | 認証情報削除 |
+| GET | `/auth/login` | 不要 | Google ログイン開始 |
+| GET | `/auth/callback` | 不要 | OAuth コールバック |
+| GET | `/auth/logout` | 不要 | ログアウト |
+| POST | `/api/internal/auto-fetch-all` | 内部トークン | 全ユーザー自動同期 |
+| GET | `/healthz` | 不要 | ヘルスチェック |
+
+### 環境変数一覧
+
+| 変数名 | 必須 | 説明 |
+|--------|------|------|
+| `FLASK_SECRET_KEY` | ◎ | セッション暗号化キー（本番では 32 バイト以上のランダム文字列）|
+| `GOOGLE_CLIENT_ID` | ◎ | Google OAuth クライアント ID |
+| `GOOGLE_CLIENT_SECRET` | ◎ | Google OAuth クライアントシークレット |
+| `DATA_DIR` | ○ | データディレクトリのパス（デフォルト: `data`）|
+| `YONDA_INTERNAL_TOKEN` | ○ | 内部 API 認証トークン |
+| `GCP_PROJECT` | △ | Google Cloud プロジェクト ID（自動検出されない環境用）|
+| `CREDENTIALS_ENCRYPTION_KEY` | △ | 認証情報の暗号化キー（Fernet 形式）|
+
+### BookRecord フィールド一覧
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `title` | str | ◎ | タイトル |
+| `author` | str | ◎ | 著者名 |
+| `source` | str | ◎ | `audible_jp` / `kindle` / `library_{id}` / `paper` |
+| `completed` | bool | ◎ | 読了フラグ |
+| `loan_date` | str | ○ | 取得日（YYYY-MM-DD）|
+| `completed_date` | str | ○ | 読了日（YYYY-MM-DD）|
+| `rating` | int | ○ | 評価（0〜5）|
+| `catalog_number` | str | ○ | ASIN または図書館資料番号 |
+| `cover_url` | str | ○ | 表紙画像 URL |
+| `genre` | str | ○ | ジャンル（正規化済み）|
+| `summary` | str | ○ | 概要（200 文字以内）|
+| `full_summary` | str | ○ | 概要（全文）|
+| `percent_complete` | float | ○ | 読書進捗（0.0〜1.0）|
+| `runtime_length_min` | int | ○ | 再生時間（分）Audible のみ |
+
+---
+
+## 付録 C — Cursor ショートカット・プロンプトチートシート
+
+### よく使う Cursor ショートカット
+
+| 操作 | Mac | Windows |
+|------|-----|---------|
+| AI チャットを開く | `Cmd + L` | `Ctrl + L` |
+| インライン編集（Cmd+K） | `Cmd + K` | `Ctrl + K` |
+| コンポーザーを開く | `Cmd + Shift + I` | `Ctrl + Shift + I` |
+| Tab 補完を受け入れる | `Tab` | `Tab` |
+| Tab 補完を拒否する | `Esc` | `Esc` |
+| ファイルを @ で参照 | チャットで `@ファイル名` | 同左 |
+| コードブロックをコピー | チャット内のコピーアイコン | 同左 |
+
+### シチュエーション別プロンプトテンプレート
+
+#### 新機能の追加
+
+```
+「@app.py に以下の機能を追加してください。
+
+機能: [機能名]
+要件:
+- [要件1]
+- [要件2]
+既存コードへの影響を最小限にしてください。」
+```
+
+#### バグ修正
+
+```
+「以下のエラーが発生しています。原因と修正コードを教えてください。
+
+エラー:
+[エラーメッセージをそのままペースト]
+
+発生箇所:
+[該当コードをペースト]
+
+試したこと:
+[これまでに試した対処法]」
+```
+
+#### コードレビュー
+
+```
+「@library_service.py のコードをレビューしてください。
+
+確認してほしいポイント:
+- セキュリティ上の問題はないか
+- パフォーマンス改善の余地はないか
+- エラーハンドリングの漏れはないか」
+```
+
+#### リファクタリング
+
+```
+「@adapters/setagaya.py を汎用化したいです。
+世田谷区立図書館専用のハードコードを設定ファイル化して、
+任意の図書館に対応できる LibraryConfig + LibraryAdapter パターンに
+書き直してください。」
+```
+
+#### テスト生成
+
+```
+「@adapters/audible.py の _to_book_record メソッドの
+pytest ユニットテストを書いてください。
+以下のケースを含めてください:
+- 正常系（is_finished=True）
+- percent_complete で完了判定されるケース（percent >= 0.95）
+- 著者が複数いるケース」
+```
+
+### Claude が苦手なこと（注意点）
+
+| 苦手な操作 | 対処法 |
+|-----------|--------|
+| 最新ライブラリの API | バージョンを明示する（例: `openai==1.30.0`）|
+| 巨大ファイルの全体把握 | 関係する関数だけ @ で参照する |
+| 副作用のある操作の確認 | 「実行前に何が変わるか説明して」と聞く |
+| 本番環境でのテスト | ステージング環境を作るか dry-run モードを実装する |
+
+---
+
+## 付録 D — 開発に使ったツール・サービス一覧
+
+### 開発ツール
+
+| ツール | 用途 | 無料枠 |
+|--------|------|--------|
+| [Cursor](https://cursor.com) | AI コードエディタ | 月 50 回まで Claude |
+| [Claude](https://claude.ai) | AI アシスタント | 無料プランあり |
+| [GitHub](https://github.com) | ソースコード管理 | パブリックリポジトリ無料 |
+| [Postman](https://postman.com) | API テスト | 基本機能無料 |
+
+### Google Cloud サービス
+
+| サービス | 用途 | 月額目安 |
+|---------|------|---------|
+| Cloud Run | アプリのホスティング | 無料枠内でほぼ 0 円 |
+| Firestore | ユーザーデータ DB | 無料枠内でほぼ 0 円 |
+| Cloud Storage | JSON データ永続化 | 0〜数円 |
+| Cloud Scheduler | 定期同期 | 3 ジョブまで無料 |
+| Secret Manager | API キー管理 | 月 $0.06/シークレット |
+
+### 外部 API
+
+| API | 用途 | 料金 |
+|-----|------|------|
+| Google Books API | 書誌情報取得 | 無料（日 1,000 回） |
+| Open Library API | 書誌情報取得 | 完全無料 |
+| OpenAI API | 書評・ジャンル生成 | 従量課金（gpt-4o-mini は安価）|
+| Google Gemini API | 書評・ジャンル生成 | 無料枠あり |
+| Audible API（非公式）| ライブラリ取得 | 無料（利用規約に注意）|
 
 ---
 
