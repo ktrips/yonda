@@ -55,7 +55,8 @@ header {
   gap: 0.75rem;
   position: relative;
   flex-wrap: nowrap;   /* 横一列を維持 */
-  overflow: hidden;    /* はみ出し防止 */
+  /* 横方向のみクリップ（overflow: hidden だと top:100% のハンバーガーメニューが隠れて開けない） */
+  overflow-x: clip;
   box-shadow: 0 4px 16px rgba(40,20,10,0.18);
   border-bottom: 3px solid #2a1a10;
 }
