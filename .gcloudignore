@@ -1,0 +1,12 @@
+# gcloud builds submit のソースアップロード除外設定
+# （このファイルを置くと .gitignore からの自動生成は無効になるため明示的に include する）
+.gcloudignore
+.git
+#!include:.gitignore
+
+# ビルドに不要な大容量・ローカル専用ファイル
+venv/
+.claude/
+output.json
+docs/cursor_claude_amazon_app.pdf
+docs/cursor_claude_amazon_app.docx
