@@ -371,7 +371,7 @@ def list_all_users_public_stats() -> list:
         return []
 
 
-
+def get_user_profile(uid: str) -> Optional[dict]:
     """1ユーザーのプロフィールを返す（メッセージ生成用）。"""
     db = get_db()
     if not db:

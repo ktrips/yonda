@@ -430,19 +430,9 @@ def invalidate_saved_cache() -> None:
 
 
 def _load_saved_uncached() -> Optional[dict]:
-    """全ソースを統合読み込み。Firestore が利用可能な場合はそちらを優先。"""
-    # ── Firestore 優先読み込み ──────────────────────────────────────
-    uid = get_current_uid()
-    if uid:
-        try:
-            import firestore_service  # noqa: PLC0415
-            result = firestore_service.load_books(uid)
-            if result:
-                return result
-        except Exception as e:
-            logger.warning("Firestore読み込み失敗、JSONにフォールバック: %s", e)
-
-    # ── JSON フォールバック ───────────────────────────────────────
+    """全ソースを統合読み込み。
+    JSON（GCS FUSE / ローカル）を正とし、JSON が空の場合のみ Firestore から復元する。
+    JSON は全書き込み経路でライトスルー済みなので、通常経路で Firestore 全件読みは不要。"""
     all_books: list[dict] = []
     sources: list[dict] = []
     json_map = _get_json_map()
@@ -469,10 +459,19 @@ def _load_saved_uncached() -> Optional[dict]:
             })
         except (json.JSONDecodeError, OSError) as e:
             logger.warning("JSON 読込失敗 (%s): %s", path, e)
-    if not all_books:
-        return None
-    all_books.sort(key=lambda b: b.get("loan_date", ""), reverse=True)
-    return {"sources": sources, "total": len(all_books), "books": all_books}
+    if all_books:
+        all_books.sort(key=lambda b: b.get("loan_date", ""), reverse=True)
+        return {"sources": sources, "total": len(all_books), "books": all_books}
+
+    # ── Firestore フォールバック（JSON 消失時の復元用） ─────────────
+    uid = get_current_uid()
+    if uid:
+        try:
+            import firestore_service  # noqa: PLC0415
+            return firestore_service.load_books(uid)
+        except Exception as e:
+            logger.warning("Firestore フォールバック読み込み失敗: %s", e)
+    return None
 
 
 def load_saved() -> Optional[dict]:
@@ -679,19 +678,15 @@ def try_auto_fetch_kindle() -> bool:
     """自動取得用: 保存済みセッションが有効な場合のみ Kindle データを取得・保存。
     OTP は要求せず、セッション無効時はスキップして False を返す。
     ローカルファイル（SQLite/XML）がある場合はそちらから取得する。"""
-    import requests as _requests
     from adapters.kindle import KindleAdapter
 
     adapter = KindleAdapter()
     creds = get_kindle_credentials()
 
     if creds and creds.get("user_id") and creds.get("password"):
-        session = _requests.Session()
+        session = requests.Session()
         session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ),
+            "User-Agent": _DEFAULT_UA,
             "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
         })
         if adapter.load_session(session) and adapter.verify_session(session):
@@ -1265,6 +1260,12 @@ def _save_json(library_id: str, payload: dict) -> None:
             logger.warning("Firestore書き込みエラー（JSONは保存済み）: %s", e)
 
 
+def save_payload(library_id: str, payload: dict) -> None:
+    """外部から書籍 payload を保存する公開ラッパー（キャッシュ無効化 + Firestore 同期込み）。"""
+    payload.setdefault("total", len(payload.get("books", [])))
+    _save_json(library_id, payload)
+
+
 def enrich_library_books_missing_genre(
     library_id: str = "setagaya",
     max_books: int = 10,
@@ -1358,8 +1359,8 @@ def enrich_library_books_missing_genre(
         time.sleep(0.5)
 
     if updated:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+        payload.setdefault("total", len(books))
+        _save_json(library_id, payload)  # キャッシュ無効化 + Firestore ライトスルー込み
         logger.info("%s: ジャンル/概要/表紙補完 %d 件保存完了", library_id, updated)
 
     return {

@@ -144,11 +144,18 @@ def get_current_user() -> dict | None:
         return None
 
 
+def _get_current_uid() -> str | None:
+    """ログイン中ユーザーのサニタイズ済み UID を返す。未ログインなら None。"""
+    user = get_current_user()
+    if not user:
+        return None
+    return re.sub(r"[^a-zA-Z0-9_\-]", "_", user.get("sub", "anonymous"))
+
+
 def get_user_data_dir_for_session() -> Path:
     """ログイン中ユーザーのデータディレクトリを返す。未ログインなら BASE DATA_DIR。"""
-    user = get_current_user()
-    if user:
-        uid = re.sub(r"[^a-zA-Z0-9_\-]", "_", user.get("sub", "anonymous"))
+    uid = _get_current_uid()
+    if uid:
         d = library_service.DATA_DIR / "users" / uid
         d.mkdir(parents=True, exist_ok=True)
         return d
@@ -485,19 +492,127 @@ def api_admin_backfill_messages():
     return jsonify({"success": True, "updated": updated, "user": user_info})
 
 
+def _internal_auth_ok() -> bool:
+    """内部エンドポイント認証: X-Internal-Token（設定済みの場合）
+    または Cloud Scheduler が自動付与する X-CloudScheduler: true ヘッダー。"""
+    if request.headers.get("X-CloudScheduler", "").lower() == "true":
+        return True
+    token = request.headers.get("X-Internal-Token", "")
+    return bool(_INTERNAL_TOKEN and hmac.compare_digest(token, _INTERNAL_TOKEN))
+
+
+# ソース名の表記ゆれ → adapter の library_id
+_SOURCE_TO_LIB_ID = {
+    "setagaya": "setagaya",
+    "audible": "audible_jp",
+    "audible_jp": "audible_jp",
+    "kindle": "kindle",
+}
+
+
+def _sync_user_books(
+    target_uid: str,
+    sources: list[str],
+    user_info: dict | None = None,
+    enrich_batch: int = 20,
+    update_stats: bool = True,
+) -> dict:
+    """1ユーザーの読書記録を指定ソースから同期する共通コア。
+    内部自動取得エンドポイント（Cloud Scheduler）から呼ばれる。
+    エンリッチは同期後に小バッチ（enrich_batch 冊）だけ実行し、リクエストを長時間塞がない。
+    呼び出し側スレッドの user_data_dir を設定してから戻る（スレッドローカル）。"""
+    import firestore_service as _fs  # noqa: PLC0415
+
+    user_data_dir = library_service.DATA_DIR / "users" / target_uid
+    if not user_data_dir.exists():
+        return {"error": "データディレクトリが見つかりません"}
+
+    # スレッドローカルなので並列実行でも安全
+    library_service.set_user_data_dir(user_data_dir)
+
+    if user_info is None:
+        try:
+            user_info = _fs.get_user_profile(target_uid)
+        except Exception as e:
+            logger.warning("ユーザー情報取得失敗 uid=%s: %s", target_uid, e)
+
+    results: dict = {}
+    errors: dict = {}
+    previous_payloads: dict = {}
+    current_payloads: dict = {}
+
+    for source in sources:
+        lib_id = _SOURCE_TO_LIB_ID.get(source, source)
+        try:
+            previous_payloads[lib_id] = library_service.load_saved_for(lib_id)
+            logger.info("自動取得開始: source=%s uid=%s", lib_id, target_uid)
+            # 取得自体は skip_enrich=True で高速化（既存ジャンル・概要は引き継がれる）
+            payload = library_service.fetch_and_save(lib_id, skip_enrich=True)
+            current_payloads[lib_id] = payload
+            results[source] = {"total": payload.get("total", 0)}
+            logger.info("自動取得完了: source=%s uid=%s total=%d",
+                        lib_id, target_uid, payload.get("total", 0))
+            # 図書館・Kindle のみ: ジャンル・概要なし本を小バッチで補完（外部API + AI）
+            if enrich_batch > 0 and lib_id in ("setagaya", "kindle"):
+                try:
+                    enrich_result = library_service.enrich_library_books_missing_genre(
+                        library_id=lib_id, max_books=enrich_batch
+                    )
+                    updated_by_api = enrich_result.get("updated", 0)
+                    still_missing = [
+                        b for b in enrich_result.get("books", []) if not b.get("genre")
+                    ]
+                    ai_updated = 0
+                    if still_missing:
+                        try:
+                            ai_updated = _enrich_missing_books_with_ai(lib_id, still_missing)
+                        except Exception as ai_err:
+                            logger.warning("自動取得: uid=%s %s AI補完エラー: %s",
+                                           target_uid, lib_id, ai_err)
+                    if updated_by_api or ai_updated:
+                        logger.info("自動取得: uid=%s %s ジャンル補完 %d 件 (API=%d AI=%d)",
+                                    target_uid, lib_id, updated_by_api + ai_updated,
+                                    updated_by_api, ai_updated)
+                except Exception as enrich_err:
+                    logger.warning("自動取得: uid=%s %s ジャンル補完エラー: %s",
+                                   target_uid, lib_id, enrich_err)
+        except Exception as e:
+            logger.error("自動取得エラー: source=%s uid=%s error=%s",
+                         lib_id, target_uid, e, exc_info=True)
+            errors[source] = str(e)
+
+    # 新規追加・読了があればメッセージ生成（user_info なしでも保存）
+    if current_payloads:
+        try:
+            message = _create_completed_books_message(previous_payloads, current_payloads, errors)
+            if message:
+                if user_info:
+                    message["user"] = user_info
+                library_service.update_yonda_message(message)
+                logger.info("同期メッセージ更新: uid=%s %d冊",
+                            target_uid, len(message.get("books", [])))
+        except Exception as e:
+            logger.error("同期メッセージ生成エラー uid=%s: %s", target_uid, e)
+
+    # 読了冊数を Firestore に更新（公開統計）
+    if update_stats and current_payloads:
+        try:
+            _fs.update_user_stats(target_uid, library_service.count_completed_books())
+        except Exception as e:
+            logger.warning("統計更新エラー uid=%s: %s", target_uid, e)
+
+    return {
+        "results": results,
+        "errors": errors,
+        "status": "ok" if not errors else ("partial" if results else "error"),
+    }
+
+
 @app.route("/api/internal/auto-fetch", methods=["POST"])
 def api_internal_auto_fetch():
-    """Cloud Scheduler から呼ばれる内部自動取得エンドポイント。
-    認証: X-Internal-Token ヘッダー（YONDA_INTERNAL_TOKEN が設定済みの場合）
-         または Cloud Scheduler が自動付与する X-CloudScheduler: true ヘッダー。
+    """内部自動取得エンドポイント（uid / sources 指定可の互換API）。
     uid=all または uid 未指定の場合は DATA_DIR/users/ 配下の全ユーザーを処理する。"""
-    import hmac
-
-    # 認証: X-Internal-Token（設定済みの場合）または X-CloudScheduler ヘッダー
-    is_scheduler = request.headers.get("X-CloudScheduler", "").lower() == "true"
-    token = request.headers.get("X-Internal-Token", "")
-    token_ok = _INTERNAL_TOKEN and hmac.compare_digest(token, _INTERNAL_TOKEN)
-    if not is_scheduler and not token_ok:
+    if not _internal_auth_ok():
         logger.warning("内部取得: 認証失敗 (IP=%s)", request.remote_addr)
         return jsonify({"error": "unauthorized"}), 401
 
@@ -516,88 +631,26 @@ def api_internal_auto_fetch():
     else:
         uid_list = [uid]
 
-    all_results = {}
-    def _fetch_for_user(target_uid: str) -> tuple[str, dict]:
-        user_data_dir = library_service.DATA_DIR / "users" / target_uid
-        if not user_data_dir.exists():
-            return target_uid, {"error": "データディレクトリが見つかりません"}
-
-        # スレッドローカルなので並列実行でも安全
-        library_service.set_user_data_dir(user_data_dir)
-
-        # Firestore からユーザープロフィールを取得
-        user_info = None
-        try:
-            import firestore_service  # noqa: PLC0415
-            db = firestore_service.get_db()
-            if db:
-                doc = db.collection("users").document(target_uid).get()
-                if doc.exists:
-                    d = doc.to_dict() or {}
-                    user_info = {"name": d.get("name", ""), "email": d.get("email", ""), "picture": d.get("picture", "")}
-        except Exception as e:
-            logger.warning("ユーザー情報取得失敗 uid=%s: %s", target_uid, e)
-
-        source_map = {"kindle": "kindle", "audible": "audible_jp", "audible_jp": "audible_jp", "setagaya": "setagaya"}
-        results: dict = {}
-        errors: dict = {}
-        previous_payloads: dict = {}
-        current_payloads: dict = {}
-
-        for source in sources:
-            lib_id = source_map.get(source, source)
-            try:
-                previous_payloads[lib_id] = library_service.load_saved_for(lib_id)
-                logger.info("自動取得開始: source=%s uid=%s", lib_id, target_uid)
-                payload = library_service.fetch_and_save(lib_id)
-                current_payloads[lib_id] = payload
-                results[lib_id] = {"total": payload.get("total", 0)}
-                logger.info("自動取得完了: source=%s uid=%s total=%d", lib_id, target_uid, payload.get("total", 0))
-            except Exception as e:
-                logger.error("自動取得エラー: source=%s uid=%s error=%s", lib_id, target_uid, e, exc_info=True)
-                errors[lib_id] = str(e)
-
-        # 新規追加・読了があればメッセージ生成（user_info なしでも保存）
-        if current_payloads:
-            try:
-                message = _create_completed_books_message(previous_payloads, current_payloads, errors)
-                if message:
-                    if user_info:
-                        message["user"] = user_info
-                    library_service.update_yonda_message(message)
-                    logger.info("同期メッセージ更新: uid=%s %d冊", target_uid, len(message.get("books", [])))
-            except Exception as e:
-                logger.error("同期メッセージ生成エラー uid=%s: %s", target_uid, e)
-
-        return target_uid, {
-            "results": results,
-            "errors": errors,
-            "status": "ok" if not errors else ("partial" if results else "error"),
-        }
-
-    # 複数ユーザーを並列処理（_tls はスレッドローカルなので安全）
+    # 複数ユーザーを並列処理（user_data_dir はスレッドローカルなので安全）
     import concurrent.futures as _cf
+    all_results = {}
     with _cf.ThreadPoolExecutor(max_workers=min(4, len(uid_list))) as executor:
-        for uid, result in executor.map(_fetch_for_user, uid_list):
-            all_results[uid] = result
+        futures = {executor.submit(_sync_user_books, u, sources): u for u in uid_list}
+        for future in _cf.as_completed(futures):
+            all_results[futures[future]] = future.result()
 
-    logger.info("全ユーザー自動取得完了: %s", {u: v["status"] for u, v in all_results.items()})
+    logger.info("全ユーザー自動取得完了: %s",
+                {u: v.get("status", "error") for u, v in all_results.items()})
     return jsonify({"success": True, "users": all_results})
 
 
 @app.route("/api/internal/auto-fetch-all", methods=["POST"])
 def api_internal_auto_fetch_all():
     """Cloud Scheduler から呼ばれる。全ユーザーの読書記録を同期取得して 200 を返す。
-    エンリッチは yonda-enrich-daily ジョブ（/api/enrich）に委任する。
-    認証: X-Internal-Token ヘッダー（YONDA_INTERNAL_TOKEN が設定済みの場合）
-         または Cloud Scheduler が自動付与する X-CloudScheduler: true ヘッダー。"""
-    import hmac as _hmac
+    同期対象ユーザー・ソースは Firestore の sources フラグから決定する。"""
     import concurrent.futures as _cf
 
-    is_scheduler = request.headers.get("X-CloudScheduler", "").lower() == "true"
-    token = request.headers.get("X-Internal-Token", "")
-    token_ok = _INTERNAL_TOKEN and _hmac.compare_digest(token, _INTERNAL_TOKEN)
-    if not is_scheduler and not token_ok:
+    if not _internal_auth_ok():
         logger.warning("auto-fetch-all: 認証失敗 (IP=%s)", request.remote_addr)
         return jsonify({"error": "unauthorized"}), 401
 
@@ -641,105 +694,22 @@ def api_internal_auto_fetch_all():
             logger.warning("auto-fetch-all: 同期対象ユーザーなし")
             return jsonify({"status": "no_users"}), 200
 
-    source_map = {"setagaya": "setagaya", "audible": "audible_jp", "kindle": "kindle"}
+    def _fetch_for_fs_user(u: dict) -> dict:
+        enabled_sources = [s for s, on in (u.get("sources") or {}).items() if on]
+        return _sync_user_books(u["uid"], enabled_sources)
 
-    def _fetch_for_fs_user(u: dict) -> tuple:
-        target_uid = u["uid"]
-        sources = u.get("sources", {})
-        user_data_dir = library_service.DATA_DIR / "users" / target_uid
-        if not user_data_dir.exists():
-            logger.warning("auto-fetch-all: uid=%s のデータディレクトリなし、スキップ", target_uid)
-            return target_uid, {"error": "データディレクトリが見つかりません"}
-
-        library_service.set_user_data_dir(user_data_dir)
-        profile = _fs.get_user_public_profile(target_uid)
-
-        results: dict = {}
-        errors: dict = {}
-        prev_payloads: dict = {}
-        curr_payloads: dict = {}
-
-        for src_key, enabled in sources.items():
-            if not enabled:
-                continue
-            lib_id = source_map.get(src_key, src_key)
-            try:
-                prev_payloads[lib_id] = library_service.load_saved_for(lib_id)
-                # エンリッチはスキップするが既存ジャンル・概要を引き継ぐ
-                payload = library_service.fetch_and_save(lib_id, skip_enrich=True)
-                curr_payloads[lib_id] = payload
-                results[src_key] = {"total": payload.get("total", 0)}
-                logger.warning("auto-fetch-all: uid=%s source=%s 完了 (%d冊)",
-                               target_uid, src_key, payload.get("total", 0))
-                # 図書館・Kindleのみ: ジャンルなし本を小バッチで補完（API + AI）
-                if lib_id in ("setagaya", "kindle"):
-                    try:
-                        enrich_result = library_service.enrich_library_books_missing_genre(
-                            library_id=lib_id, max_books=20
-                        )
-                        updated_by_api = enrich_result.get("updated", 0)
-                        # 外部APIで取れなかった本はAIで補完
-                        still_missing = [
-                            b for b in enrich_result.get("books", [])
-                            if not b.get("genre")
-                        ]
-                        ai_updated = 0
-                        if still_missing:
-                            try:
-                                ai_updated = _enrich_missing_books_with_ai(lib_id, still_missing)
-                            except Exception as ai_err:
-                                logger.warning("auto-fetch-all: uid=%s %s AI補完エラー: %s",
-                                               target_uid, lib_id, ai_err)
-                        total_updated = updated_by_api + ai_updated
-                        if total_updated:
-                            logger.warning(
-                                "auto-fetch-all: uid=%s %s ジャンル補完 %d 件 (API=%d AI=%d)",
-                                target_uid, lib_id, total_updated, updated_by_api, ai_updated
-                            )
-                    except Exception as enrich_err:
-                        logger.warning("auto-fetch-all: uid=%s %s ジャンル補完エラー: %s",
-                                       target_uid, lib_id, enrich_err)
-            except Exception as e:
-                logger.error("auto-fetch-all: uid=%s source=%s エラー: %s", target_uid, src_key, e)
-                errors[src_key] = str(e)
-
-        if curr_payloads:
-            try:
-                message = _create_completed_books_message(prev_payloads, curr_payloads, errors)
-                if message:
-                    if profile:
-                        message["user"] = profile
-                    library_service.update_yonda_message(message)
-            except Exception as e:
-                logger.error("auto-fetch-all: uid=%s メッセージ生成エラー: %s", target_uid, e)
-
-        # 読了冊数を Firestore に更新（公開統計）
-        try:
-            completed = library_service.count_completed_books()
-            _fs.update_user_stats(target_uid, completed)
-        except Exception as e:
-            logger.warning("auto-fetch-all: uid=%s 統計更新エラー: %s", target_uid, e)
-
-        return target_uid, {
-            "results": results,
-            "errors": errors,
-            "status": "ok" if not errors else ("partial" if results else "error"),
-        }
-
-    # 複数ユーザーを並列フェッチ（エンリッチなし、高速）
+    # 複数ユーザーを並列フェッチ（user_data_dir はスレッドローカルなので安全）
     all_results: dict = {}
     with _cf.ThreadPoolExecutor(max_workers=min(4, len(fs_users))) as executor:
         futures = {executor.submit(_fetch_for_fs_user, u): u["uid"] for u in fs_users}
         for future in _cf.as_completed(futures, timeout=300):
+            uid = futures[future]
             try:
-                uid, result = future.result(timeout=5)
-                all_results[uid] = result
+                all_results[uid] = future.result(timeout=5)
             except _cf.TimeoutError:
-                uid = futures[future]
                 logger.error("auto-fetch-all: uid=%s タイムアウト（5分）", uid)
                 all_results[uid] = {"error": "timeout"}
             except Exception as e:
-                uid = futures[future]
                 logger.error("auto-fetch-all: uid=%s 予期しないエラー: %s", uid, e)
                 all_results[uid] = {"error": str(e)}
 
@@ -2143,12 +2113,34 @@ def _create_completed_books_message(
     return library_service.update_yonda_message(message)
 
 
-def _create_audible_completed_message(previous_payload: dict | None, current_payload: dict | None) -> dict | None:
-    """互換用: Audible単体更新でも同じメッセージ生成を使う。"""
-    return _create_completed_books_message(
-        {"audible_jp": previous_payload},
-        {"audible_jp": current_payload},
-    )
+def _attach_current_user_to_message(message: dict) -> None:
+    """ログイン中ユーザーのプロフィールをメッセージに付与する（Firestore 優先）。"""
+    user = get_current_user()
+    if not user:
+        return
+    try:
+        import firestore_service as _fs  # noqa: PLC0415
+        profile = _fs.get_user_profile(_get_current_uid())
+    except Exception:
+        profile = None
+    message["user"] = profile or {
+        "name":    user.get("name", ""),
+        "email":   user.get("email", ""),
+        "picture": user.get("picture", ""),
+    }
+
+
+def _start_user_thread(target, name: str, **kwargs) -> None:
+    """現在リクエストのユーザーデータディレクトリを引き継いでバックグラウンド処理を開始する。
+    （threading.Thread 直接起動だとスレッドローカルが未設定になり ROOT データを処理してしまう）"""
+    import threading
+    user_dir = library_service.get_user_data_dir()
+
+    def _run():
+        library_service.set_user_data_dir(user_dir)
+        target(**kwargs)
+
+    threading.Thread(target=_run, daemon=False, name=name).start()
 
 
 @app.route("/api/fetch", methods=["POST"])
@@ -2172,18 +2164,31 @@ def api_fetch():
                 for lid in synced_libraries
             } if notify_completed else {}
             current_payloads = {}
-            for lid in ["setagaya", "audible_jp"]:
-                try:
-                    payload = library_service.fetch_and_save(lid)
-                    current_payloads[lid] = payload
-                except Exception as e:
-                    errors[lid] = str(e)
-            try:
-                if library_service.try_auto_fetch_kindle():
-                    current_payloads["kindle"] = library_service.load_saved_for("kindle")
-            except Exception as e:
-                errors["kindle"] = str(e)
-                logger.warning("Kindle 自動取得エラー: %s", e)
+
+            # 3ソースは独立したネットワークI/Oなので並列取得する
+            user_dir = library_service.get_user_data_dir()
+
+            def _fetch_source(lid: str):
+                library_service.set_user_data_dir(user_dir)  # ワーカースレッドに引き継ぐ
+                if lid == "kindle":
+                    if library_service.try_auto_fetch_kindle():
+                        return library_service.load_saved_for("kindle")
+                    return None
+                return library_service.fetch_and_save(lid)
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
+                future_map = {ex.submit(_fetch_source, lid): lid for lid in synced_libraries}
+                for future in concurrent.futures.as_completed(future_map):
+                    lid = future_map[future]
+                    try:
+                        payload = future.result()
+                        if payload:
+                            current_payloads[lid] = payload
+                    except Exception as e:
+                        errors[lid] = str(e)
+                        if lid == "kindle":
+                            logger.warning("Kindle 自動取得エラー: %s", e)
+
             combined = library_service.load_saved()
             result = {"success": True, **(combined or {})}
             if notify_completed:
@@ -2193,46 +2198,17 @@ def api_fetch():
                         message_payloads[lid] = previous_payloads.get(lid) or library_service.load_saved_for(lid)
                 message = _create_completed_books_message(previous_payloads, message_payloads, errors)
                 if message:
-                    user = get_current_user()
-                    if user:
-                        uid = re.sub(r"[^a-zA-Z0-9_\-]", "_", user.get("sub", "anonymous"))
-                        try:
-                            import firestore_service as _fs
-                            profile = _fs.get_user_profile(uid)
-                        except Exception:
-                            profile = None
-                        message["user"] = profile or {
-                            "name":    user.get("name", ""),
-                            "email":   user.get("email", ""),
-                            "picture": user.get("picture", ""),
-                        }
+                    _attach_current_user_to_message(message)
                     library_service.update_yonda_message(message)
                     result["message"] = message
             if errors:
                 result["errors"] = errors
-            # 同期後にバックグラウンドでinsights未生成の本を補完（最大5冊/回）
-            import threading
-            threading.Thread(
-                target=_backfill_missing_insights,
-                kwargs={"max_books": 5},
-                daemon=False,
-                name="insights-backfill",
-            ).start()
-            # 図書館本のジャンル・概要未設定を自動補完（最大5冊/回）
-            threading.Thread(
-                target=_backfill_library_genre,
-                daemon=False,
-                name="library-genre-backfill",
-            ).start()
-            # Kindle本のジャンル・概要未設定を自動補完（最大5冊/回）
-            threading.Thread(
-                target=_backfill_library_genre,
-                kwargs={"library_id": "kindle"},
-                daemon=False,
-                name="kindle-genre-backfill",
-            ).start()
+            # 同期後にバックグラウンドで insights / ジャンル・概要の未設定分を補完
+            _start_user_thread(_backfill_missing_insights, "insights-backfill", max_books=5)
+            _start_user_thread(_backfill_library_genre, "library-genre-backfill")
+            _start_user_thread(_backfill_library_genre, "kindle-genre-backfill", library_id="kindle")
             return jsonify(result)
-        previous_audible = (
+        previous_payload = (
             library_service.load_saved_for(library_id)
             if notify_completed
             else None
@@ -2241,30 +2217,13 @@ def api_fetch():
         combined = library_service.load_saved()
         result = {"success": True, **(combined or {})}
         if notify_completed:
-            message = _create_completed_books_message({library_id: previous_audible}, {library_id: payload})
+            message = _create_completed_books_message({library_id: previous_payload}, {library_id: payload})
             if message:
-                user = get_current_user()
-                if user:
-                    uid = re.sub(r"[^a-zA-Z0-9_\-]", "_", user.get("sub", "anonymous"))
-                    try:
-                        import firestore_service as _fs
-                        profile = _fs.get_user_profile(uid)
-                    except Exception:
-                        profile = None
-                    message["user"] = profile or {
-                        "name":    user.get("name", ""),
-                        "email":   user.get("email", ""),
-                        "picture": user.get("picture", ""),
-                    }
+                _attach_current_user_to_message(message)
                 library_service.update_yonda_message(message)
                 result["message"] = message
         if library_id == "setagaya":
-            import threading
-            threading.Thread(
-                target=_backfill_library_genre,
-                daemon=False,
-                name="library-genre-backfill",
-            ).start()
+            _start_user_thread(_backfill_library_genre, "library-genre-backfill")
         return jsonify(result)
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 400
@@ -2272,6 +2231,30 @@ def api_fetch():
         return jsonify({"success": False, "error": str(e)}), 502
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+def _new_amazon_session() -> requests.Session:
+    """Amazon 向けの UA / Accept-Language を設定した requests.Session を作る。"""
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+    })
+    return session
+
+
+def _finish_kindle_fetch(adapter, session, save_session: bool = False):
+    """Kindle 履歴を取得・保存し、統合データ + バックフィル起動込みのレスポンスを返す。"""
+    records = adapter.fetch_history(session)
+    if save_session and session is not None:
+        # セッションを保存（次回自動取得時に再利用）
+        adapter.save_session(session)
+    combined = library_service.save_kindle_records_and_load(records)
+    _start_user_thread(_backfill_library_genre, "kindle-genre-backfill", library_id="kindle")
+    return jsonify({"success": True, **combined})
 
 
 def _api_fetch_kindle(session_id: str, otp: str):
@@ -2282,13 +2265,7 @@ def _api_fetch_kindle(session_id: str, otp: str):
     if not creds or not creds.get("user_id") or not creds.get("password"):
         library_service.fetch_and_save("kindle")
         combined = library_service.load_saved()
-        import threading
-        threading.Thread(
-            target=_backfill_library_genre,
-            kwargs={"library_id": "kindle"},
-            daemon=False,
-            name="kindle-genre-backfill",
-        ).start()
+        _start_user_thread(_backfill_library_genre, "kindle-genre-backfill", library_id="kindle")
         return jsonify({"success": True, **(combined or {})})
 
     if session_id and otp:
@@ -2296,80 +2273,34 @@ def _api_fetch_kindle(session_id: str, otp: str):
         data = _kindle_otp_sessions.pop(session_id, None)
         if not data:
             return jsonify({"success": False, "error": "セッションが期限切れです。最初からやり直してください。"}), 400
-        session = requests.Session()
-        session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ),
-            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
-        })
+        session = _new_amazon_session()
         session.cookies.update(requests.utils.cookiejar_from_dict(data["cookies"]))
         adapter = KindleAdapter()
         if not adapter.submit_otp(session, otp, data.get("otp_page_html")):
             return jsonify({"success": False, "error": "OTP が正しくありません。もう一度お試しください。"}), 401
-        records = adapter.fetch_history(session)
-        # OTP認証成功後もセッションを保存（次回自動取得時に再利用）
-        adapter.save_session(session)
-        combined = library_service.save_kindle_records_and_load(records)
-        import threading
-        threading.Thread(
-            target=_backfill_library_genre,
-            kwargs={"library_id": "kindle"},
-            daemon=False,
-            name="kindle-genre-backfill",
-        ).start()
-        return jsonify({"success": True, **combined})
+        return _finish_kindle_fetch(adapter, session, save_session=True)
 
     # 初回: セッション再利用を試してからログイン
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        ),
-        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
-    })
+    session = _new_amazon_session()
     adapter = KindleAdapter()
 
     # 1. 保存済みセッションを試す
-    session_loaded = adapter.load_session(session)
     session_valid = False
-    if session_loaded:
+    if adapter.load_session(session):
         logger.info("保存済みセッションを検証中...")
         session_valid = adapter.verify_session(session)
 
     # 2. セッションが有効ならそのまま使う
     if session_valid:
         logger.info("保存済みセッションを使用してデータ取得")
-        records = adapter.fetch_history(session)
-        combined = library_service.save_kindle_records_and_load(records)
-        import threading
-        threading.Thread(
-            target=_backfill_library_genre,
-            kwargs={"library_id": "kindle"},
-            daemon=False,
-            name="kindle-genre-backfill",
-        ).start()
-        return jsonify({"success": True, **combined})
+        return _finish_kindle_fetch(adapter, session)
 
     # 3. セッションが無効なら再ログイン
     logger.info("セッションが無効なため、再ログイン")
     creds_obj = LibraryCredentials(user_id=creds["user_id"], password=creds["password"])
     ok, needs_otp, otp_page_html = adapter._login_amazon(session, creds_obj)
     if ok:
-        records = adapter.fetch_history(session)
-        # ログイン成功時もセッションを保存（次回自動取得時に再利用）
-        adapter.save_session(session)
-        combined = library_service.save_kindle_records_and_load(records)
-        import threading
-        threading.Thread(
-            target=_backfill_library_genre,
-            kwargs={"library_id": "kindle"},
-            daemon=False,
-            name="kindle-genre-backfill",
-        ).start()
-        return jsonify({"success": True, **combined})
+        return _finish_kindle_fetch(adapter, session, save_session=True)
     if needs_otp and otp_page_html:
         sid = str(uuid.uuid4())
         _kindle_otp_sessions[sid] = {
@@ -3157,9 +3088,6 @@ def api_enrich_library_genre():
     """図書館本のジャンル・概要が未設定の直近N冊を補完する。
     Open Library / Google Books API 取得後、取れなかった本は AI で推定する。
     uid パラメータを指定すると内部トークン認証で任意ユーザーのデータを処理できる。"""
-    import hmac as _hmac
-    import firestore_service as _fs  # noqa: PLC0415
-
     try:
         body = request.get_json(silent=True) or {}
         library_id = body.get("library_id", "setagaya")
@@ -3168,10 +3096,7 @@ def api_enrich_library_genre():
 
         # uid 指定時は内部トークン認証が必要
         if target_uid:
-            is_scheduler = request.headers.get("X-CloudScheduler", "").lower() == "true"
-            token = request.headers.get("X-Internal-Token", "")
-            token_ok = _INTERNAL_TOKEN and _hmac.compare_digest(token, _INTERNAL_TOKEN)
-            if not is_scheduler and not token_ok:
+            if not _internal_auth_ok():
                 uid = _get_current_uid()
                 if uid != target_uid:
                     return jsonify({"error": "unauthorized"}), 401
@@ -3257,8 +3182,7 @@ JSONのみ出力してください。前置きや説明は不要です。
             logger.warning("AI ジャンル推定エラー [%s]: %s", title[:30], e)
 
     if updated:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+        library_service.save_payload(library_id, payload)  # キャッシュ無効化 + Firestore 同期込み
         logger.info("AI 補完 %d 件保存: %s", updated, library_id)
 
     return updated
