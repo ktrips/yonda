@@ -93,7 +93,8 @@ function _applyAuthUI() {
 }
 
 function _showAllTabs() {
-  ['mainTabYonda', 'mainTabYomu', 'mainTabOshi'].forEach(id => {
+  // mainTabOshi は一旦無効化中（HTML側で display:none、コンテンツはYomu下部へ移動）
+  ['mainTabYonda', 'mainTabYomu'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = '';
   });
@@ -119,8 +120,8 @@ function switchBookTab(tabVal) {
 }
 
 function _showPublicOnly() {
-  // ヘッダーのタブは全て表示（Yonda/Yomu/Oshi）
-  ['mainTabYonda', 'mainTabYomu', 'mainTabOshi'].forEach(id => {
+  // ヘッダーのタブは全て表示（Yonda/Yomu。Oshiは一旦無効化中）
+  ['mainTabYonda', 'mainTabYomu'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = '';
   });
@@ -366,7 +367,7 @@ function _bookIndex(book) {
   return _bookIndexMap.has(book) ? _bookIndexMap.get(book) : allBooks.indexOf(book);
 }
 let currentPage = 0;
-let activeMainTab = 'yonda'; // 'yonda' | 'yomu' | 'oshi'
+let activeMainTab = 'yonda'; // 'yonda' | 'yomu'（'oshi' は一旦無効化、AI推しはYomu下部に統合）
 let activeBookTab = 'read'; // 'read' = 読んだ/途中, 'community' = みんなのYonda, 'messages' = メッセージ
 let monthlyChart = null;
 let activeChartSource = null; // null=全ソース, 'audible'|'kindle'|'library'|'paper'
@@ -844,14 +845,15 @@ function setAffiliateTag(tag) {
 function getDefaultPage() {
   try {
     const v = localStorage.getItem(DEFAULT_PAGE_KEY);
-    if (v && ['yonda', 'yomu', 'oshi'].includes(v)) return v;
+    if (v === 'oshi') return 'yomu'; // Oshiは一旦無効化（AI推しはYomu下部へ移動）
+    if (v && ['yonda', 'yomu'].includes(v)) return v;
   } catch (_) {}
   return DEFAULT_PAGE;
 }
 
 function setDefaultPage(page) {
   try {
-    if (page && ['yonda', 'yomu', 'oshi'].includes(page)) {
+    if (page && ['yonda', 'yomu'].includes(page)) {
       localStorage.setItem(DEFAULT_PAGE_KEY, page);
     }
   } catch (_) {}
@@ -1658,15 +1660,12 @@ function updateMainTabVisibility() {
   document.querySelectorAll('.main-content').forEach(el => { el.style.display = 'none'; });
   const yonda = document.getElementById('mainContentYonda');
   const yomu = document.getElementById('mainContentYomu');
-  const oshi = document.getElementById('mainContentOshi');
   if (activeMainTab === 'yonda' && yonda) yonda.style.display = 'block';
   else if (activeMainTab === 'yomu' && yomu) {
     yomu.style.display = 'block';
     renderBookSearchResults();
     renderTagAnalytics();
-  } else if (activeMainTab === 'oshi' && oshi) {
-    oshi.style.display = 'block';
-    initAiRecommendIfNeeded();
+    initAiRecommendIfNeeded(); // AI推し（旧Oshi）はYomu下部に統合
   }
   document.querySelectorAll('.header-tab').forEach(t => t.classList.remove('active'));
   const activeTab = document.querySelector(`.header-tab[data-main-tab="${activeMainTab}"]`);
@@ -1924,7 +1923,7 @@ function showRecommendInitialState() {
   if (refreshBtn) refreshBtn.style.display = 'none';
 }
 
-/** Oshiタブ内で読書履歴ベース推薦を実行 */
+/** AI推しセクション（Yomuページ下部）で読書履歴ベース推薦を実行 */
 async function renderHistoryRecommend() {
   const listEl = document.getElementById('historyRecommendList');
   const loadingEl = document.getElementById('historyRecommendLoading');
@@ -6570,10 +6569,9 @@ document.querySelectorAll('.header-tab').forEach(tab => {
     if (notLoggedIn && tabVal === 'yomu') {
       const el = document.getElementById('loginNoticeYomu');
       if (el) el.style.display = '';
-    }
-    if (notLoggedIn && tabVal === 'oshi') {
-      const el = document.getElementById('loginNoticeOshi');
-      if (el) el.style.display = '';
+      // AI推し（旧Oshi）セクションの案内もYomu内に表示
+      const oshiNotice = document.getElementById('loginNoticeOshi');
+      if (oshiNotice) oshiNotice.style.display = '';
     }
     if (tabVal === 'yonda') {
       document.getElementById('sourceFilter').value = 'all';

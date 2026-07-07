@@ -30,7 +30,8 @@
       <div class="header-main-tabs">
         <button type="button" class="header-tab active" id="mainTabYonda" data-main-tab="yonda"><span class="header-tab-en">Yonda</span><span class="header-tab-ja">読んだ？</span></button>
         <button type="button" class="header-tab" id="mainTabYomu" data-main-tab="yomu"><span class="header-tab-en">Yomu</span><span class="header-tab-ja">何読む？</span></button>
-        <button type="button" class="header-tab" id="mainTabOshi" data-main-tab="oshi"><span class="header-tab-en">Oshi</span><span class="header-tab-ja">AI推し</span></button>
+        <!-- Oshiタブは一旦無効化（コンテンツはYomuページ下部へ移動） -->
+        <button type="button" class="header-tab" id="mainTabOshi" data-main-tab="oshi" style="display:none;"><span class="header-tab-en">Oshi</span><span class="header-tab-ja">AI推し</span></button>
       </div>
       <div class="header-search">
         <input type="text" id="searchInputYonda" class="header-search-input" placeholder="タイトル・著者…" aria-label="検索">
@@ -299,10 +300,8 @@
             <div class="tag-cat-content" id="tagCatContent"></div>
           </div>
         </details>
-      </div>
 
-      <!-- Oshi: AI推し -->
-      <div id="mainContentOshi" class="main-content" style="display:none;">
+        <!-- AI推し（旧Oshiページから移動） -->
         <!-- 未ログイン時のログイン案内 -->
         <div id="loginNoticeOshi" class="tab-login-notice" style="display:none;">
           🤖 AI推し本機能を使うには<a href="/auth/login" class="btn-notice-login">Googleログイン</a>後、アプリ設定でAI APIキーの設定が必要です。
@@ -369,7 +368,7 @@
             <input type="text" id="aiRecommendInput" class="ai-recommend-input" placeholder="メッセージを入力…" autocomplete="off">
             <button type="button" class="btn btn-primary" id="aiRecommendSendBtn">送信</button>
           </div>
-          <!-- 読書履歴推し結果（Oshiタブ内） -->
+          <!-- 読書履歴推し結果 -->
           <div id="historyRecommendSection" style="display:none; margin-top:1rem;">
             <div class="history-recommend-intro">
               <p>あなたの読書履歴から最適な本を探します。<br>API Key に AI キーを入れてください。</p>
@@ -446,7 +445,7 @@
           <select id="defaultPageSelect" class="modal-input">
             <option value="yonda">Yonda（読んだ本ページ）</option>
             <option value="yomu">Yomu（読みたい本検索）</option>
-            <option value="oshi">Oshi（AI選書サービス）</option>
+            <!-- Oshiページは一旦無効化（AI推しはYomuページ下部に統合） -->
           </select>
         </div>
         <p class="modal-note">アプリ起動時に最初に表示するページを選択します。</p>
