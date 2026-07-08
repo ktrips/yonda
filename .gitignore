@@ -12,3 +12,7 @@ Arc/
 data/*
 !data/.gitkeep
 !data/kindle_books.json
+
+# Word の一時ロックファイル
+~$*
+**/~$*
