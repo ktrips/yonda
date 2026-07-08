@@ -212,16 +212,16 @@ def add_cover_page(doc: Document):
 
     # メインタイトル
     _center_para(
-        "Cursor + Claude で\nAmazon 連携読書記録アプリを作る",
-        24, bold=True,
+        "Cursor + Claude Fable 5 で\nAmazon 連携アプリを週末だけで開発して\n収益化する方法",
+        22, bold=True,
         color=RGBColor(0x16, 0x3A, 0x7A),
         space_before=0, space_after=12
     )
 
     # サブタイトル
     _center_para(
-        "実践ガイド",
-        18, bold=True,
+        "週末開発 × AI × 収益化の実践ガイド",
+        16, bold=True,
         color=RGBColor(0x2A, 0x5A, 0xA0),
         space_before=0, space_after=20
     )
@@ -237,7 +237,7 @@ def add_cover_page(doc: Document):
 
     # キャッチコピー
     _center_para(
-        "Audible・Kindle・公共図書館・紙の本を一元管理し\nAI が書評と選書を支援する Web アプリを\nAI エディタで実際に作る方法を解説する実践書",
+        "Audible・Kindle・公共図書館・紙の本を一元管理する Web アプリを\nAI エディタで週末だけで作り、アフィリエイト・KDP 出版・\nフリーミアムで収益を生む仕組みまで組み込む実践書",
         11,
         color=RGBColor(0x44, 0x55, 0x66),
         space_before=8, space_after=40
@@ -245,7 +245,7 @@ def add_cover_page(doc: Document):
 
     # 下部余白を埋めてから日付
     _center_para(
-        "2026年6月",
+        "2026年7月",
         10,
         color=RGBColor(0x88, 0x88, 0x99),
         space_before=60, space_after=4
