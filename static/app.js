@@ -6119,13 +6119,19 @@ document.getElementById('viewTable')?.addEventListener('click', () => {
   renderBooks();
 });
 
-document.getElementById('hamburgerBtn')?.addEventListener('click', (e) => {
+function _toggleHamburger(e) {
   e.stopPropagation();
+  e.preventDefault(); // touchend でのゴースト click を防ぐ
   document.getElementById('hamburgerMenu')?.classList.toggle('open');
   document.getElementById('filterMenuPanel')?.classList.remove('open');
   document.getElementById('menuSourceLink') && updateMenuSourceLink();
   document.getElementById('menuCredStatus') && updateCredentialStatus();
-});
+}
+const _hBtn = document.getElementById('hamburgerBtn');
+if (_hBtn) {
+  _hBtn.addEventListener('click', _toggleHamburger);
+  _hBtn.addEventListener('touchend', _toggleHamburger, { passive: false });
+}
 document.getElementById('filterMenuBtn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   document.getElementById('hamburgerMenu')?.classList.remove('open');
