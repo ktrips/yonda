@@ -118,11 +118,7 @@ header {
   padding: 2.5rem 1.25rem 1.5rem;
   text-align: center;
 }
-.pl-hero { margin-bottom: 2rem; }
-.pl-pain {
-  font-size: 0.95rem; color: var(--text-secondary);
-  margin: 0 0 0.5rem;
-}
+.pl-hero { margin-bottom: 1rem; }
 .pl-promise {
   font-size: 2rem; font-weight: 700; line-height: 1.35;
   color: var(--accent); margin: 0 0 1rem;
@@ -146,35 +142,13 @@ header {
   box-shadow: 0 6px 18px rgba(107,66,38,0.34);
   text-decoration: none;
 }
-.pl-price {
-  font-size: 0.8rem; color: var(--text-secondary);
-  margin: 0.7rem 0 0;
-}
 .pl-proof {
   font-size: 0.85rem; color: var(--accent);
   font-weight: 600; margin: 1rem 0 0; min-height: 1.2em;
 }
-.pl-how {
-  display: flex; justify-content: center; gap: 0.5rem;
-  flex-wrap: wrap; margin-top: 0.5rem;
-}
-.pl-step {
-  display: flex; align-items: center; gap: 0.5rem;
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 0.6rem 0.9rem;
-  font-size: 0.85rem; color: var(--text);
-}
-.pl-step-n {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 1.5rem; height: 1.5rem; border-radius: 50%;
-  background: var(--accent-light); color: var(--accent);
-  font-weight: 700; font-size: 0.8rem; flex-shrink: 0;
-}
 @media (max-width: 600px) {
   .public-landing { padding: 1.75rem 1rem 1rem; }
   .pl-promise { font-size: 1.55rem; }
-  .pl-how { flex-direction: column; align-items: stretch; }
-  .pl-step { justify-content: flex-start; }
 }
 .tab-login-notice {
   display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;

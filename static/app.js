@@ -205,12 +205,11 @@ function _updateHeaderCompletedCount() {
     const total = _publicUserStatsData.reduce((sum, u) => sum + (u.completed_count || 0), 0);
     if (totalCountEl) totalCountEl.textContent = total.toLocaleString();
     if (totalEl) totalEl.style.display = total > 0 ? 'flex' : 'none';
-    // ランディングの証拠テキスト（すでに◯人が△冊を記録）
+    // ランディングの証拠テキスト（すでに◯冊の本が登録されています）
     const proofEl = document.getElementById('plProof');
     if (proofEl) {
-      const userCount = _publicUserStatsData.length;
-      proofEl.textContent = (userCount > 0 && total > 0)
-        ? `すでに ${userCount.toLocaleString()} 人が ${total.toLocaleString()} 冊を記録しています`
+      proofEl.textContent = total > 0
+        ? `すでに ${total.toLocaleString()} 冊の本が登録されています`
         : '';
     }
   }
