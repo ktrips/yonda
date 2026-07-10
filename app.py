@@ -165,7 +165,7 @@ def get_user_data_dir_for_session() -> Path:
 # OAuth 有効時に認証不要なパス（前方一致）
 _PUBLIC_PREFIXES = ("/auth/", "/static/", "/help", "/api/public/", "/api/v1/", "/dev-guide")
 # OAuth 有効時に認証不要な完全一致パス
-_PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info", "/api/internal/auto-fetch", "/api/internal/auto-fetch-all"}
+_PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info", "/api/internal/auto-fetch", "/api/internal/auto-fetch-all", "/api/analytics/visit"}
 
 
 @app.before_request
@@ -248,6 +248,12 @@ def _restore_oauth_state_from_fs(state: str) -> bool:
 def auth_login():
     if not _OAUTH_ENABLED:
         return redirect(url_for("index"))
+    # 計測: ログイン開始（訪問→ログインボタンクリックのファネル）
+    try:
+        import firestore_service as _fs  # noqa: PLC0415
+        _fs.record_event("login_click")
+    except Exception:
+        pass
     redirect_uri = _GOOGLE_REDIRECT_URI or url_for("auth_callback", _external=True)
     # コールバック後に元のホスト（yonda.ktrips.net など）に戻れるよう保存
     return_host = request.host  # 例: "yonda.ktrips.net"
@@ -375,10 +381,13 @@ def auth_callback():
     _migrate_root_data_to_user(uid_safe)
     # ログインのたびに認証ファイルの存在を保証（センチネルに依存しない）
     _ensure_user_credentials(library_service.DATA_DIR / "users" / uid_safe)
-    # Firestore にユーザープロフィールを作成/更新
+    # Firestore にユーザープロフィールを作成/更新 + ログイン計測
     try:
         import firestore_service  # noqa: PLC0415
-        firestore_service.upsert_user_profile(uid_safe, dict(session["user"]))
+        is_new = firestore_service.upsert_user_profile(uid_safe, dict(session["user"]))
+        firestore_service.record_event("login")
+        if is_new:
+            firestore_service.record_event("signup")
     except Exception as e:
         logger.warning("ユーザープロフィール作成スキップ: %s", e)
 
@@ -455,6 +464,27 @@ def api_admin_users():
         return jsonify({"users": users, "total": len(users)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/admin/analytics")
+def api_admin_analytics():
+    """訪問→ログインのファネルと継続率の代理指標を返す（管理者のみ）。"""
+    if not _is_admin(get_current_user()):
+        return jsonify({"error": "管理者権限が必要です"}), 403
+    try:
+        import firestore_service as _fs  # noqa: PLC0415
+        days = request.args.get("days", "30")
+        try:
+            days_n = max(1, min(90, int(days)))
+        except ValueError:
+            days_n = 30
+        return jsonify({
+            "success":   True,
+            "funnel":    _fs.get_analytics(days_n),
+            "retention": _fs.compute_retention(),
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/api/admin/backfill-messages", methods=["POST"])
@@ -3327,6 +3357,20 @@ def api_v1_user_recent(email: str):
     qs = request.query_string.decode()
     new_qs = ("filter=recent&" + qs).rstrip("&")
     return _redir(f"/api/v1/users/{email}/books?{new_qs}", code=302)
+
+
+@app.route("/api/analytics/visit", methods=["POST"])
+def api_analytics_visit():
+    """未ログイン訪問を1件記録する（フロントが1セッション1回だけ叩く公開ビーコン）。
+    集計は /api/admin/analytics で参照する。常に 204 を返し、失敗しても無視する。"""
+    if get_current_user():
+        return "", 204  # ログイン済みは訪問カウントに含めない
+    try:
+        import firestore_service as _fs  # noqa: PLC0415
+        _fs.record_event("visit")
+    except Exception:
+        pass
+    return "", 204
 
 
 @app.route("/api/public/user-stats")

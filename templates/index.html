@@ -113,10 +113,25 @@
       </div>
     </header>
 
-    <!-- 未ログイン時ウェルカムバナー（ヘッダー直下） -->
-    <div id="headerWelcomeBanner" class="header-welcome-banner" style="display:none;">
-      📚 <strong>Yonda</strong> みんなの読書へようこそ！ログインすると自分の読書記録を作れます！
-    </div>
+    <!-- 未ログイン時ランディング（1メッセージ: 痛み→約束→根拠→行動→証拠→価格） -->
+    <section id="publicLanding" class="public-landing" style="display:none;">
+      <div class="pl-hero">
+        <p class="pl-pain">読んだ本、思い出せますか。</p>
+        <h1 class="pl-promise">「最近、何読んだ？」に、<br>3秒で答えられる。</h1>
+        <p class="pl-sub">
+          Audible・Kindle・図書館・紙の本の読書記録が、毎朝ひとりでに貯まっていく。<br>
+          入力する項目は、ありません。
+        </p>
+        <a href="/auth/login" class="pl-cta" id="plLoginBtn">Googleで無料ではじめる</a>
+        <p class="pl-price">無料。クレジットカードも不要です。</p>
+        <p class="pl-proof" id="plProof"></p>
+      </div>
+      <div class="pl-how">
+        <div class="pl-step"><span class="pl-step-n">1</span><span class="pl-step-t">Googleでログイン</span></div>
+        <div class="pl-step"><span class="pl-step-n">2</span><span class="pl-step-t">Audible・Kindle・図書館を連携</span></div>
+        <div class="pl-step"><span class="pl-step-n">3</span><span class="pl-step-t">あとは読むだけ。記録は自動</span></div>
+      </div>
+    </section>
 
     <div id="content">
       <!-- Yonda: 読んだ・途中・ランキング -->
@@ -856,6 +871,7 @@
           </button>
           <span id="adminBackfillResult" class="admin-backfill-result"></span>
         </div>
+        <div id="adminAnalytics" class="admin-analytics"></div>
         <div id="adminUsersLoading" class="recommend-loading" style="display:none;">読み込み中…</div>
         <div id="adminUsersList"></div>
       </div>

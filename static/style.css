@@ -110,6 +110,72 @@ header {
   font-size: 0.85rem;
   color: var(--text);
 }
+
+/* === 未ログイン時ランディング（1メッセージ） === */
+.public-landing {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 1.5rem;
+  text-align: center;
+}
+.pl-hero { margin-bottom: 2rem; }
+.pl-pain {
+  font-size: 0.95rem; color: var(--text-secondary);
+  margin: 0 0 0.5rem;
+}
+.pl-promise {
+  font-size: 2rem; font-weight: 700; line-height: 1.35;
+  color: var(--accent); margin: 0 0 1rem;
+  letter-spacing: 0.01em;
+}
+.pl-sub {
+  font-size: 0.95rem; line-height: 1.9; color: var(--text);
+  margin: 0 0 1.5rem;
+}
+.pl-cta {
+  display: inline-block;
+  background: var(--accent); color: #fff;
+  font-size: 1.05rem; font-weight: 700;
+  padding: 0.85rem 2rem; border-radius: var(--radius);
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(107,66,38,0.28);
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.pl-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(107,66,38,0.34);
+  text-decoration: none;
+}
+.pl-price {
+  font-size: 0.8rem; color: var(--text-secondary);
+  margin: 0.7rem 0 0;
+}
+.pl-proof {
+  font-size: 0.85rem; color: var(--accent);
+  font-weight: 600; margin: 1rem 0 0; min-height: 1.2em;
+}
+.pl-how {
+  display: flex; justify-content: center; gap: 0.5rem;
+  flex-wrap: wrap; margin-top: 0.5rem;
+}
+.pl-step {
+  display: flex; align-items: center; gap: 0.5rem;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 0.6rem 0.9rem;
+  font-size: 0.85rem; color: var(--text);
+}
+.pl-step-n {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.5rem; height: 1.5rem; border-radius: 50%;
+  background: var(--accent-light); color: var(--accent);
+  font-weight: 700; font-size: 0.8rem; flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .public-landing { padding: 1.75rem 1rem 1rem; }
+  .pl-promise { font-size: 1.55rem; }
+  .pl-how { flex-direction: column; align-items: stretch; }
+  .pl-step { justify-content: flex-start; }
+}
 .tab-login-notice {
   display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
   background: var(--surface2, #f5ede8);
@@ -388,6 +454,28 @@ header {
 }
 .admin-backfill-result {
   font-size: 0.8rem; color: var(--text-secondary);
+}
+
+/* === 管理者アナリティクス === */
+.admin-analytics { margin-bottom: 1.25rem; }
+.an-title {
+  font-size: 0.9rem; font-weight: 700; color: var(--text);
+  margin: 1rem 0 0.5rem;
+}
+.an-cards {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;
+}
+.an-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 0.7rem 0.5rem; text-align: center;
+}
+.an-card-value { font-size: 1.4rem; font-weight: 700; color: var(--accent); line-height: 1.2; }
+.an-card-label { font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.2rem; }
+.an-card-sub { font-size: 0.7rem; color: var(--text); margin-top: 0.25rem; }
+.an-verdict { font-size: 0.85rem; font-weight: 600; margin: 0.6rem 0 0; color: var(--text); }
+.an-note { font-size: 0.75rem; color: var(--text-secondary); margin: 0.5rem 0 0; }
+@media (max-width: 600px) {
+  .an-cards { grid-template-columns: repeat(2, 1fr); }
 }
 .menu-sync-dates {
   padding: 0.1rem 0.75rem 0.4rem;

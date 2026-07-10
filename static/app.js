@@ -45,7 +45,7 @@ function _applyAuthUI() {
     if (userEl) userEl.style.display = 'none';
     if (menuAuthSection) menuAuthSection.style.display = 'none';
     if (menuLoggedInSection) menuLoggedInSection.style.display = '';
-    document.getElementById('headerWelcomeBanner')?.style.setProperty('display', 'none');
+    document.getElementById('publicLanding')?.style.setProperty('display', 'none');
     _showAllTabs();
     return;
   }
@@ -73,7 +73,7 @@ function _applyAuthUI() {
     // 管理者メニュー表示制御
     const adminSection = document.getElementById('menuAdminSection');
     if (adminSection) adminSection.style.display = _isAdmin ? '' : 'none';
-    document.getElementById('headerWelcomeBanner')?.style.setProperty('display', 'none');
+    document.getElementById('publicLanding')?.style.setProperty('display', 'none');
     document.getElementById('hamburgerBtn')?.style.setProperty('display', '');
     _showAllTabs();
     _updateHeaderCompletedCount();
@@ -84,7 +84,7 @@ function _applyAuthUI() {
     if (menuUserInfo) menuUserInfo.style.display = 'none';
     if (menuLoginBtn) menuLoginBtn.style.display = '';
     if (menuLoggedInSection) menuLoggedInSection.style.display = 'none';
-    document.getElementById('headerWelcomeBanner')?.style.setProperty('display', '');
+    document.getElementById('publicLanding')?.style.setProperty('display', '');
     _updateHeaderCompletedCount();
     // 未ログイン時はハンバーガーを非表示
     document.getElementById('hamburgerBtn')?.style.setProperty('display', 'none');
@@ -150,13 +150,21 @@ function _showPublicOnly() {
     if (el) el.style.display = 'none';
   });
 
-  // ウェルカムバナーを表示（publicWelcomeBanner は HTML に存在しないため headerWelcomeBanner で対応済み）
-  const welcomeBanner = document.getElementById('publicWelcomeBanner');
-  if (welcomeBanner) welcomeBanner.style.display = '';
+  // 未ログイン時ランディング（1メッセージ）を表示
+  const landing = document.getElementById('publicLanding');
+  if (landing) landing.style.display = '';
   // bookTabs は表示しない（タブ名不要）。みんなのYondaコンテンツを直接表示
   const communitySection = document.getElementById('communitySection');
   if (communitySection) communitySection.style.display = 'block';
   activeBookTab = 'community';
+
+  // 計測: 未ログイン訪問を1セッション1回だけ記録（訪問→ログインのファネル）
+  try {
+    if (!sessionStorage.getItem('yonda_visit_recorded')) {
+      sessionStorage.setItem('yonda_visit_recorded', '1');
+      fetch(API.analyticsVisit, { method: 'POST', keepalive: true }).catch(() => {});
+    }
+  } catch (_) {}
 }
 
 // ------------------------------------------------------------------
@@ -197,6 +205,14 @@ function _updateHeaderCompletedCount() {
     const total = _publicUserStatsData.reduce((sum, u) => sum + (u.completed_count || 0), 0);
     if (totalCountEl) totalCountEl.textContent = total.toLocaleString();
     if (totalEl) totalEl.style.display = total > 0 ? 'flex' : 'none';
+    // ランディングの証拠テキスト（すでに◯人が△冊を記録）
+    const proofEl = document.getElementById('plProof');
+    if (proofEl) {
+      const userCount = _publicUserStatsData.length;
+      proofEl.textContent = (userCount > 0 && total > 0)
+        ? `すでに ${userCount.toLocaleString()} 人が ${total.toLocaleString()} 冊を記録しています`
+        : '';
+    }
   }
 }
 
@@ -311,6 +327,8 @@ const API = {
   updatePaperBook: (id) => `/api/paper-book/${id}`,
   deletePaperBook: (id) => `/api/paper-book/${id}`,
   publicUserStats: '/api/public/user-stats',
+  analyticsVisit: '/api/analytics/visit',
+  adminAnalytics: '/api/admin/analytics',
 };
 
 let allBooks = [];
@@ -5241,7 +5259,68 @@ function openAdminUsersModal() {
   const modal = document.getElementById('adminUsersModal');
   if (!modal) return;
   modal.style.display = 'flex';
+  loadAdminAnalytics();
   loadAdminUsers();
+}
+
+async function loadAdminAnalytics() {
+  const el = document.getElementById('adminAnalytics');
+  if (!el) return;
+  el.innerHTML = '<div class="recommend-loading">計測を集計中…</div>';
+  try {
+    const res = await fetch(API.adminAnalytics);
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      el.innerHTML = `<p class="recommend-error">${escapeHtml(data.error || '計測の取得に失敗')}</p>`;
+      return;
+    }
+    el.innerHTML = _renderAdminAnalytics(data.funnel, data.retention);
+  } catch (e) {
+    el.innerHTML = `<p class="recommend-error">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function _analyticsCard(label, value, sub) {
+  return `<div class="an-card">
+    <div class="an-card-value">${value}</div>
+    <div class="an-card-label">${escapeHtml(label)}</div>
+    ${sub ? `<div class="an-card-sub">${escapeHtml(sub)}</div>` : ''}
+  </div>`;
+}
+
+function _renderAdminAnalytics(funnel, retention) {
+  let html = '<h3 class="an-title">📈 訪問→ログインのファネル（直近30日）</h3>';
+  if (!funnel || !funnel.available) {
+    html += '<p class="an-note">まだ計測データがありません（Firestore 未接続、または訪問がゼロ）。</p>';
+  } else {
+    const t = funnel.totals || {};
+    const r = funnel.rates || {};
+    const loginRate = r.login_rate || 0;
+    // 合格基準5%に対する達否
+    const verdict = loginRate >= 5 ? '✅ 合格基準（5%）達成'
+      : (t.visit ? `⬜ 合格基準 5% まであと ${(5 - loginRate).toFixed(1)}pt` : '—');
+    html += `<div class="an-cards">
+      ${_analyticsCard('訪問', (t.visit || 0).toLocaleString())}
+      ${_analyticsCard('ログインボタン', (t.login_click || 0).toLocaleString(), `クリック率 ${r.click_rate || 0}%`)}
+      ${_analyticsCard('ログイン成功', (t.login || 0).toLocaleString(), `登録率 ${loginRate}%`)}
+      ${_analyticsCard('新規登録', (t.signup || 0).toLocaleString(), `新規率 ${r.signup_rate || 0}%`)}
+    </div>
+    <p class="an-verdict">${verdict}</p>`;
+  }
+
+  html += '<h3 class="an-title">🔁 継続率（last_login ベースの代理指標）</h3>';
+  if (!retention || !retention.available) {
+    html += '<p class="an-note">継続率データがありません。</p>';
+  } else {
+    html += `<div class="an-cards">
+      ${_analyticsCard('総ユーザー', (retention.total || 0).toLocaleString())}
+      ${_analyticsCard('7日アクティブ', (retention.active_7d || 0).toLocaleString())}
+      ${_analyticsCard('30日アクティブ', (retention.active_30d || 0).toLocaleString())}
+      ${_analyticsCard('再訪率', `${retention.return_rate || 0}%`, `${retention.returned || 0}/${retention.eligible || 0} 人が再ログイン`)}
+    </div>
+    <p class="an-note">※ ログイン履歴を持たないため、登録日と異なる日にログインした人を「再訪」として算出しています。</p>`;
+  }
+  return html;
 }
 
 function closeAdminUsersModal() {
@@ -6570,7 +6649,7 @@ document.querySelectorAll('.header-tab').forEach(tab => {
       if (el) el.style.display = 'none';
     });
     // headerWelcomeBanner は Yonda タブのみ表示
-    const wb = document.getElementById('headerWelcomeBanner');
+    const wb = document.getElementById('publicLanding');
     if (wb) wb.style.display = notLoggedIn && tabVal === 'yonda' ? '' : 'none';
     if (notLoggedIn && tabVal === 'yomu') {
       const el = document.getElementById('loginNoticeYomu');

@@ -220,15 +220,16 @@ def list_users() -> list[dict]:
         return []
 
 
-def upsert_user_profile(uid: str, user_info: dict) -> None:
+def upsert_user_profile(uid: str, user_info: dict) -> bool:
     """
     ログイン時にユーザープロフィールを Firestore に作成/更新する。
     - 初回ログイン: created_at を含む全フィールドを作成
     - 2回目以降: last_login と name/picture だけ更新
+    新規作成なら True、既存更新なら False を返す（Firestore 不可時も False）。
     """
     db = get_db()
     if not db:
-        return
+        return False
     try:
         now = datetime.now(timezone.utc).isoformat()
         user_ref = db.collection("users").document(uid)
@@ -240,18 +241,20 @@ def upsert_user_profile(uid: str, user_info: dict) -> None:
                 "picture":    user_info.get("picture", ""),
             })
             logger.info("ユーザープロフィール更新: %s", uid)
-        else:
-            user_ref.set({
-                "uid":        uid,
-                "email":      user_info.get("email", ""),
-                "name":       user_info.get("name", ""),
-                "picture":    user_info.get("picture", ""),
-                "created_at": now,
-                "last_login": now,
-            })
-            logger.info("ユーザープロフィール新規作成: %s", uid)
+            return False
+        user_ref.set({
+            "uid":        uid,
+            "email":      user_info.get("email", ""),
+            "name":       user_info.get("name", ""),
+            "picture":    user_info.get("picture", ""),
+            "created_at": now,
+            "last_login": now,
+        })
+        logger.info("ユーザープロフィール新規作成: %s", uid)
+        return True
     except Exception as e:
         logger.warning("ユーザープロフィール作成/更新失敗: %s", e)
+        return False
 
 
 def update_user_sources(uid: str, source: str, enabled: bool) -> None:
@@ -388,3 +391,136 @@ def get_user_profile(uid: str) -> Optional[dict]:
     except Exception:
         pass
     return None
+
+
+# ------------------------------------------------------------------
+# アナリティクス（訪問→ログインのファネル計測）
+# ------------------------------------------------------------------
+# analytics/{YYYY-MM-DD} ドキュメントに visit / login_click / login / signup
+# のカウンタを Increment で積む。管理者ダッシュボードで集計する。
+
+_ANALYTICS_EVENTS = ("visit", "login_click", "login", "signup")
+
+
+def record_event(event: str, day: Optional[str] = None) -> None:
+    """アナリティクスイベントを1件記録する（当日ドキュメントのカウンタを+1）。
+    未知のイベント名・Firestore 不可時は静かに無視する。"""
+    if event not in _ANALYTICS_EVENTS:
+        return
+    db = get_db()
+    if not db:
+        return
+    try:
+        from google.cloud import firestore  # noqa: PLC0415
+        if not day:
+            day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        db.collection("analytics").document(day).set(
+            {event: firestore.Increment(1),
+             "day": day,
+             "_updated_at": datetime.now(timezone.utc).isoformat()},
+            merge=True,
+        )
+    except Exception as e:
+        logger.debug("アナリティクス記録エラー event=%s: %s", event, e)
+
+
+def get_analytics(days: int = 30) -> dict:
+    """直近 days 日のファネルを集計して返す。
+    合計と日別内訳、訪問→ログインの転換率を含む。"""
+    db = get_db()
+    if not db:
+        return {"available": False, "daily": [], "totals": {}, "rates": {}}
+    try:
+        from datetime import timedelta  # noqa: PLC0415
+        today = datetime.now(timezone.utc).date()
+        wanted = {(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)}
+        daily: list[dict] = []
+        totals = {e: 0 for e in _ANALYTICS_EVENTS}
+        for doc in db.collection("analytics").stream():
+            if doc.id not in wanted:
+                continue
+            d = doc.to_dict() or {}
+            row = {"day": doc.id}
+            for e in _ANALYTICS_EVENTS:
+                v = int(d.get(e, 0) or 0)
+                row[e] = v
+                totals[e] += v
+            daily.append(row)
+        daily.sort(key=lambda r: r["day"], reverse=True)
+
+        def _rate(num: int, den: int) -> float:
+            return round(num / den * 100, 1) if den else 0.0
+
+        rates = {
+            # 訪問→ログインボタンクリック
+            "click_rate":  _rate(totals["login_click"], totals["visit"]),
+            # 訪問→ログイン成功（本命の登録率）
+            "login_rate":  _rate(totals["login"], totals["visit"]),
+            # 訪問→新規登録
+            "signup_rate": _rate(totals["signup"], totals["visit"]),
+        }
+        return {"available": True, "days": days, "daily": daily,
+                "totals": totals, "rates": rates}
+    except Exception as e:
+        logger.warning("アナリティクス集計エラー: %s", e)
+        return {"available": False, "daily": [], "totals": {}, "rates": {}}
+
+
+def compute_retention() -> dict:
+    """last_login と created_at から継続率の代理指標を計算する。
+    ログイン履歴は持たないため last_login のみで判定できる指標に限定する:
+      - total: 総ユーザー数
+      - active_7d / active_30d: 直近7/30日にログインがあった人数
+      - returned: 登録日と異なる日にログインした（=一度は戻ってきた）人数
+      - return_rate: 登録から1日以上経ったユーザーのうち returned の割合
+    """
+    db = get_db()
+    if not db:
+        return {"available": False}
+    try:
+        from datetime import timedelta  # noqa: PLC0415
+        now = datetime.now(timezone.utc)
+
+        def _parse(ts: str):
+            if not ts:
+                return None
+            try:
+                t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+            except Exception:
+                return None
+
+        total = active_7d = active_30d = returned = eligible = 0
+        for doc in db.collection("users").stream():
+            d = doc.to_dict() or {}
+            created = _parse(d.get("created_at", ""))
+            last = _parse(d.get("last_login", ""))
+            if not created:
+                continue
+            total += 1
+            if last:
+                age_days = (now - last).days
+                if age_days <= 7:
+                    active_7d += 1
+                if age_days <= 30:
+                    active_30d += 1
+                # 登録日と異なる暦日にログイン = 一度は戻ってきた
+                if last.date() > created.date():
+                    returned += 1
+            # 登録から1日以上経過したユーザーだけを return_rate の母数に
+            if (now - created).days >= 1:
+                eligible += 1
+
+        return_rate = round(returned / eligible * 100, 1) if eligible else 0.0
+        return {
+            "available": True,
+            "total": total,
+            "active_7d": active_7d,
+            "active_30d": active_30d,
+            "returned": returned,
+            "eligible": eligible,
+            "return_rate": return_rate,
+        }
+    except Exception as e:
+        logger.warning("継続率計算エラー: %s", e)
+        return {"available": False}
