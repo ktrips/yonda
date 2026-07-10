@@ -142,19 +142,30 @@ header {
   box-shadow: 0 6px 18px rgba(107,66,38,0.34);
   text-decoration: none;
 }
+/* ランディングページの特徴リスト */
+.pl-features {
+  list-style: none; margin: 1.5rem auto 0; padding: 0;
+  display: inline-block; text-align: left;
+}
+.pl-features li {
+  position: relative;
+  font-size: 0.92rem; line-height: 1.6; color: var(--text);
+  padding: 0.3rem 0 0.3rem 1.6rem;
+}
+.pl-features li::before {
+  content: '✓';
+  position: absolute; left: 0; top: 0.3rem;
+  color: var(--completed); font-weight: 700;
+}
 .pl-proof {
   font-size: 0.85rem; color: var(--accent);
   font-weight: 600; margin: 1rem 0 0; min-height: 1.2em;
 }
-/* ランディングページの Audible/KU 二次CTA */
+/* ランディングページの Audible/KU 体験CTA */
 .pl-trial-cta {
   margin-top: 1.75rem;
   padding-top: 1.25rem;
-  border-top: 1px solid rgba(255,255,255,0.15);
-}
-.pl-trial-label {
-  font-size: 0.78rem; color: rgba(255,255,255,0.7);
-  margin-bottom: 0.6rem;
+  border-top: 1px solid var(--border);
 }
 .pl-trial-btns {
   display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;
@@ -170,7 +181,7 @@ header {
 .pl-trial-audible { background: #f29d38; color: #fff; }
 .pl-trial-ku      { background: #232f3e; color: #fff; }
 .pl-trial-note {
-  font-size: 0.6rem; color: rgba(255,255,255,0.45);
+  font-size: 0.62rem; color: var(--text-secondary);
   margin-top: 0.6rem;
 }
 @media (max-width: 600px) {
