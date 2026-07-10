@@ -151,16 +151,90 @@
       .guide-body h1 { font-size: 1.25rem; }
       .guide-body h2 { font-size: 1.05rem; }
     }
+
+    /* アプリ誘導CTAバナー */
+    .guide-app-cta {
+      background: linear-gradient(135deg, #3d2b1f 0%, #4a3428 100%);
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+      color: #fff;
+    }
+    .guide-app-cta-bottom { margin-top: 3rem; margin-bottom: 0; }
+    .guide-app-cta-inner {
+      display: flex; align-items: center; gap: 1.25rem;
+      flex-wrap: wrap;
+    }
+    .guide-app-cta-text {
+      flex: 1; min-width: 200px;
+      display: flex; flex-direction: column; gap: 0.25rem;
+    }
+    .guide-app-cta-text strong {
+      font-size: 0.95rem; font-weight: 700; color: #fff;
+    }
+    .guide-app-cta-text span {
+      font-size: 0.82rem; color: rgba(255,255,255,0.75);
+    }
+    .guide-app-cta-btn {
+      display: inline-block; white-space: nowrap;
+      background: #fff; color: #3d2b1f;
+      font-size: 0.88rem; font-weight: 700;
+      padding: 0.55rem 1.25rem; border-radius: 2rem;
+      text-decoration: none; flex-shrink: 0;
+      transition: opacity 0.15s;
+    }
+    .guide-app-cta-btn:hover { opacity: 0.88; text-decoration: none; color: #3d2b1f; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="guide-wrap">
       <a href="{{ url_for('help_usage_page') }}" class="guide-back">← Yondaの使い方へ戻る</a>
+
+      <!-- アプリ誘導CTA（上部） -->
+      <div class="guide-app-cta">
+        <div class="guide-app-cta-inner">
+          <div class="guide-app-cta-text">
+            <strong>このガイドを読んで試してみたい方へ</strong>
+            <span>Yonda は無料でそのまま使えます。Audible・Kindle・図書館の記録が自動で同期。</span>
+          </div>
+          <a href="/?ref=guide" class="guide-app-cta-btn" id="guideAppCtaTop" data-affiliate-cta="devguide-app-cta">
+            Yonda を無料で試す →
+          </a>
+        </div>
+      </div>
+
       <div class="guide-body">
         {{ content | safe }}
       </div>
+
+      <!-- アプリ誘導CTA（下部） -->
+      <div class="guide-app-cta guide-app-cta-bottom">
+        <div class="guide-app-cta-inner">
+          <div class="guide-app-cta-text">
+            <strong>実際に動くアプリを見てみましょう</strong>
+            <span>読んだ本が全部ここに貯まります。入力ゼロ・無料・即利用可。</span>
+          </div>
+          <a href="/?ref=guide" class="guide-app-cta-btn" id="guideAppCtaBottom" data-affiliate-cta="devguide-app-cta">
+            Yonda を試してみる →
+          </a>
+        </div>
+      </div>
+
     </div>
   </div>
+  <script>
+    // dev-guide からのアプリCTAクリックを記録
+    document.querySelectorAll('[data-affiliate-cta="devguide-app-cta"]').forEach(el => {
+      el.addEventListener('click', () => {
+        fetch('/api/analytics/affiliate-click', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cta: 'devguide-app-cta' }),
+          keepalive: true,
+        }).catch(() => {});
+      });
+    });
+  </script>
 </body>
 </html>

@@ -165,7 +165,7 @@ def get_user_data_dir_for_session() -> Path:
 # OAuth 有効時に認証不要なパス（前方一致）
 _PUBLIC_PREFIXES = ("/auth/", "/static/", "/help", "/api/public/", "/api/v1/", "/dev-guide")
 # OAuth 有効時に認証不要な完全一致パス
-_PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info", "/api/internal/auto-fetch", "/api/internal/auto-fetch-all", "/api/analytics/visit"}
+_PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info", "/api/internal/auto-fetch", "/api/internal/auto-fetch-all", "/api/analytics/visit", "/api/analytics/affiliate-click", "/api/analytics/ref"}
 
 
 @app.before_request
@@ -3373,7 +3373,38 @@ def api_analytics_visit():
     return "", 204
 
 
-@app.route("/api/public/user-stats")
+@app.route("/api/analytics/affiliate-click", methods=["POST"])
+def api_analytics_affiliate_click():
+    """アフィリエイトCTAのクリックを記録する公開ビーコン。常に 204 を返す。
+    body: {"cta": "audible-trial" | "ku-trial"}"""
+    try:
+        import firestore_service as _fs  # noqa: PLC0415
+        body = request.get_json(silent=True) or {}
+        cta = (body.get("cta") or "").strip()
+        if "audible" in cta:
+            _fs.record_event("affiliate_audible_trial")
+        elif "ku" in cta:
+            _fs.record_event("affiliate_ku_trial")
+    except Exception:
+        pass
+    return "", 204
+
+
+@app.route("/api/analytics/ref", methods=["POST"])
+def api_analytics_ref():
+    """流入元（ref= パラメータ）を記録する公開ビーコン。常に 204 を返す。
+    body: {"ref": "x" | "note" | "book" | "guide" | ...}"""
+    try:
+        import firestore_service as _fs  # noqa: PLC0415
+        body = request.get_json(silent=True) or {}
+        ref = (body.get("ref") or "").strip().lower()
+        event_map = {"x": "ref_x", "note": "ref_note", "book": "ref_book",
+                     "guide": "ref_guide"}
+        event = event_map.get(ref, "ref_other")
+        _fs.record_event(event)
+    except Exception:
+        pass
+    return "", 204
 def api_public_user_stats():
     """全ユーザーの公開統計（名前・アバター・読了数）を返す。認証不要。"""
     try:

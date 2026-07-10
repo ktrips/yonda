@@ -399,7 +399,15 @@ def get_user_profile(uid: str) -> Optional[dict]:
 # analytics/{YYYY-MM-DD} ドキュメントに visit / login_click / login / signup
 # のカウンタを Increment で積む。管理者ダッシュボードで集計する。
 
-_ANALYTICS_EVENTS = ("visit", "login_click", "login", "signup")
+_ANALYTICS_EVENTS = (
+    "visit", "login_click", "login", "signup",
+    # アフィリエイトCTAクリック
+    "affiliate_audible_trial", "affiliate_ku_trial",
+    # 流入元（ref パラメータ）
+    "ref_x", "ref_note", "ref_book", "ref_guide", "ref_other",
+    # dev-guide ページからのアプリCTAクリック
+    "devguide_app_cta",
+)
 
 
 def record_event(event: str, day: Optional[str] = None) -> None:

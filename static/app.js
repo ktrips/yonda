@@ -332,6 +332,8 @@ const API = {
   deletePaperBook: (id) => `/api/paper-book/${id}`,
   publicUserStats: '/api/public/user-stats',
   analyticsVisit: '/api/analytics/visit',
+  analyticsAffiliateClick: '/api/analytics/affiliate-click',
+  analyticsRef: '/api/analytics/ref',
   adminAnalytics: '/api/admin/analytics',
 };
 
@@ -755,6 +757,34 @@ const KU_TRIAL_URL = 'https://www.amazon.co.jp/kindle-dbs/hz/subscribe/ku';
 
 function getAudibleTrialUrl() { return appendTagToUrl(AUDIBLE_TRIAL_URL, getAffiliateTag()); }
 function getKUTrialUrl()      { return appendTagToUrl(KU_TRIAL_URL,      getAffiliateTag()); }
+
+/** アフィリエイトCTAのクリックをFirestoreに記録（fire-and-forget） */
+function _trackAffiliateClick(cta) {
+  fetch(API.analyticsAffiliateClick, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cta }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
+/** URL の ref= パラメータを読み取りFirestoreに記録（ページ読み込み時に1度だけ） */
+function _trackRefParam() {
+  try {
+    const ref = new URLSearchParams(window.location.search).get('ref');
+    if (!ref) return;
+    fetch(API.analyticsRef, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ref }),
+      keepalive: true,
+    }).catch(() => {});
+    // ref= をセッション中に保存（ログイン後も流入元として参照できる）
+    try { sessionStorage.setItem('yonda_ref', ref); } catch (_) {}
+  } catch (_) {}
+}
+// ページ読み込み時に即実行
+_trackRefParam();
 
 const SEARCH_APPS_KEY = 'yonda_search_apps';
 const BUILTIN_SEARCH_APP_IDS = ['amazon', 'kindle', 'audible', 'mercari', 'bookoff', 'library'];
@@ -5350,6 +5380,24 @@ function _renderAdminAnalytics(funnel, retention) {
     </div>
     <p class="an-note">※ ログイン履歴を持たないため、登録日と異なる日にログインした人を「再訪」として算出しています。</p>`;
   }
+
+  // アフィリエイト・流入元セクション
+  html += '<h3 class="an-title">💰 アフィリエイトCTAクリック</h3>';
+  html += `<div class="an-cards">
+    ${_analyticsCard('Audible 無料体験', (t.affiliate_audible_trial || 0).toLocaleString())}
+    ${_analyticsCard('KU 無料体験', (t.affiliate_ku_trial || 0).toLocaleString())}
+    ${_analyticsCard('dev-guide CTA', (t.devguide_app_cta || 0).toLocaleString())}
+  </div>`;
+
+  html += '<h3 class="an-title">📣 流入元（ref=）</h3>';
+  html += `<div class="an-cards">
+    ${_analyticsCard('X（Twitter）', (t.ref_x || 0).toLocaleString())}
+    ${_analyticsCard('note', (t.ref_note || 0).toLocaleString())}
+    ${_analyticsCard('書籍', (t.ref_book || 0).toLocaleString())}
+    ${_analyticsCard('ガイド', (t.ref_guide || 0).toLocaleString())}
+    ${_analyticsCard('その他', (t.ref_other || 0).toLocaleString())}
+  </div>`;
+
   return html;
 }
 
@@ -6264,6 +6312,12 @@ document.addEventListener('click', () => {
 });
 document.getElementById('hamburgerMenu')?.addEventListener('click', (e) => e.stopPropagation());
 document.getElementById('filterMenuPanel')?.addEventListener('click', (e) => e.stopPropagation());
+
+// アフィリエイトCTAクリックを Firestore に記録（イベント委任）
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-affiliate-cta]');
+  if (el) _trackAffiliateClick(el.dataset.affiliateCta);
+});
 
 document.getElementById('menuFetchDirect')?.addEventListener('click', () => {
   document.getElementById('hamburgerMenu')?.classList.remove('open');
