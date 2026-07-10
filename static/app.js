@@ -743,6 +743,14 @@ async function manualFetchSource(sourceId) {
 const AFFILIATE_TAG_KEY = 'yonda_affiliate_tag';
 const DEFAULT_AFFILIATE_TAG = 'ktrip-22';
 
+/** Audible 30日無料体験ページ */
+const AUDIBLE_TRIAL_URL = 'https://www.amazon.co.jp/dp/B00NB86OYE';
+/** Kindle Unlimited 30日無料体験ページ */
+const KU_TRIAL_URL = 'https://www.amazon.co.jp/kindle-dbs/hz/subscribe/ku';
+
+function getAudibleTrialUrl() { return appendTagToUrl(AUDIBLE_TRIAL_URL, getAffiliateTag()); }
+function getKUTrialUrl()      { return appendTagToUrl(KU_TRIAL_URL,      getAffiliateTag()); }
+
 const SEARCH_APPS_KEY = 'yonda_search_apps';
 const BUILTIN_SEARCH_APP_IDS = ['amazon', 'kindle', 'audible', 'mercari', 'bookoff', 'library'];
 
@@ -3080,6 +3088,10 @@ function renderAiRecommendBookCards(books) {
             <a href="${urls.mercari}" target="_blank" rel="noopener">メルカリ</a>
             <a href="${urls.bookoff}" target="_blank" rel="noopener">ブックオフ</a>
             <a href="${urls.setagaya}" target="_blank" rel="noopener">図書館</a>
+          </div>
+          <div class="ai-rec-trial-cta">
+            <a href="${getAudibleTrialUrl()}" target="_blank" rel="noopener sponsored" class="ai-rec-trial-btn ai-rec-trial-audible" data-affiliate-cta="audible-trial">🎧 Audibleで聴く</a>
+            <a href="${getKUTrialUrl()}" target="_blank" rel="noopener sponsored" class="ai-rec-trial-btn ai-rec-trial-ku" data-affiliate-cta="ku-trial">📖 KUで読む</a>
           </div>
           <button class="btn-add-paper-book"
             data-title="${escapeAttr(book.title)}"
@@ -6204,6 +6216,11 @@ function _toggleHamburger(e) {
   document.getElementById('filterMenuPanel')?.classList.remove('open');
   document.getElementById('menuSourceLink') && updateMenuSourceLink();
   document.getElementById('menuCredStatus') && updateCredentialStatus();
+  // アフィリエイトURLを開くタイミングでセット（タグを動的に付与）
+  const audibleEl = document.getElementById('menuAudibleTrial');
+  const kuEl      = document.getElementById('menuKUTrial');
+  if (audibleEl) audibleEl.href = getAudibleTrialUrl();
+  if (kuEl)      kuEl.href      = getKUTrialUrl();
 }
 const _hBtn = document.getElementById('hamburgerBtn');
 if (_hBtn) {
