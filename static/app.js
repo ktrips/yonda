@@ -852,6 +852,8 @@ const DEFAULT_PAGE_KEY = 'yonda_default_page';
 const DEFAULT_PAGE = 'yonda';
 
 function getAffiliateTag() {
+  // 管理者のみ localStorage のカスタムタグを使用。それ以外は常に固定タグ
+  if (!_isAdmin) return DEFAULT_AFFILIATE_TAG;
   try {
     const t = localStorage.getItem(AFFILIATE_TAG_KEY);
     if (t === null || (t || '').trim() === '') return DEFAULT_AFFILIATE_TAG;
@@ -5884,6 +5886,9 @@ async function openSettingsModal() {
   }
   const affiliateSection = document.getElementById('affiliateTagSection');
   if (affiliateSection) affiliateSection.style.display = 'none';
+  const affiliateToggle = document.getElementById('affiliateTagToggle');
+  // 管理者のみアフィリエイトタグ設定を表示
+  if (affiliateToggle) affiliateToggle.closest('p')?.style.setProperty('display', _isAdmin ? '' : 'none');
   const aiProvider = document.getElementById('aiProviderSelect');
   const aiKey = document.getElementById('aiApiKeyInput');
   if (aiProvider && aiKey) {
@@ -6259,7 +6264,6 @@ document.getElementById('menuAmazonAi')?.addEventListener('click', () => {
 function openAmazonSettingsModal() {
   const modal = document.getElementById('amazonSettingsModal');
   if (!modal) return;
-  // 現在の値をロード
   const url = localStorage.getItem(AMAZON_LIST_URL_KEY) || '';
   const name = localStorage.getItem(AMAZON_LIST_NAME_KEY) || '';
   const tag = localStorage.getItem(AFFILIATE_TAG_KEY) || DEFAULT_AFFILIATE_TAG;
@@ -6269,6 +6273,9 @@ function openAmazonSettingsModal() {
   if (urlInput) urlInput.value = url;
   if (nameInput) nameInput.value = name;
   if (tagInput) tagInput.value = tag;
+  // タグ入力欄は管理者のみ表示
+  const tagField = tagInput?.closest('.modal-field');
+  if (tagField) tagField.style.display = _isAdmin ? '' : 'none';
   const statusEl = document.getElementById('amazonSettingsStatus');
   if (statusEl) statusEl.textContent = '';
   modal.style.display = 'flex';
@@ -6283,12 +6290,10 @@ function saveAmazonSettings() {
   const url = (document.getElementById('amazonSettingsListUrl')?.value || '').trim();
   const name = (document.getElementById('amazonSettingsListName')?.value || '').trim();
   const tag = (document.getElementById('amazonSettingsTag')?.value || '').trim();
-  // Amazonリストの保存
   localStorage.setItem(AMAZON_LIST_URL_KEY, url);
   localStorage.setItem(AMAZON_LIST_NAME_KEY, name);
-  // アフィリエイトタグの保存
-  setAffiliateTag(tag);
-  // Yomuタブのリスト表示も更新
+  // アフィリエイトタグは管理者のみ保存
+  if (_isAdmin) setAffiliateTag(tag);
   loadAmazonListUrl();
   const statusEl = document.getElementById('amazonSettingsStatus');
   if (statusEl) {
