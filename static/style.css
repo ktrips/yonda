@@ -151,32 +151,23 @@ header {
   font-size: 0.95rem; line-height: 1.7; color: var(--text);
   padding: 0.25rem 0;
 }
-.pl-proof {
-  font-size: 0.85rem; color: var(--accent);
-  font-weight: 600; margin: 0.5rem 0 0;
+/* ランディングページの「みんなの読書」合計冊数 */
+.pl-community {
+  display: inline-flex; align-items: baseline; gap: 0.35rem;
+  margin-top: 1.5rem;
+  padding: 0.55rem 1.25rem;
+  background: var(--accent-light);
+  border-radius: 2rem;
 }
-.pl-proof:empty { margin: 0; }
-/* ランディングページの Audible/KU 体験CTA */
-.pl-trial-cta {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
+.pl-community-label {
+  font-size: 0.9rem; font-weight: 600; color: var(--accent);
 }
-.pl-trial-btns {
-  display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;
+.pl-community-count {
+  font-size: 1.5rem; font-weight: 800; color: var(--accent);
+  line-height: 1;
 }
-.pl-trial-btn {
-  display: inline-flex; align-items: center; gap: 0.3rem;
-  font-size: 0.82rem; font-weight: 700;
-  padding: 0.5rem 1.1rem; border-radius: 2rem;
-  text-decoration: none; white-space: nowrap;
-  transition: opacity 0.15s;
-}
-.pl-trial-btn:hover { opacity: 0.85; text-decoration: none; }
-.pl-trial-audible { background: #f29d38; color: #fff; }
-.pl-trial-ku      { background: #232f3e; color: #fff; }
-.pl-trial-note {
-  font-size: 0.62rem; color: var(--text-secondary);
-  margin-top: 0.6rem;
+.pl-community-unit {
+  font-size: 0.9rem; font-weight: 600; color: var(--accent);
 }
 @media (max-width: 600px) {
   .public-landing { padding: 1.75rem 1rem 1rem; }

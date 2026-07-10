@@ -205,18 +205,11 @@ function _updateHeaderCompletedCount() {
     const total = _publicUserStatsData.reduce((sum, u) => sum + (u.completed_count || 0), 0);
     if (totalCountEl) totalCountEl.textContent = total.toLocaleString();
     if (totalEl) totalEl.style.display = total > 0 ? 'flex' : 'none';
-    // ランディングの証拠テキスト（すでに◯冊の本が登録されています）
-    const proofEl = document.getElementById('plProof');
-    if (proofEl) {
-      proofEl.textContent = total > 0
-        ? `すでに ${total.toLocaleString()} 冊の本が登録されています`
-        : '';
-    }
-    // ランディングの Audible/KU CTAにタグ付きURLをセット
-    const plAudible = document.getElementById('plAudibleTrial');
-    const plKU      = document.getElementById('plKUTrial');
-    if (plAudible) plAudible.href = getAudibleTrialUrl();
-    if (plKU)      plKU.href      = getKUTrialUrl();
+    // ランディングの「みんなの読書」（全ユーザー合計冊数）
+    const communityEl = document.getElementById('plCommunity');
+    const communityCountEl = document.getElementById('plCommunityCount');
+    if (communityCountEl) communityCountEl.textContent = total.toLocaleString();
+    if (communityEl) communityEl.style.display = total > 0 ? 'inline-flex' : 'none';
   }
 }
 
