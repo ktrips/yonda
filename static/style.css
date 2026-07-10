@@ -146,6 +146,33 @@ header {
   font-size: 0.85rem; color: var(--accent);
   font-weight: 600; margin: 1rem 0 0; min-height: 1.2em;
 }
+/* ランディングページの Audible/KU 二次CTA */
+.pl-trial-cta {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(255,255,255,0.15);
+}
+.pl-trial-label {
+  font-size: 0.78rem; color: rgba(255,255,255,0.7);
+  margin-bottom: 0.6rem;
+}
+.pl-trial-btns {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;
+}
+.pl-trial-btn {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  font-size: 0.82rem; font-weight: 700;
+  padding: 0.5rem 1.1rem; border-radius: 2rem;
+  text-decoration: none; white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.pl-trial-btn:hover { opacity: 0.85; text-decoration: none; }
+.pl-trial-audible { background: #f29d38; color: #fff; }
+.pl-trial-ku      { background: #232f3e; color: #fff; }
+.pl-trial-note {
+  font-size: 0.6rem; color: rgba(255,255,255,0.45);
+  margin-top: 0.6rem;
+}
 @media (max-width: 600px) {
   .public-landing { padding: 1.75rem 1rem 1rem; }
   .pl-promise { font-size: 1.55rem; }
@@ -4300,3 +4327,16 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
   font-size: 0.62rem; color: var(--text-secondary); text-align: center;
   margin-top: 0.1rem;
 }
+
+/* === Site Footer（アソシエイト表記） === */
+.site-footer {
+  text-align: center;
+  padding: 1rem 1.5rem 1.5rem;
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  line-height: 1.8;
+  border-top: 1px solid var(--border);
+  margin-top: 2rem;
+}
+.site-footer a { color: var(--text-secondary); text-decoration: underline; }
+.site-footer a:hover { color: var(--accent); }

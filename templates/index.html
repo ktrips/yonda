@@ -135,6 +135,19 @@
         </p>
         <a href="/auth/login" class="pl-cta" id="plLoginBtn">Googleで無料ではじめる</a>
         <p class="pl-proof" id="plProof"></p>
+        <!-- Audible / KU 未体験者向けの二次CTA -->
+        <div class="pl-trial-cta">
+          <p class="pl-trial-label">AudibleやKindle Unlimitedをまだ試していない方へ</p>
+          <div class="pl-trial-btns">
+            <a id="plAudibleTrial" href="#" target="_blank" rel="noopener sponsored" class="pl-trial-btn pl-trial-audible" data-affiliate-cta="audible-trial-landing">
+              🎧 Audible 30日無料体験
+            </a>
+            <a id="plKUTrial" href="#" target="_blank" rel="noopener sponsored" class="pl-trial-btn pl-trial-ku" data-affiliate-cta="ku-trial-landing">
+              📖 Kindle Unlimited 30日無料
+            </a>
+          </div>
+          <p class="pl-trial-note">※アフィリエイトリンクです</p>
+        </div>
       </div>
     </section>
 
@@ -658,6 +671,9 @@
             <div class="book-detail-links">
               <a id="bookDetailAmazon" href="#" target="_blank" rel="noopener" class="btn btn-secondary">Amazon</a>
               <a id="bookDetailMercari" href="#" target="_blank" rel="noopener" class="btn btn-secondary">メルカリ</a>
+              <!-- 図書館・紙の本の時だけ Audible/KU 無料体験CTA を表示（JS で制御） -->
+              <a id="bookDetailAudibleTrial" href="#" target="_blank" rel="noopener sponsored" class="btn ai-rec-trial-btn ai-rec-trial-audible" style="display:none;" data-affiliate-cta="audible-trial-detail">🎧 Audibleで聴く</a>
+              <a id="bookDetailKUTrial" href="#" target="_blank" rel="noopener sponsored" class="btn ai-rec-trial-btn ai-rec-trial-ku" style="display:none;" data-affiliate-cta="ku-trial-detail">📖 KUで読む</a>
             </div>
           </div>
         </div>
@@ -885,5 +901,9 @@
 
   <script>const APP_VERSION = "{{ app_version }}";</script>
   <script src="{{ url_for('static', filename='app.js') }}?v={{ app_version }}"></script>
+  <footer class="site-footer">
+    <p>当サービスはAmazonアソシエイト・プログラムの参加者です。適格販売により収入を得ることがあります。</p>
+    <p><a href="/dev-guide" target="_blank" rel="noopener">開発ガイド</a> &nbsp;|&nbsp; <a href="mailto:support@ktrips.net">お問い合わせ</a></p>
+  </footer>
 </body>
 </html>

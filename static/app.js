@@ -212,6 +212,11 @@ function _updateHeaderCompletedCount() {
         ? `すでに ${total.toLocaleString()} 冊の本が登録されています`
         : '';
     }
+    // ランディングの Audible/KU CTAにタグ付きURLをセット
+    const plAudible = document.getElementById('plAudibleTrial');
+    const plKU      = document.getElementById('plKUTrial');
+    if (plAudible) plAudible.href = getAudibleTrialUrl();
+    if (plKU)      plKU.href      = getKUTrialUrl();
   }
 }
 
@@ -4619,6 +4624,18 @@ function openBookDetail(book) {
   if (mercariEl) {
     mercariEl.href = urls.mercari;
     mercariEl.style.display = searchQ ? '' : 'none';
+  }
+  // 図書館・紙の本ソースの時だけ Audible/KU 無料体験CTAを表示
+  const audibleTrialEl = document.getElementById('bookDetailAudibleTrial');
+  const kuTrialEl      = document.getElementById('bookDetailKUTrial');
+  const showTrialCta   = searchQ && (book.source === 'setagaya' || book.source === 'paper');
+  if (audibleTrialEl) {
+    audibleTrialEl.href         = getAudibleTrialUrl();
+    audibleTrialEl.style.display = showTrialCta ? '' : 'none';
+  }
+  if (kuTrialEl) {
+    kuTrialEl.href         = getKUTrialUrl();
+    kuTrialEl.style.display = showTrialCta ? '' : 'none';
   }
 
   // 概要
