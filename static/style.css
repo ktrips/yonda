@@ -120,7 +120,7 @@ header {
 }
 .pl-hero { margin-bottom: 1rem; }
 .pl-promise {
-  font-size: 2rem; font-weight: 700; line-height: 1.35;
+  font-size: 2.75rem; font-weight: 800; line-height: 1.3;
   color: var(--accent); margin: 0 0 1rem;
   letter-spacing: 0.01em;
 }
@@ -142,30 +142,24 @@ header {
   box-shadow: 0 6px 18px rgba(107,66,38,0.34);
   text-decoration: none;
 }
-/* ランディングページの特徴リスト */
+/* ランディングページの特徴リスト（マーカーなし・中央揃え） */
 .pl-features {
-  list-style: none; margin: 1.5rem auto 0; padding: 0;
-  display: inline-block; text-align: left;
+  list-style: none; margin: 1.25rem auto 0; padding: 0;
+  text-align: center;
 }
 .pl-features li {
-  position: relative;
-  font-size: 0.92rem; line-height: 1.6; color: var(--text);
-  padding: 0.3rem 0 0.3rem 1.6rem;
-}
-.pl-features li::before {
-  content: '✓';
-  position: absolute; left: 0; top: 0.3rem;
-  color: var(--completed); font-weight: 700;
+  font-size: 0.95rem; line-height: 1.7; color: var(--text);
+  padding: 0.25rem 0;
 }
 .pl-proof {
   font-size: 0.85rem; color: var(--accent);
-  font-weight: 600; margin: 1rem 0 0; min-height: 1.2em;
+  font-weight: 600; margin: 0.5rem 0 0;
 }
+.pl-proof:empty { margin: 0; }
 /* ランディングページの Audible/KU 体験CTA */
 .pl-trial-cta {
-  margin-top: 1.75rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border);
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
 }
 .pl-trial-btns {
   display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;
@@ -186,7 +180,7 @@ header {
 }
 @media (max-width: 600px) {
   .public-landing { padding: 1.75rem 1rem 1rem; }
-  .pl-promise { font-size: 1.55rem; }
+  .pl-promise { font-size: 2.2rem; }
 }
 .tab-login-notice {
   display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
