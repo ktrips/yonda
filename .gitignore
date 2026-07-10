@@ -16,3 +16,6 @@ data/*
 # Word の一時ロックファイル
 ~$*
 **/~$*
+
+# 他プロジェクトの内部戦略プラン原本（ローカル参照用・公開しない）
+docs/SamBezThieMuskJobs_plan.md
