@@ -142,14 +142,19 @@ header {
   box-shadow: 0 6px 18px rgba(107,66,38,0.34);
   text-decoration: none;
 }
-/* ランディングページの特徴リスト（マーカーなし・中央揃え） */
+/* ランディングページの特徴リスト（バッジ風・横並び） */
 .pl-features {
   list-style: none; margin: 1.25rem auto 0; padding: 0;
-  text-align: center;
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 0.5rem;
 }
 .pl-features li {
-  font-size: 0.95rem; line-height: 1.7; color: var(--text);
-  padding: 0.25rem 0;
+  font-size: 0.82rem; font-weight: 600; line-height: 1.4;
+  color: var(--accent);
+  background: var(--accent-light);
+  border-radius: 1rem;
+  padding: 0.4rem 0.9rem;
+  white-space: nowrap;
 }
 /* ランディングページの「みんなの読書」合計冊数 */
 .pl-community {
