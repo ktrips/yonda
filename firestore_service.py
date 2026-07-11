@@ -402,7 +402,7 @@ def get_user_profile(uid: str) -> Optional[dict]:
 _ANALYTICS_EVENTS = (
     "visit", "login_click", "login", "signup",
     # アフィリエイトCTAクリック
-    "affiliate_audible_trial", "affiliate_ku_trial",
+    "affiliate_audible_trial", "affiliate_ku_trial", "affiliate_book_guide",
     # 流入元（ref パラメータ）
     "ref_x", "ref_note", "ref_book", "ref_guide", "ref_other",
     # dev-guide ページからのアプリCTAクリック

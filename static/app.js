@@ -5379,6 +5379,7 @@ function _renderAdminAnalytics(funnel, retention) {
   html += `<div class="an-cards">
     ${_analyticsCard('Audible 無料体験', (t.affiliate_audible_trial || 0).toLocaleString())}
     ${_analyticsCard('KU 無料体験', (t.affiliate_ku_trial || 0).toLocaleString())}
+    ${_analyticsCard('Kindle本（開発ガイド）', (t.affiliate_book_guide || 0).toLocaleString())}
     ${_analyticsCard('dev-guide CTA', (t.devguide_app_cta || 0).toLocaleString())}
   </div>`;
 

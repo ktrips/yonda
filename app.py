@@ -3393,7 +3393,7 @@ def api_analytics_visit():
 @app.route("/api/analytics/affiliate-click", methods=["POST"])
 def api_analytics_affiliate_click():
     """アフィリエイトCTAのクリックを記録する公開ビーコン。常に 204 を返す。
-    body: {"cta": "audible-trial" | "ku-trial"}"""
+    body: {"cta": "audible-trial" | "ku-trial" | "book-guide-*"}"""
     try:
         import firestore_service as _fs  # noqa: PLC0415
         body = request.get_json(silent=True) or {}
@@ -3402,6 +3402,8 @@ def api_analytics_affiliate_click():
             _fs.record_event("affiliate_audible_trial")
         elif "ku" in cta:
             _fs.record_event("affiliate_ku_trial")
+        elif "book" in cta:
+            _fs.record_event("affiliate_book_guide")
     except Exception:
         pass
     return "", 204

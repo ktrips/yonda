@@ -174,6 +174,30 @@ header {
 .pl-community-unit {
   font-size: 0.9rem; font-weight: 600; color: var(--accent);
 }
+/* ランディングページの Kindle本 導線 */
+.pl-book-cta {
+  display: flex; align-items: center; gap: 0.6rem;
+  max-width: 420px; margin: 1.75rem auto 0;
+  padding: 0.7rem 1rem;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none; text-align: left;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+.pl-book-cta:hover {
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
+}
+.pl-book-cta-icon { font-size: 1.5rem; flex-shrink: 0; }
+.pl-book-cta-text {
+  font-size: 0.78rem; line-height: 1.45; color: var(--text-secondary);
+}
+.pl-book-cta-text strong {
+  display: block; font-size: 0.84rem; color: var(--accent); font-weight: 700;
+  margin-bottom: 0.1rem;
+}
 @media (max-width: 600px) {
   .public-landing { padding: 1.75rem 1rem 1rem; }
   .pl-promise { font-size: 2.2rem; }
@@ -4323,6 +4347,9 @@ a.badge-card-top:hover { opacity: 0.8; text-decoration: none; }
 }
 .menu-affiliate-ku {
   background: #232f3e; color: #fff;
+}
+.menu-affiliate-book {
+  background: #5a3e2b; color: #fff;
 }
 .menu-affiliate-note {
   font-size: 0.62rem; color: var(--text-secondary); text-align: center;

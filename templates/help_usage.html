@@ -270,12 +270,17 @@
         <li>Cloud Run へのデプロイ・定期同期の仕組み</li>
         <li>Cursor + Claude を使った AI 駆動開発の進め方</li>
       </ul>
-      <p>
+      <p style="display:flex;flex-wrap:wrap;gap:0.6rem;">
         <a href="{{ url_for('dev_guide_page') }}" target="_blank"
            style="display:inline-block;padding:0.5rem 1.2rem;background:var(--accent);color:#fff;border-radius:var(--radius);text-decoration:none;font-size:0.9rem;font-weight:600;">
           📖 開発ガイドを読む →
         </a>
+        <a href="https://amzn.to/4yh7umC" target="_blank" rel="noopener sponsored" data-affiliate-cta="book-guide-usage"
+           style="display:inline-block;padding:0.5rem 1.2rem;background:#232f3e;color:#fff;border-radius:var(--radius);text-decoration:none;font-size:0.9rem;font-weight:600;">
+          📕 完全版を Kindle で読む →
+        </a>
       </p>
+      <p style="font-size:0.72rem;color:var(--text-secondary);">※ Kindle のリンクはアフィリエイトリンクです。</p>
 
     </div>
   </div>
@@ -287,6 +292,15 @@
         el.href = '#'; el.onclick = function(e){ e.preventDefault(); window.parent.postMessage('yondaCloseHelpModal','*'); };
       }
     })();
+    // アフィリエイトCTAクリックを計測
+    document.querySelectorAll('[data-affiliate-cta]').forEach(function(a){
+      a.addEventListener('click', function(){
+        fetch('/api/analytics/affiliate-click', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cta: a.dataset.affiliateCta }), keepalive: true,
+        }).catch(function(){});
+      });
+    });
   </script>
 </body>
 </html>
