@@ -163,7 +163,7 @@ def get_user_data_dir_for_session() -> Path:
 
 
 # OAuth 有効時に認証不要なパス（前方一致）
-_PUBLIC_PREFIXES = ("/auth/", "/static/", "/help", "/api/public/", "/api/v1/", "/dev-guide")
+_PUBLIC_PREFIXES = ("/auth/", "/static/", "/help", "/api/public/", "/api/v1/", "/dev-guide", "/pr-faq")
 # OAuth 有効時に認証不要な完全一致パス
 _PUBLIC_EXACT = {"/", "/api/docs", "/api/messages", "/api/book-cover", "/api/book-info", "/api/internal/auto-fetch", "/api/internal/auto-fetch-all", "/api/analytics/visit", "/api/analytics/affiliate-click", "/api/analytics/ref"}
 
@@ -771,24 +771,41 @@ def help_usage_page():
     return render_template("help_usage.html")
 
 
-@app.route("/dev-guide")
-def dev_guide_page():
-    """Cursor + Claude アプリ開発ガイドページ"""
+def _render_md_page(md_filename: str, fallback_title: str, cta_ref: str, cta_name: str):
+    """docs/ 配下の Markdown を公開ページとしてレンダリングする共通処理。
+    cta_ref はアプリ誘導 CTA の ?ref= 値、cta_name はクリック計測のキー。"""
     import markdown as _md
-    guide_path = Path(__file__).parent / "docs" / "cursor_claude_amazon_app.md"
-    if not guide_path.exists():
-        return "ガイドが見つかりません", 404
-    raw = guide_path.read_text(encoding="utf-8")
+    md_path = Path(__file__).parent / "docs" / md_filename
+    if not md_path.exists():
+        return "ドキュメントが見つかりません", 404
+    raw = md_path.read_text(encoding="utf-8")
     html = _md.markdown(
         raw,
         extensions=["tables", "fenced_code", "toc", "nl2br"],
     )
     # h1 タイトルを抽出
     import re as _re
+    import html as _html
     title_match = _re.search(r"<h1[^>]*>(.*?)</h1>", html)
-    title = title_match.group(1) if title_match else "開発ガイド"
+    title = title_match.group(1) if title_match else fallback_title
     title = _re.sub(r"<[^>]+>", "", title)  # HTMLタグを除去
-    return render_template("dev_guide.html", content=html, title=title)
+    title = _html.unescape(title)  # &amp; 等を戻す（テンプレ側で再エスケープされるため）
+    return render_template("dev_guide.html", content=html, title=title,
+                           cta_ref=cta_ref, cta_name=cta_name)
+
+
+@app.route("/dev-guide")
+def dev_guide_page():
+    """Cursor + Claude アプリ開発ガイドページ"""
+    return _render_md_page("cursor_claude_amazon_app.md", "開発ガイド",
+                           cta_ref="guide", cta_name="devguide-app-cta")
+
+
+@app.route("/pr-faq")
+def pr_faq_page():
+    """Yonda 未来のプレスリリース & 購入前 FAQ ページ"""
+    return _render_md_page("Yonda_PR_FAQ.md", "Yonda PR & FAQ",
+                           cta_ref="prfaq", cta_name="prfaq-app-cta")
 
 
 @app.route("/api/isbn/<isbn>")

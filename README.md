@@ -4,6 +4,7 @@
 
 - 本番: https://yonda.ktrips.net
 - 戦略プラン: [docs/Yonda_plan.md](docs/Yonda_plan.md) / 設計変数（PR & FAQ）: [docs/Yonda_PR_FAQ.md](docs/Yonda_PR_FAQ.md)
+- PR & FAQ（公開版）: https://yonda.ktrips.net/pr-faq
 - 開発ガイド（公開版）: https://yonda.ktrips.net/dev-guide
 
 ## 機能

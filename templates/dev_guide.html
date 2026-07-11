@@ -198,7 +198,7 @@
             <strong>このガイドを読んで試してみたい方へ</strong>
             <span>Yonda は無料でそのまま使えます。Audible・Kindle・図書館の記録が自動で同期。</span>
           </div>
-          <a href="/?ref=guide" class="guide-app-cta-btn" id="guideAppCtaTop" data-affiliate-cta="devguide-app-cta">
+          <a href="/?ref={{ cta_ref | default('guide') }}" class="guide-app-cta-btn" id="guideAppCtaTop" data-affiliate-cta="{{ cta_name | default('devguide-app-cta') }}">
             Yonda を無料で試す →
           </a>
         </div>
@@ -215,7 +215,7 @@
             <strong>実際に動くアプリを見てみましょう</strong>
             <span>読んだ本が全部ここに貯まります。入力ゼロ・無料・即利用可。</span>
           </div>
-          <a href="/?ref=guide" class="guide-app-cta-btn" id="guideAppCtaBottom" data-affiliate-cta="devguide-app-cta">
+          <a href="/?ref={{ cta_ref | default('guide') }}" class="guide-app-cta-btn" id="guideAppCtaBottom" data-affiliate-cta="{{ cta_name | default('devguide-app-cta') }}">
             Yonda を試してみる →
           </a>
         </div>
@@ -224,13 +224,13 @@
     </div>
   </div>
   <script>
-    // dev-guide からのアプリCTAクリックを記録
-    document.querySelectorAll('[data-affiliate-cta="devguide-app-cta"]').forEach(el => {
+    // ドキュメントページからのアプリCTAクリックを記録（CTA名は data 属性から取得）
+    document.querySelectorAll('[data-affiliate-cta]').forEach(el => {
       el.addEventListener('click', () => {
         fetch('/api/analytics/affiliate-click', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cta: 'devguide-app-cta' }),
+          body: JSON.stringify({ cta: el.dataset.affiliateCta }),
           keepalive: true,
         }).catch(() => {});
       });
