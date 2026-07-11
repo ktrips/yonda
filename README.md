@@ -1,6 +1,10 @@
-# yonda — 読書記録ビューア
+# yonda — 読書が、あなたの財産に。
 
-図書館・Audible・Kindle・紙の本の読書記録を統合して表示・管理する Web アプリ。
+図書館・Audible・Kindle・紙の本の読書記録を自動で同期し、ひとつの本棚として積み上げる Web アプリ。入力する項目は、ありません。
+
+- 本番: https://yonda.ktrips.net
+- 戦略プラン: [docs/Yonda_plan.md](docs/Yonda_plan.md) / 設計変数（PR & FAQ）: [docs/Yonda_PR_FAQ.md](docs/Yonda_PR_FAQ.md)
+- 開発ガイド（公開版）: https://yonda.ktrips.net/dev-guide
 
 ## 機能
 
