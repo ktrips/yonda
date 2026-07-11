@@ -7,12 +7,30 @@ import re
 from pathlib import Path
 
 from docx import Document
-from docx.shared import Mm, Pt, RGBColor, Cm
+from docx.shared import Mm, Pt, RGBColor, Cm, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.enum.style import WD_STYLE_TYPE
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
+
+
+# ──────────────────────────────────────────────
+# カラーパレット（茶色・ベージュ基調の落ち着いたトーン）
+# ──────────────────────────────────────────────
+
+C_BODY       = RGBColor(0x2E, 0x26, 0x20)  # 本文（温かみのある濃い茶）
+C_H1         = RGBColor(0x4A, 0x35, 0x24)  # 見出し1（ダークブラウン）
+C_H2         = RGBColor(0x6B, 0x4A, 0x2F)  # 見出し2（ブラウン）
+C_H3         = RGBColor(0x85, 0x5C, 0x3B)  # 見出し3（ミディアムブラウン）
+C_H4         = RGBColor(0x8A, 0x6A, 0x4A)  # 見出し4（ソフトブラウン）
+C_ACCENT     = RGBColor(0xA5, 0x5A, 0x33)  # 強調・アクセント（テラコッタ）
+C_QUOTE      = RGBColor(0x6B, 0x5D, 0x4A)  # 引用（トープ）
+C_MUTED      = RGBColor(0x7A, 0x6A, 0x55)  # 補足テキスト（薄いトープ）
+C_FAINT      = RGBColor(0x9A, 0x8A, 0x75)  # かすれ気味の補助テキスト
+C_LINE       = "C9B79C"                     # 区切り線・罫線（ベージュ）
+C_CODE_BG    = "F4EEE3"                     # コードブロック背景（薄ベージュ）
+C_TABLE_HEAD = "EADFC9"                     # 表ヘッダー背景（ベージュ）
 
 
 # ──────────────────────────────────────────────
@@ -40,7 +58,7 @@ def setup_styles(doc: Document):
     n = styles["Normal"]
     n.font.name = "Hiragino Kaku Gothic ProN"
     n.font.size = Pt(10)
-    n.font.color.rgb = RGBColor(0x1A, 0x1A, 0x1A)
+    n.font.color.rgb = C_BODY
     n.paragraph_format.space_after  = Pt(5)
     n.paragraph_format.line_spacing = Pt(16)
 
@@ -49,7 +67,7 @@ def setup_styles(doc: Document):
     h1.font.name  = "Hiragino Kaku Gothic ProN"
     h1.font.size  = Pt(17)
     h1.font.bold  = True
-    h1.font.color.rgb = RGBColor(0x16, 0x3A, 0x7A)
+    h1.font.color.rgb = C_H1
     h1.paragraph_format.space_before = Pt(24)
     h1.paragraph_format.space_after  = Pt(8)
     h1.paragraph_format.keep_with_next = True
@@ -60,7 +78,7 @@ def setup_styles(doc: Document):
     h2.font.name  = "Hiragino Kaku Gothic ProN"
     h2.font.size  = Pt(13)
     h2.font.bold  = True
-    h2.font.color.rgb = RGBColor(0x2A, 0x5A, 0xA0)
+    h2.font.color.rgb = C_H2
     h2.paragraph_format.space_before = Pt(16)
     h2.paragraph_format.space_after  = Pt(5)
     h2.paragraph_format.keep_with_next = True
@@ -70,7 +88,7 @@ def setup_styles(doc: Document):
     h3.font.name  = "Hiragino Kaku Gothic ProN"
     h3.font.size  = Pt(11)
     h3.font.bold  = True
-    h3.font.color.rgb = RGBColor(0x35, 0x65, 0xAA)
+    h3.font.color.rgb = C_H3
     h3.paragraph_format.space_before = Pt(11)
     h3.paragraph_format.space_after  = Pt(3)
     h3.paragraph_format.keep_with_next = True
@@ -81,7 +99,7 @@ def setup_styles(doc: Document):
     h4.font.size   = Pt(10.5)
     h4.font.bold   = True
     h4.font.italic = False
-    h4.font.color.rgb = RGBColor(0x44, 0x44, 0x55)
+    h4.font.color.rgb = C_H4
     h4.paragraph_format.space_before = Pt(9)
     h4.paragraph_format.space_after  = Pt(2)
     h4.paragraph_format.keep_with_next = True
@@ -89,14 +107,14 @@ def setup_styles(doc: Document):
     # Code Block
     _ensure_style(styles, "Code Block", WD_STYLE_TYPE.PARAGRAPH, "Normal",
                   font_name="Courier New", font_size=7.5,
-                  color=RGBColor(0x1E, 0x1E, 0x2E),
+                  color=RGBColor(0x3B, 0x32, 0x2A),
                   space_before=0, space_after=0,
                   left_indent=Mm(3), line_spacing=Pt(10.5))
 
     # Block Quote
     _ensure_style(styles, "Block Quote", WD_STYLE_TYPE.PARAGRAPH, "Normal",
                   font_name="Hiragino Kaku Gothic ProN", font_size=9.5,
-                  color=RGBColor(0x55, 0x55, 0x66), italic=True,
+                  color=C_QUOTE, italic=True,
                   space_before=6, space_after=6,
                   left_indent=Mm(6))
 
@@ -147,7 +165,7 @@ def add_page_numbers_to_footer(section, start_num: int = 1):
     _add_fld_char(run, ' PAGE ')
     run.font.name = "Hiragino Kaku Gothic ProN"
     run.font.size = Pt(9)
-    run.font.color.rgb = RGBColor(0x77, 0x77, 0x88)
+    run.font.color.rgb = C_FAINT
 
     # ページ番号の開始値を設定
     sectPr = section._sectPr
@@ -192,17 +210,25 @@ def add_cover_page(doc: Document):
     section.different_first_page_header_footer = True
     _blank_footer(section)   # 表紙はフッターなし
 
-    def _center_para(text, size, bold=False, color=None, space_before=0, space_after=8):
+    def _center_para(text, size, bold=False, color=None, space_before=0, space_after=8,
+                     line_spacing=None):
         p = doc.add_paragraph()
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.paragraph_format.space_before = Pt(space_before)
         p.paragraph_format.space_after  = Pt(space_after)
-        r = p.add_run(text)
+        if line_spacing is not None:
+            p.paragraph_format.line_spacing = Pt(line_spacing)
+        r = p.add_run()
         r.font.name = "Hiragino Kaku Gothic ProN"
         r.font.size = Pt(size)
         r.font.bold = bold
         if color:
             r.font.color.rgb = color
+        # \n を run 内の改行（<w:br/>）に変換して正しく改行させる
+        for idx, chunk in enumerate(text.split("\n")):
+            if idx > 0:
+                r.add_break()
+            r.add_text(chunk)
         return p
 
     # 上部余白
@@ -214,15 +240,16 @@ def add_cover_page(doc: Document):
     _center_para(
         "Cursor + Claude Fable 5 で\nAmazon 連携アプリを週末だけで開発して\n収益化する方法",
         22, bold=True,
-        color=RGBColor(0x16, 0x3A, 0x7A),
-        space_before=0, space_after=12
+        color=C_H1,
+        space_before=0, space_after=12,
+        line_spacing=30
     )
 
     # サブタイトル
     _center_para(
         "週末開発 × AI × 収益化の実践ガイド",
         16, bold=True,
-        color=RGBColor(0x2A, 0x5A, 0xA0),
+        color=C_H2,
         space_before=0, space_after=20
     )
 
@@ -232,28 +259,29 @@ def add_cover_page(doc: Document):
     sep.paragraph_format.space_before = Pt(6)
     sep.paragraph_format.space_after  = Pt(6)
     r = sep.add_run("─" * 28)
-    r.font.color.rgb = RGBColor(0xBB, 0xCC, 0xDD)
+    r.font.color.rgb = RGBColor(0xC9, 0xB7, 0x9C)
     r.font.size = Pt(10)
 
     # キャッチコピー
     _center_para(
         "Audible・Kindle・公共図書館・紙の本を一元管理する Web アプリを\nAI エディタで週末だけで作り、アフィリエイト・KDP 出版・\nフリーミアムで収益を生む仕組みまで組み込む実践書",
         11,
-        color=RGBColor(0x44, 0x55, 0x66),
-        space_before=8, space_after=40
+        color=C_MUTED,
+        space_before=8, space_after=40,
+        line_spacing=18
     )
 
     # 下部余白を埋めてから日付
     _center_para(
         "2026年7月",
         10,
-        color=RGBColor(0x88, 0x88, 0x99),
+        color=C_FAINT,
         space_before=60, space_after=4
     )
     _center_para(
         "yonda プロジェクト",
         10, bold=True,
-        color=RGBColor(0x55, 0x66, 0x88),
+        color=C_H2,
         space_before=0, space_after=4
     )
 
@@ -283,7 +311,7 @@ def add_toc_page(doc: Document):
     r.font.name  = "Hiragino Kaku Gothic ProN"
     r.font.size  = Pt(16)
     r.font.bold  = True
-    r.font.color.rgb = RGBColor(0x16, 0x3A, 0x7A)
+    r.font.color.rgb = C_H1
 
     # TOC フィールド挿入
     p_toc = doc.add_paragraph()
@@ -328,7 +356,7 @@ def add_toc_page(doc: Document):
 # コードブロック装飾
 # ──────────────────────────────────────────────
 
-def _add_code_shading(para, fill="F3F4F6"):
+def _add_code_shading(para, fill=C_CODE_BG):
     pPr = para._p.get_or_add_pPr()
     shd = OxmlElement("w:shd")
     shd.set(qn("w:val"), "clear")
@@ -337,7 +365,7 @@ def _add_code_shading(para, fill="F3F4F6"):
     pPr.append(shd)
 
 
-def _add_border_bottom(para, color="CCCCCC", sz="4"):
+def _add_border_bottom(para, color=C_LINE, sz="4"):
     pPr = para._p.get_or_add_pPr()
     pBdr = OxmlElement("w:pBdr")
     bottom = OxmlElement("w:bottom")
@@ -366,11 +394,12 @@ def parse_inline(para, text: str):
             r = para.add_run(m.group(2))
             r.bold = True
             r.font.name = "Hiragino Kaku Gothic ProN"
+            r.font.color.rgb = C_ACCENT
         elif full.startswith("`"):
             r = para.add_run(m.group(3))
             r.font.name  = "Courier New"
             r.font.size  = Pt(8.5)
-            r.font.color.rgb = RGBColor(0xBF, 0x1F, 0x4A)
+            r.font.color.rgb = C_ACCENT
         else:
             r = para.add_run(m.group(4))
             r.italic = True
@@ -419,7 +448,7 @@ def build_table(doc: Document, lines: list[str]):
                 shd = OxmlElement("w:shd")
                 shd.set(qn("w:val"), "clear")
                 shd.set(qn("w:color"), "auto")
-                shd.set(qn("w:fill"), "D6E4F7")
+                shd.set(qn("w:fill"), C_TABLE_HEAD)
                 tcPr.append(shd)
             else:
                 p.clear()
@@ -430,6 +459,40 @@ def build_table(doc: Document, lines: list[str]):
             p.paragraph_format.space_after  = Pt(2)
 
     doc.add_paragraph().paragraph_format.space_after = Pt(4)
+
+
+# ──────────────────────────────────────────────
+# インライン画像（アプリ画面ショット）
+# ──────────────────────────────────────────────
+
+def add_inline_image(doc: Document, img_path: Path, caption: str, width_mm: float = 62):
+    """本文中に画像＋キャプションを中央寄せで挿入する。
+
+    Markdown の `![キャプション](パス)` 行から呼ばれる。
+    画面ショット（縦長スマホ）を想定し、既定幅 62mm（本文幅の約 1/3）で配置。
+    """
+    if not img_path.exists():
+        print(f"⚠ 画像が見つかりません（スキップ）: {img_path}")
+        return
+
+    # 画像段落（中央寄せ）
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_before = Pt(6)
+    p.paragraph_format.space_after  = Pt(2)
+    p.add_run().add_picture(str(img_path), width=Mm(width_mm))
+
+    # キャプション段落（中央寄せ・小さめグレー斜体）
+    if caption:
+        cap = doc.add_paragraph()
+        cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        cap.paragraph_format.space_before = Pt(0)
+        cap.paragraph_format.space_after  = Pt(8)
+        r = cap.add_run(f"▲ {caption}")
+        r.font.name = "Hiragino Kaku Gothic ProN"
+        r.font.size = Pt(8)
+        r.font.italic = True
+        r.font.color.rgb = C_MUTED
 
 
 # ──────────────────────────────────────────────
@@ -484,7 +547,7 @@ def convert_md_to_docx(md_path: Path, docx_path: Path):
                     lp.style = "Normal"
                     for r in lp.runs:
                         r.font.size = Pt(7)
-                        r.font.color.rgb = RGBColor(0x99, 0x99, 0xAA)
+                        r.font.color.rgb = C_FAINT
                         r.font.name = "Courier New"
                     lp.paragraph_format.space_after = Pt(0)
                 for j, cl in enumerate(code_lines):
@@ -546,6 +609,16 @@ def convert_md_to_docx(md_path: Path, docx_path: Path):
             r0 = p.add_run(prefix)
             r0.font.name = "Hiragino Kaku Gothic ProN"
             parse_inline(p, m_li.group(3))
+            i += 1
+            continue
+
+        # ── インライン画像 ![caption](path) ──
+        m_img = re.match(r'^!\[([^\]]*)\]\(([^)]+)\)\s*$', line.strip())
+        if m_img:
+            caption = m_img.group(1).strip()
+            img_rel = m_img.group(2).strip()
+            img_abs = (md_path.parent / img_rel).resolve()
+            add_inline_image(doc, img_abs, caption)
             i += 1
             continue
 
