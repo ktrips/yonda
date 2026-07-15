@@ -588,6 +588,7 @@ function bookRatingRowHtml(book, { showUnrated = false, communityUnrated = false
 
   // 未レビューボタン（完了済み & レビューなし のみ表示）
   let unratedEl = '';
+  let shareEl = '';
   if (book.completed && !hasReview) {
     if (showUnrated) {
       // 自分の本: クリックで書評ページへ
@@ -601,6 +602,7 @@ function bookRatingRowHtml(book, { showUnrated = false, communityUnrated = false
                onclick="event.stopPropagation()">未レビュー</a>`
           : `<span class="btn-unrated btn-unrated-card" onclick="event.stopPropagation();openBookDetail(_bookByIdMap.get('${escapeHtml(book.book_id||'')}'))">未レビュー</span>`;
       }
+      shareEl = shareButtonHtml(book, rating, 'btn-share-card');
     } else if (communityUnrated) {
       // 他人の本: グレーの未レビューラベル（クリック不可）
       unratedEl = `<span class="btn-unrated btn-unrated-other">未レビュー</span>`;
@@ -617,7 +619,7 @@ function bookRatingRowHtml(book, { showUnrated = false, communityUnrated = false
   const reviewHtml = reviewText
     ? `<span class="card-review-text">"${escapeHtml(reviewText.length > 60 ? reviewText.substring(0, 60) + '…' : reviewText)}"</span>`
     : '';
-  return `<div class="book-card-rating-row">${stars}${reviewHtml}${unratedEl}</div>`;
+  return `<div class="book-card-rating-row">${stars}${reviewHtml}${unratedEl}${shareEl}</div>`;
 }
 
 const AUDIBLE_LIBRARY_URL = 'https://www.audible.co.jp/library/audiobooks';
@@ -4048,8 +4050,10 @@ function buildReviewCellHtml(book) {
   if (!personalReview) {
     if (book.source === 'paper' && book.book_id && !!_authUser) {
       html += `<button type="button" class="btn-unrated" onclick="event.stopPropagation();openPaperBookEditToRate('${escapeHtml(book.book_id)}')">未レビュー</button>`;
+      html += shareButtonHtml(book, dispRating, 'btn-share-table');
     } else if (reviewUrl) {
       html += `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-unrated" title="レビューを入力" onclick="event.stopPropagation()">未レビュー</a>`;
+      html += shareButtonHtml(book, dispRating, 'btn-share-table');
     }
   }
   return html;
@@ -4098,6 +4102,56 @@ function reviewUrlForBook(book) {
     return q ? appendTagToUrl(`https://www.amazon.co.jp/s?k=${encodeURIComponent(q)}&i=stripbooks`, getAffiliateTag()) : '';
   }
   return '';
+}
+
+/** 本の共有テキストを組み立てる（星評価があれば含める） */
+function buildBookShareText(title, author, rating) {
+  const stars = rating > 0 ? `${'★'.repeat(rating)}${'☆'.repeat(5 - rating)} ` : '';
+  const byline = author ? `／${author}` : '';
+  return `${stars}${title}${byline}\n#Yonda 読書が、あなたの財産に。`;
+}
+
+/** data-* 属性から本情報を取り出して共有する（Web Share API、非対応時はクリップボードコピー） */
+async function shareBookByData(btn) {
+  const title = btn.dataset.title || '';
+  const author = btn.dataset.author || '';
+  const rating = parseInt(btn.dataset.rating || '0', 10) || 0;
+  if (!title) return;
+  const text = buildBookShareText(title, author, rating);
+  const url = 'https://yonda.ktrips.net/?ref=share';
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text, url });
+    } catch (_) {
+      // ユーザーによるキャンセル等は無視
+    }
+    return;
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(`${text}\n${url}`);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = `${text}\n${url}`;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    showToast('共有テキストをコピーしました');
+  } catch (_) {
+    showToast('コピーに失敗しました', 'error');
+  }
+}
+
+/** 共有ボタンHTML（カード/テーブル用の小型版） */
+function shareButtonHtml(book, rating, extraClass = '') {
+  const title = escapeAttr(book.title || '');
+  if (!title) return '';
+  return `<button type="button" class="btn-share ${extraClass}" data-title="${title}" data-author="${escapeAttr(book.author || '')}" data-rating="${rating || 0}" title="共有" aria-label="共有" onclick="event.stopPropagation();shareBookByData(this)">📤</button>`;
 }
 
 function messageId(message, idx) {
@@ -4584,17 +4638,19 @@ function openBookDetail(book) {
       } else if (reviewUrl) {
         html += ` <a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-no-review">未レビュー</a>`;
       }
+      html += ` ${shareButtonHtml(book, dispRating, 'btn-share-detail')}`;
     }
     ratingEl.innerHTML = html;
   } else if (isOwnBook && !personalReview) {
     // 星なし・自分の本で個人レビューがない場合
+    let html = '';
     if (book.source === 'paper') {
-      ratingEl.innerHTML = `<button type="button" class="btn-no-review" onclick="closeBookDetail();openPaperBookEditToRate('${escapeHtml(book.book_id || '')}')">未レビュー</button>`;
+      html = `<button type="button" class="btn-no-review" onclick="closeBookDetail();openPaperBookEditToRate('${escapeHtml(book.book_id || '')}')">未レビュー</button>`;
     } else if (reviewUrl) {
-      ratingEl.innerHTML = `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-no-review">未レビュー</a>`;
-    } else {
-      ratingEl.innerHTML = '';
+      html = `<a href="${escapeHtml(reviewUrl)}" target="_blank" rel="noopener" class="btn-no-review">未レビュー</a>`;
     }
+    if (html) html += ` ${shareButtonHtml(book, dispRating, 'btn-share-detail')}`;
+    ratingEl.innerHTML = html;
   } else {
     ratingEl.innerHTML = '';
   }
