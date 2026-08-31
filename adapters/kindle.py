@@ -164,7 +164,24 @@ class KindleAdapter(LibraryAdapter):
         # OTP/2段階認証ページの検出
         otp_input = soup.find("input", {"name": re.compile(r"otp|code|auth", re.I)})
         if otp_input or re.search(r"otp|ワンタイム|認証コード|2段階", r.text or "", re.I):
-            logger.info("Amazon OTP 入力が必要です")
+            # 診断用: このページが実際に「コード入力欄」を持つのか、それとも
+            # 「送信方法の選択」等の中間ページなのかをログに残す。
+            # 中間ページの場合、コードを入力する前に方法選択の送信が必要で、
+            # それを行わないと Amazon がコードを送信しないまま
+            # 「OTPが届かない」状態になり得る。
+            all_input_names = [inp.get("name", "") for inp in soup.find_all("input") if inp.get("name")]
+            has_code_field = bool(re.search(r"otp|code", " ".join(all_input_names), re.I))
+            logger.info(
+                "Amazon OTP/認証ページを検出: url=%s has_code_field=%s input_names=%s",
+                r.url, has_code_field, all_input_names,
+            )
+            if not has_code_field:
+                logger.warning(
+                    "OTP ページにコード入力欄が見つかりません。"
+                    "送信方法の選択ページ（中間ページ）の可能性があり、"
+                    "その場合 Amazon からコードが送信されないまま "
+                    "OTP入力を待つ状態になっている可能性があります。"
+                )
             return False, True, r.text
 
         if "signin" in r.url.lower() and "fiona" not in r.url.lower() and "digital" not in r.url.lower():
@@ -213,6 +230,18 @@ class KindleAdapter(LibraryAdapter):
                 break
         if otp_key:
             form_values[otp_key] = otp.strip()
+        else:
+            # コード入力欄が見つからない = ユーザーが入力したOTPを
+            # どこにも渡せていない。このページが実は「送信方法選択」等の
+            # 中間ページだった場合にここに来る（_login_amazon 側の
+            # has_code_field=False ログと合わせて原因切り分けに使う）。
+            logger.warning(
+                "OTP 入力欄が見つからないため、入力されたコードを送信できません。"
+                "form_id=%s action=%s input_names=%s",
+                form.get("id") if form else None,
+                form.get("action") if form else None,
+                list(form_values.keys()) if form else [],
+            )
 
         signin_url = AMAZON_JP + "/ap/signin"
         if form and form.get("action"):
