@@ -26,6 +26,12 @@ IMAGE_TAG="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${SERVICE_NAME}:l
 BUCKET_NAME="${PROJECT_ID}-yonda-data"
 DATA_MOUNT="/mnt/data"
 SECRETS_MOUNT="/secrets"
+# 静的ファイル（app.js/style.css）のキャッシュバスティング用バージョン。
+# デプロイのたびに現在の git SHA を Cloud Run の環境変数へ反映することで、
+# APP_VERSION が古いまま固定され、ブラウザが1年キャッシュした古いJS/CSSを
+# 使い続けてしまう問題を防ぐ（APP_VERSION は gcloud run deploy を跨いで
+# 明示的に更新しない限り前のリビジョンの値を引き継ぐため）。
+APP_VERSION="$(git rev-parse --short HEAD 2>/dev/null || date +%s)"
 
 echo "============================================"
 echo "  yonda Deploy"
@@ -65,10 +71,11 @@ gcloud builds submit \
   .
 
 if [[ "${1:-}" == "--image-only" ]]; then
-  echo ">>> イメージ更新のみ — Cloud Run をデプロイ..."
+  echo ">>> イメージ更新のみ — Cloud Run をデプロイ（APP_VERSION=${APP_VERSION}）..."
   gcloud run deploy "${SERVICE_NAME}" \
     --image "${IMAGE_TAG}" \
     --region "${REGION}" \
+    --update-env-vars "APP_VERSION=${APP_VERSION}" \
     --quiet
   echo "✔ デプロイ完了"
   exit 0
@@ -195,7 +202,8 @@ YONDA_DATA_DIR=${DATA_MOUNT},\
 YONDA_AUTH_FILE=${SECRETS_MOUNT}/auth_jp.json,\
 YONDA_CREDS_PATH=${DATA_MOUNT}/.credentials.json,\
 YONDA_KINDLE_SESSION_PATH=${DATA_MOUNT}/kindle_session.json,\
-YONDA_AI_CONFIG_PATH=${DATA_MOUNT}/ai_config.json" \
+YONDA_AI_CONFIG_PATH=${DATA_MOUNT}/ai_config.json,\
+APP_VERSION=${APP_VERSION}" \
   --quiet
 
 SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
