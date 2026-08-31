@@ -107,6 +107,50 @@ def get_kindle_session_path_for_user() -> Path:
         return user_dir / "kindle_session.json"
     return get_kindle_session_path()
 
+
+def _kindle_otp_session_path() -> Path:
+    """Kindle OTP 入力待ちの一時セッション保存先（ユーザーディレクトリ内）。
+    GCS FUSE マウント経由で全 gunicorn ワーカー・全 Cloud Run インスタンス間で共有されるため、
+    プロセスローカルな dict と違い「OTP発行リクエストと送信リクエストが別プロセスに
+    ルーティングされてセッションが見つからない」問題が起きない。"""
+    return get_user_data_dir() / ".kindle_otp_session.json"
+
+
+def save_kindle_otp_session(session_id: str, data: dict) -> None:
+    """OTP 入力待ちのセッション情報をファイルに保存する（1ユーザーにつき同時1件）。"""
+    path = _kindle_otp_session_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"session_id": session_id, "created_at": time.time(), **data}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False)
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+
+
+def pop_kindle_otp_session(session_id: str, max_age_sec: int = 600) -> Optional[dict]:
+    """session_id が一致し、有効期限内であればセッション情報を取り出して削除する。
+    不一致・期限切れ・不存在の場合は None（呼び出し側で「セッション切れ」として扱う）。"""
+    path = _kindle_otp_session_path()
+    if not path.exists():
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            payload = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+    finally:
+        try:
+            path.unlink()
+        except OSError:
+            pass
+    if payload.get("session_id") != session_id:
+        return None
+    if time.time() - payload.get("created_at", 0) > max_age_sec:
+        return None
+    return payload
+
 def _get_json_map() -> dict[str, Path]:
     d = get_user_data_dir()
     return {

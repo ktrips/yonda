@@ -55,8 +55,11 @@ def _get_app_version() -> str:
 
 APP_VERSION = _get_app_version()
 
-# Kindle OTP ログイン用セッション（session_id -> {cookies, otp_page_html}）
-_kindle_otp_sessions: dict[str, dict] = {}
+# Kindle OTP ログイン用セッションは library_service.save_kindle_otp_session /
+# pop_kindle_otp_session でユーザーディレクトリ配下にファイル永続化する
+# （gunicorn マルチワーカー・Cloud Run マルチインスタンス構成では、
+#  プロセスローカルな dict だと発行リクエストと送信リクエストが別プロセスに
+#  ルーティングされて「セッション切れ」になるため）
 
 app = Flask(
     __name__,
@@ -2317,7 +2320,7 @@ def _api_fetch_kindle(session_id: str, otp: str):
 
     if session_id and otp:
         # OTP 送信して取得を続行
-        data = _kindle_otp_sessions.pop(session_id, None)
+        data = library_service.pop_kindle_otp_session(session_id)
         if not data:
             return jsonify({"success": False, "error": "セッションが期限切れです。最初からやり直してください。"}), 400
         session = _new_amazon_session()
@@ -2350,10 +2353,10 @@ def _api_fetch_kindle(session_id: str, otp: str):
         return _finish_kindle_fetch(adapter, session, save_session=True)
     if needs_otp and otp_page_html:
         sid = str(uuid.uuid4())
-        _kindle_otp_sessions[sid] = {
+        library_service.save_kindle_otp_session(sid, {
             "cookies": requests.utils.dict_from_cookiejar(session.cookies),
             "otp_page_html": otp_page_html,
-        }
+        })
         return jsonify({
             "success": False,
             "needs_otp": True,
@@ -3677,12 +3680,12 @@ def api_kindle_login():
             return jsonify({"success": True, "message": "ログインに成功しました"})
         if needs_otp and otp_page_html:
             session_id = str(uuid.uuid4())
-            _kindle_otp_sessions[session_id] = {
+            library_service.save_kindle_otp_session(session_id, {
                 "cookies": requests.utils.dict_from_cookiejar(session.cookies),
                 "otp_page_html": otp_page_html,
                 "user_id": user_id,
                 "password": password,
-            }
+            })
             return jsonify({
                 "needs_otp": True,
                 "session_id": session_id,
@@ -3703,7 +3706,7 @@ def api_kindle_login_otp():
         if not session_id or not otp:
             return jsonify({"success": False, "error": "OTP を入力してください。"}), 400
 
-        data = _kindle_otp_sessions.pop(session_id, None)
+        data = library_service.pop_kindle_otp_session(session_id)
         if not data:
             return jsonify({"success": False, "error": "セッションが期限切れです。最初からやり直してください。"}), 400
 
