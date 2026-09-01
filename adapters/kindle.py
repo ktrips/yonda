@@ -96,31 +96,19 @@ class KindleAdapter(LibraryAdapter):
             return self._fetch_from_xml(path)
         return self._fetch_from_sqlite(path)
 
-    def _login_amazon(
-        self, session: requests.Session, credentials: LibraryCredentials
-    ) -> tuple[bool, bool, Optional[str]]:
-        """Amazon にログイン。戻り値: (成功, OTP必要, OTPページHTML)"""
-        try:
-            from bs4 import BeautifulSoup
-        except ImportError:
-            logger.error("BeautifulSoup4 が必要です: pip install beautifulsoup4")
-            return False, False, None
-
-        session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ),
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
-        })
-
-        r = session.get(AMAZON_JP + "/gp/digital/fiona/manage", timeout=30)
-        soup = BeautifulSoup(r.content, "html.parser")
-
-        form = soup.find("form", id="signInForm")
+    @staticmethod
+    def _submit_credentials_form(
+        session: requests.Session, soup, credentials: LibraryCredentials, preferred_form=None
+    ):
+        """soup 内のログインフォーム（またはpreferred_formで指定したフォーム）に
+        email/password を埋めて POST し、レスポンスを返す。
+        既存の hidden 入力（CSRF トークン等）はそのまま引き継ぎ、
+        email/password のみ資格情報で上書きする。"""
+        form = preferred_form
         if form is None:
-            form = soup.find("form", action=re.compile(r"signin", re.I))
+            form = soup.find("form", id="signInForm")
+        if form is None:
+            form = soup.find("form", action=re.compile(r"signin|claim", re.I))
         if form is None:
             for f in soup.find_all("form"):
                 if f.find("input", {"name": "email"}) or f.find("input", {"name": "ap_email"}):
@@ -151,41 +139,77 @@ class KindleAdapter(LibraryAdapter):
             elif action.startswith("http"):
                 signin_url = action
 
-        r = session.post(signin_url, data=form_values, allow_redirects=True, timeout=30)
+        return session.post(signin_url, data=form_values, allow_redirects=True, timeout=30)
+
+    def _login_amazon(
+        self, session: requests.Session, credentials: LibraryCredentials
+    ) -> tuple[bool, bool, Optional[str]]:
+        """Amazon にログイン。戻り値: (成功, OTP必要, OTPページHTML)"""
+        try:
+            from bs4 import BeautifulSoup
+        except ImportError:
+            logger.error("BeautifulSoup4 が必要です: pip install beautifulsoup4")
+            return False, False, None
+
+        session.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+        })
+
+        r = session.get(AMAZON_JP + "/gp/digital/fiona/manage", timeout=30)
         soup = BeautifulSoup(r.content, "html.parser")
 
-        if soup.find(class_=re.compile(r"message\s+error")):
-            logger.error("Amazon ログイン失敗: メールアドレスまたはパスワードが正しくありません")
-            return False, False, None
-        if soup.find(id="ap_captcha_img") or soup.find(id="auth-captcha-image-container"):
-            logger.error("Amazon ログイン失敗: CAPTCHA が表示されています。ブラウザでログインしてから再試行してください。")
-            return False, False, None
+        r = self._submit_credentials_form(session, soup, credentials)
+        soup = BeautifulSoup(r.content, "html.parser")
 
-        # OTP/2段階認証ページの検出
-        otp_input = soup.find("input", {"name": re.compile(r"otp|code|auth", re.I)})
-        if otp_input or re.search(r"otp|ワンタイム|認証コード|2段階", r.text or "", re.I):
-            # 診断用: このページが実際に「コード入力欄」を持つのか、それとも
-            # 「送信方法の選択」等の中間ページなのかをログに残す。
-            # 中間ページの場合、コードを入力する前に方法選択の送信が必要で、
-            # それを行わないと Amazon がコードを送信しないまま
-            # 「OTPが届かない」状態になり得る。
+        # Amazon は稀に /ax/claim 等、OTPではなく email/password の再入力のみを
+        # 求める中間ページ（本人確認の再確認）を挟むことがある。これは
+        # 「送信方法の選択」ではなく単なる再認証フォームなので、資格情報を
+        # 再送信して先へ進める（無限ループ防止のため最大3回まで）。
+        for _ in range(3):
+            if soup.find(class_=re.compile(r"message\s+error")):
+                logger.error("Amazon ログイン失敗: メールアドレスまたはパスワードが正しくありません")
+                return False, False, None
+            if soup.find(id="ap_captcha_img") or soup.find(id="auth-captcha-image-container"):
+                logger.error("Amazon ログイン失敗: CAPTCHA が表示されています。ブラウザでログインしてから再試行してください。")
+                return False, False, None
+
             all_input_names = [inp.get("name", "") for inp in soup.find_all("input") if inp.get("name")]
             has_code_field = bool(re.search(r"otp|code", " ".join(all_input_names), re.I))
-            logger.info(
-                "Amazon OTP/認証ページを検出: url=%s has_code_field=%s input_names=%s",
-                r.url, has_code_field, all_input_names,
-            )
-            if not has_code_field:
-                logger.warning(
-                    "OTP ページにコード入力欄が見つかりません。"
-                    "送信方法の選択ページ（中間ページ）の可能性があり、"
-                    "その場合 Amazon からコードが送信されないまま "
-                    "OTP入力を待つ状態になっている可能性があります。"
+            has_reauth_fields = "email" in all_input_names and "password" in all_input_names
+
+            if has_code_field:
+                logger.info("Amazon OTP 入力が必要です: url=%s input_names=%s", r.url, all_input_names)
+                return False, True, r.text
+
+            if has_reauth_fields:
+                # コード入力欄はないが email/password の再入力欄がある
+                # = ax/claim 等の再認証ページ。資格情報を再送信して継続する。
+                logger.info(
+                    "Amazon 再認証ページ（コード欄なし）を検出。資格情報を再送信します: url=%s",
+                    r.url,
                 )
-            return False, True, r.text
+                r = self._submit_credentials_form(session, soup, credentials)
+                soup = BeautifulSoup(r.content, "html.parser")
+                continue
+
+            # コード欄も email/password 欄もないが、文言的に OTP らしきページ
+            # （未知の中間ページ）。安全側に倒して OTP 入力待ちとして扱う。
+            if re.search(r"otp|ワンタイム|認証コード|2段階", r.text or "", re.I):
+                logger.warning(
+                    "OTP ページにコード入力欄が見つかりません（未知の中間ページの可能性）。"
+                    "url=%s input_names=%s", r.url, all_input_names,
+                )
+                return False, True, r.text
+
+            break
 
         if "signin" in r.url.lower() and "fiona" not in r.url.lower() and "digital" not in r.url.lower():
-            logger.error("Amazon ログイン失敗: サインインが完了しませんでした")
+            logger.error("Amazon ログイン失敗: サインインが完了しませんでした（url=%s）", r.url)
             return False, False, None
 
         logger.info("Amazon ログイン成功")
