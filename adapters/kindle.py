@@ -279,9 +279,13 @@ class KindleAdapter(LibraryAdapter):
             logger.error("OTP が正しくありません")
             return False
         if "signin" in r.url.lower() and "fiona" not in r.url.lower() and "digital" not in r.url.lower():
+            logger.warning("OTP 送信後もサインインページのまま: url=%s", r.url)
             return False
 
-        logger.info("Amazon OTP 認証成功")
+        # 診断用: OTP送信直後の最終遷移先を記録する。ここが fiona/digital 配下の
+        # 実ページでない場合、後続の FIONA API 呼び出しがすべて失敗する
+        # （＝「Kindle API に接続できませんでした」エラー）原因になり得る。
+        logger.info("Amazon OTP 認証成功: final_url=%s", r.url)
         return True
 
     @staticmethod
@@ -593,15 +597,41 @@ class KindleAdapter(LibraryAdapter):
                     headers=ajax_headers,
                     timeout=20,
                 )
-                r.raise_for_status()
+                status = r.status_code
+                final_url = r.url
                 raw = re.sub(r"[\x00-\x1f]", "", r.text).strip()
+                if status >= 400:
+                    logger.warning(
+                        "エンドポイント %s 失敗: HTTPステータス=%s final_url=%s body_head=%r",
+                        path.split("/")[-1], status, final_url, raw[:200],
+                    )
+                    continue
                 if raw.startswith("{"):
                     parsed = json.loads(raw)
                     if isinstance(parsed, dict):
                         logger.info("Kindle API エンドポイント確定: %s", path.split("/")[-1])
                         return url
+                    logger.warning(
+                        "エンドポイント %s: JSONだが期待した形式ではありません: type=%s final_url=%s",
+                        path.split("/")[-1], type(parsed).__name__, final_url,
+                    )
+                else:
+                    # signin にリダイレクトされている等、HTML が返ってきているケースが多い
+                    is_signin = "signin" in final_url.lower() or "/ap/" in final_url.lower()
+                    logger.warning(
+                        "エンドポイント %s: JSON以外の応答（%s）final_url=%s signinらしき遷移=%s body_head=%r",
+                        path.split("/")[-1], "空" if not raw else "非JSON", final_url, is_signin, raw[:200],
+                    )
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    "エンドポイント %s: JSON解析失敗: %s body_head=%r",
+                    path.split("/")[-1], e, raw[:200],
+                )
             except Exception as e:
-                logger.debug("エンドポイント %s 失敗: %s（次を試します）", path.split("/")[-1], type(e).__name__)
+                logger.warning(
+                    "エンドポイント %s 失敗: %s: %s（次を試します）",
+                    path.split("/")[-1], type(e).__name__, e,
+                )
         return None
 
     def _fetch_from_amazon(self, session: requests.Session) -> list[BookRecord]:
