@@ -28,6 +28,16 @@ from adapters.base import LibraryCredentials
 
 from config_paths import get_ai_config_path, ensure_config_dir
 
+# gunicorn 配下（本番）では `if __name__ == "__main__"` が実行されないため、
+# ここで設定しないとルートロガーにハンドラが付かず、Python のデフォルト挙動
+# （WARNING 未満は破棄）により logger.info/debug が本番で常に握りつぶされる。
+# Cloud Run は stdout/stderr を自動収集するため StreamHandler で十分。
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+
 logger = logging.getLogger(__name__)
 
 APP_DIR = Path(__file__).resolve().parent
@@ -4097,10 +4107,12 @@ def slack_command():
 
 if __name__ == "__main__":
     # ログレベルを設定（デバッグモード）
+    # モジュール読込時に一度 basicConfig 済みのため、force=True で上書きする
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        datefmt="%Y-%m-%d %H:%M:%S",
+        force=True,
     )
 
     def find_free_port(start: int, max_attempts: int = 10) -> int:
