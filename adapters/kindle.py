@@ -429,7 +429,10 @@ class KindleAdapter(LibraryAdapter):
         elif item.get("percentRead") == 100.0 or item.get("percent_read") == 100.0:
             is_finished = True
         else:
-            status = str(item.get("readingStatus") or item.get("reading_status") or "").strip().lower()
+            # readStatus は新エンドポイント（mycd/digital-console/ajax）のフィールド
+            status = str(
+                item.get("readingStatus") or item.get("reading_status") or item.get("readStatus") or ""
+            ).strip().lower()
             if status in ("read", "finished", "completed", "done"):
                 is_finished = True
 
@@ -584,6 +587,108 @@ class KindleAdapter(LibraryAdapter):
                 logger.debug("プリフライト %s 失敗: %s（次を試します）", url.split("/")[-1], e)
         return csrf_token
 
+    # 2026年に Amazon が「コンテンツと端末の管理」を React SPA
+    # （MYCDReactApplication）へ全面刷新した際の新エンドポイント。
+    # 旧 FIONA 系エンドポイント（_OWNERSHIP_ENDPOINTS）は 404 で廃止済み。
+    # 実ブラウザの通信を直接観測して確認した値（2026-09-01時点）。
+    _MYCD_MYX_PAGE = "/mn/dcw/myx.html"
+    _MYCD_AJAX_URL = "/hz/mycd/digital-console/ajax"
+
+    def _fetch_mycd_csrf_token(self, session: requests.Session) -> str:
+        """新しい「コンテンツと端末の管理」ページから csrfToken を取得する。
+        ページ内に `var csrfToken = "...";` として埋め込まれている。"""
+        try:
+            r = session.get(AMAZON_JP + self._MYCD_MYX_PAGE, timeout=30)
+            r.raise_for_status()
+            m = re.search(r'var\s+csrfToken\s*=\s*"([^"]+)"', r.text)
+            if m:
+                return m.group(1)
+            logger.warning(
+                "myx.html から csrfToken を抽出できませんでした（final_url=%s）", r.url
+            )
+        except requests.RequestException as e:
+            logger.warning("myx.html 取得失敗: %s", e)
+        return ""
+
+    def _fetch_ownership_via_mycd_ajax(
+        self, session: requests.Session, csrf_token: str
+    ) -> list[dict]:
+        """新エンドポイント（hz/mycd/digital-console/ajax、activity=GetContentOwnershipData）
+        から購入済み Kindle タイトルを全件取得する。失敗時は例外を送出し、
+        呼び出し側で旧エンドポイントへのフォールバックを判断できるようにする。"""
+        items: list[dict] = []
+        seen_asins: set[str] = set()
+        start_index = 0
+        batch_size = 50
+        headers = {
+            "X-Requested-With": "XMLHttpRequest",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        }
+
+        while True:
+            activity_input = {
+                "contentType": "Ebook",
+                "contentCategoryReference": "booksAll",
+                "itemStatusList": ["Active", "Expired"],
+                "excludeExpiredItemsFor": [
+                    "KOLL", "Purchase", "Pottermore", "FreeTrial", "DeviceRegistration",
+                    "KindleUnlimited", "Sample", "Prime", "ComicsUnlimited", "Comixology",
+                ],
+                "originTypes": [
+                    "Purchase", "PublicLibraryLending", "PersonalLending", "Sample",
+                    "ComicsUnlimited", "KOLL", "RFFLending", "Pottermore", "Prime",
+                    "Rental", "DeviceRegistration", "FreeTrial", "KindleUnlimited", "Comixology",
+                ],
+                "showSharedContent": True,
+                "isExtendedMYK": False,
+                "fetchCriteria": {
+                    "sortOrder": "DESCENDING",
+                    "sortIndex": "DATE",
+                    "startIndex": start_index,
+                    "batchSize": batch_size,
+                    "totalContentCount": -1,
+                },
+                "surfaceType": "LargeDesktop",
+            }
+            r = session.post(
+                AMAZON_JP + self._MYCD_AJAX_URL,
+                data={
+                    "activity": "GetContentOwnershipData",
+                    "activityInput": json.dumps(activity_input, ensure_ascii=False),
+                    "clientId": "MYCD_WebService",
+                    "csrfToken": csrf_token,
+                },
+                headers=headers,
+                timeout=30,
+            )
+            r.raise_for_status()
+            payload = json.loads(r.text)
+            result = payload.get("GetContentOwnershipData") if isinstance(payload, dict) else None
+            if not isinstance(result, dict):
+                raise ValueError(f"GetContentOwnershipData が応答に含まれていません: {payload!r:.200}")
+
+            batch_items = result.get("items") or []
+            for item in batch_items:
+                if not isinstance(item, dict):
+                    continue
+                asin = (item.get("asin") or "").strip()
+                if not asin or asin in seen_asins:
+                    continue
+                seen_asins.add(asin)
+                items.append(item)
+
+            logger.info(
+                "GetContentOwnershipData: %d件取得（累計%d件, hasMoreItems=%s）",
+                len(batch_items), len(items), result.get("hasMoreItems"),
+            )
+
+            if not result.get("hasMoreItems") or not batch_items:
+                break
+            start_index += len(batch_items)
+
+        return items
+
     def _resolve_ownership_endpoint(
         self, session: requests.Session, ajax_headers: dict
     ) -> str | None:
@@ -635,12 +740,56 @@ class KindleAdapter(LibraryAdapter):
         return None
 
     def _fetch_from_amazon(self, session: requests.Session) -> list[BookRecord]:
-        """Amazon FIONA API から購入済み Kindle タイトルを取得（読書進捗情報を含む）"""
+        """Amazon から購入済み Kindle タイトルを取得（読書進捗情報を含む）。
+        2026年の「コンテンツと端末の管理」React SPA 刷新後の新エンドポイント
+        （hz/mycd/digital-console/ajax）を優先して使い、失敗時のみ
+        旧 FIONA エンドポイント（廃止済みの可能性が高いが保険として残す）に
+        フォールバックする。どちらも失敗した場合はローカルファイル取得を試み、
+        それも無ければ RuntimeError を送出する。"""
         raw_items: list[dict] = []
-        offset = 0
-        count = 100
-        seen_asins: set[str] = set()
 
+        # ── 新エンドポイント（優先） ──────────────────────────────
+        try:
+            csrf_token = self._fetch_mycd_csrf_token(session)
+            if csrf_token:
+                raw_items = self._fetch_ownership_via_mycd_ajax(session, csrf_token)
+                if raw_items:
+                    logger.info("新エンドポイント（mycd/digital-console/ajax）で %d 件取得", len(raw_items))
+            else:
+                logger.warning("csrfToken を取得できなかったため新エンドポイントをスキップします")
+        except Exception as e:
+            logger.warning(
+                "新エンドポイント（mycd/digital-console/ajax）失敗: %s: %s（旧エンドポイントへフォールバック）",
+                type(e).__name__, e,
+            )
+            raw_items = []
+
+        # ── 旧エンドポイント（フォールバック） ──────────────────────
+        if not raw_items:
+            try:
+                raw_items = self._fetch_ownership_legacy(session)
+            except Exception as e:
+                logger.warning("旧エンドポイントも失敗: %s: %s", type(e).__name__, e)
+                path = self._find_data_path()
+                if path:
+                    logger.info("全 API 失敗。ローカルファイルから取得: %s", path)
+                    return self._fetch_from_xml(path) if path.suffix == ".xml" else self._fetch_from_sqlite(path)
+                raise RuntimeError(
+                    "Amazon の Kindle API に接続できませんでした。"
+                    "Amazon の仕様変更またはログインセッションの期限切れの可能性があります。"
+                    "Amazon設定から再ログインしてください。"
+                ) from e
+
+        books = self._build_books_from_ownership_items(session, raw_items)
+
+        # 取得成功時はセッションを保存（次回の自動取得で再利用）
+        self.save_session(session)
+
+        return books
+
+    def _fetch_ownership_legacy(self, session: requests.Session) -> list[dict]:
+        """旧 FIONA オーナーシップ API から全アイテムを収集する（生アイテムのdictリストを返す）。
+        HTTP/JSON いずれかの失敗時は例外を送出し、呼び出し側でのフォールバック判断に委ねる。"""
         # プリフライト + CSRF トークン取得
         csrf_token = self._preflight_and_csrf(session)
 
@@ -653,46 +802,27 @@ class KindleAdapter(LibraryAdapter):
             ajax_headers["anti-csrftoken"] = csrf_token
             logger.debug("CSRF トークンをヘッダーに設定")
 
-        # 使用可能なエンドポイントを探す
         api_url = self._resolve_ownership_endpoint(session, ajax_headers)
         if not api_url:
-            path = self._find_data_path()
-            if path:
-                logger.info("全 API エンドポイント失敗。ローカルファイルから取得: %s", path)
-                return self._fetch_from_xml(path) if path.suffix == ".xml" else self._fetch_from_sqlite(path)
-            raise RuntimeError(
-                "Amazon の Kindle API に接続できませんでした。"
-                "Amazon の仕様変更またはログインセッションの期限切れの可能性があります。"
-                "Amazon設定から再ログインしてください。"
-            )
+            raise RuntimeError("旧エンドポイント候補がすべて利用できませんでした")
 
-        # ステップ 1: オーナーシップ API からすべてのアイテムを収集
+        raw_items: list[dict] = []
+        seen_asins: set[str] = set()
+        offset = 0
+        count = 100
         while True:
-            try:
-                r = session.post(
-                    api_url,
-                    data={"offset": offset, "count": count},
-                    headers=ajax_headers,
-                    timeout=30,
-                )
-                r.raise_for_status()
-                raw = re.sub(r"[\x00-\x1f]", "", r.text)
-                raw_stripped = raw.strip()
-                if raw_stripped.startswith("<") or "<!DOCTYPE" in raw_stripped[:50]:
-                    raise ValueError("API が HTML を返しました（ログインセッション切れの可能性）")
-                data = json.loads(raw)
-            except (json.JSONDecodeError, requests.RequestException, ValueError) as e:
-                logger.exception("FIONA API 取得失敗: %s", e)
-                if not raw_items:
-                    path = self._find_data_path()
-                    if path:
-                        logger.info("FIONA API 失敗。ローカルファイルから取得を試行: %s", path)
-                        return self._fetch_from_xml(path) if path.suffix == ".xml" else self._fetch_from_sqlite(path)
-                    raise RuntimeError(
-                        "Amazon から Kindle 蔵書を取得できませんでした。"
-                        "Amazon設定から再ログインしてください。"
-                    ) from e
-                break
+            r = session.post(
+                api_url,
+                data={"offset": offset, "count": count},
+                headers=ajax_headers,
+                timeout=30,
+            )
+            r.raise_for_status()
+            raw = re.sub(r"[\x00-\x1f]", "", r.text)
+            raw_stripped = raw.strip()
+            if raw_stripped.startswith("<") or "<!DOCTYPE" in raw_stripped[:50]:
+                raise ValueError("API が HTML を返しました（ログインセッション切れの可能性）")
+            data = json.loads(raw)
 
             payload = data.get("data") if isinstance(data, dict) else data
             if not isinstance(payload, dict):
@@ -713,26 +843,53 @@ class KindleAdapter(LibraryAdapter):
             if offset >= total or len(items) == 0:
                 break
 
-        # ステップ 2: すべての ASIN について読書進捗情報を一括取得
+        return raw_items
+
+    @staticmethod
+    def _epoch_millis_to_date(val) -> str:
+        """acquiredTime（エポックミリ秒、float/int）を YYYY-MM-DD 文字列に変換する。
+        変換できない場合は空文字を返す。"""
+        try:
+            millis = float(val)
+            if millis <= 0:
+                return ""
+            return datetime.fromtimestamp(millis / 1000).strftime("%Y-%m-%d")
+        except (TypeError, ValueError, OSError):
+            return ""
+
+    def _build_books_from_ownership_items(
+        self, session: requests.Session, raw_items: list[dict]
+    ) -> list[BookRecord]:
+        """オーナーシップ API（新旧いずれか）の生アイテムから BookRecord のリストを生成する。
+        読書進捗は別途 reading-progress API から取得してマージする
+        （新エンドポイントの readStatus フィールドがあればそれも完了判定に使う）。"""
+        # ステップ 1: すべての ASIN について読書進捗情報を一括取得
         all_asins = [item.get("asin") or item.get("contentId") for item in raw_items]
         all_asins = [a.strip() for a in all_asins if a]
         progress_map = self._fetch_reading_progress(session, all_asins)
         logger.info("Kindle reading progress: %d 冊の進捗情報を取得", len(progress_map))
 
-        # ステップ 3: BookRecord を生成（進捗データを含める）
+        # ステップ 2: BookRecord を生成（進捗データを含める）
         books: list[BookRecord] = []
         for item in raw_items:
             asin = (item.get("asin") or item.get("contentId") or "").strip()
             title = (item.get("title") or "").strip()
             if isinstance(title, str):
                 title = html.unescape(title)
-            purchase_date = (
-                item.get("purchaseDate")
-                or item.get("purchase_date")
-                or item.get("dateAdded")
-                or item.get("acquisitionDate")
-                or ""
-            )
+            author = (item.get("authors") or item.get("author") or "").strip()
+
+            # 購入/取得日: 新エンドポイントの acquiredTime（エポックミリ秒）を最優先
+            # （acquiredDate は日本語表記「2012年12月6日」で _format_date が解釈できないため）
+            purchase_date = self._epoch_millis_to_date(item.get("acquiredTime"))
+            if not purchase_date:
+                purchase_date = str(
+                    item.get("acquiredDate")
+                    or item.get("purchaseDate")
+                    or item.get("purchase_date")
+                    or item.get("dateAdded")
+                    or item.get("acquisitionDate")
+                    or ""
+                )
 
             # オーナーシップ API のフィールドから進捗を抽出
             ownership_percent, ownership_date, ownership_finished = self._extract_progress_from_item(item)
@@ -760,7 +917,7 @@ class KindleAdapter(LibraryAdapter):
                 completed_date = self._format_date(last_read_date)
 
             # カバー画像の取得
-            # 1. FIONA API のレスポンスから直接取得を試す
+            # 1. API のレスポンスから直接取得を試す
             cover_url = ""
             for key in ("productImage", "coverUrl", "imageUrl", "imageUrl500", "bookCoverImage",
                        "image", "coverImage", "cover_url"):
@@ -776,8 +933,8 @@ class KindleAdapter(LibraryAdapter):
 
             book = BookRecord(
                 title=title or "不明なタイトル",
-                author="",
-                loan_date=self._format_date(str(purchase_date)),
+                author=author,
+                loan_date=self._format_date(purchase_date),
                 loan_location="Kindle",
                 rating=0,
                 comment="",
@@ -801,9 +958,6 @@ class KindleAdapter(LibraryAdapter):
                    len(books),
                    sum(1 for b in books if b.completed),
                    sum(b.percent_complete for b in books) / len(books) if books else 0)
-
-        # 取得成功時はセッションを保存（次回の自動取得で再利用）
-        self.save_session(session)
 
         return books
 
