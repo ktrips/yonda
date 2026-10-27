@@ -13,6 +13,9 @@ data/*
 !data/.gitkeep
 !data/kindle_books.json
 
+# ローカル依存パッケージ（pip --target でインストールした一時ディレクトリ）
+vendor/
+
 # Word の一時ロックファイル
 ~$*
 **/~$*
